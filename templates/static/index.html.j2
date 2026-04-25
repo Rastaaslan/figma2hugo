@@ -1,0 +1,65 @@
+{% macro render_attributes(attributes) -%}
+{%- for name, value in attributes.items() %} {{ name | e }}="{{ value | e }}"{%- endfor -%}
+{%- endmacro %}
+{% macro render_text(text) -%}
+<{{ text.tag | e }}{% if text.id %} id="{{ text.id | e }}"{% endif %} class="content-text {{ text.class_name | e }}"{{ render_attributes(text.attributes) }}>
+  {%- if text.segments -%}
+    {%- for segment in text.segments -%}
+    <span class="{{ segment.class_name | e }}"{% if segment.style %} style="{{ segment.style | e }}"{% endif %}>{{ segment.html | safe }}</span>
+    {%- endfor -%}
+  {%- else -%}
+    {{ text.html | safe }}
+  {%- endif -%}
+</{{ text.tag | e }}>
+{%- endmacro %}
+{% macro render_asset(asset) -%}
+{%- if asset.render is not sameas false -%}
+<figure class="content-asset {{ asset.class_name | e }}{% if asset.aria_hidden %} is-decorative{% endif %}">
+  <img src="{{ asset.public_path | e }}" alt="{{ asset.alt | e }}"{% if asset.aria_hidden %} aria-hidden="true"{% endif %}{% if asset.width %} width="{{ asset.width | e }}"{% endif %}{% if asset.height %} height="{{ asset.height | e }}"{% endif %}{{ render_attributes(asset.attributes) }}>
+</figure>
+{%- endif -%}
+{%- endmacro %}
+{% macro render_node(node) -%}
+  {%- if node.kind == "text" -%}
+    {{ render_text(node.text) }}
+  {%- elif node.kind == "asset" -%}
+    {{ render_asset(node.asset) }}
+  {%- else -%}
+<{{ node.tag | e }}{% if node.id %} id="{{ node.id | e }}"{% endif %} class="content-node {{ node.class_name | e }}"{{ render_attributes(node.attributes) }}>
+    {%- for child in node.children -%}
+      {{ render_node(child) }}
+    {%- endfor -%}
+</{{ node.tag | e }}>
+  {%- endif -%}
+{%- endmacro %}
+{% macro render_section(section) -%}
+<{{ section.tag | e }} id="{{ section.anchor | e }}" class="page-section {{ section.class_name | e }}">
+  <div class="page-section__inner">
+    {%- for node in section.children -%}
+      {{ render_node(node) }}
+    {%- endfor -%}
+  </div>
+</{{ section.tag | e }}>
+{%- endmacro %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page.title | e }}</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="page page--{{ page.slug | e }}">
+    {% for section in header_sections %}
+      {{ render_section(section) }}
+    {% endfor %}
+    <main class="page-main">
+      {% for section in body_sections %}
+        {{ render_section(section) }}
+      {% endfor %}
+    </main>
+    {% for section in footer_sections %}
+      {{ render_section(section) }}
+    {% endfor %}
+  </body>
+</html>

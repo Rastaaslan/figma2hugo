@@ -1,0 +1,15 @@
+{{- $node := . -}}
+{{- if eq $node.kind "text" -}}
+  {{- partial "text.html" $node.text | safeHTML -}}
+{{- else if eq $node.kind "asset" -}}
+  {{- partial "asset.html" $node.asset | safeHTML -}}
+{{- else -}}
+{{ printf "<%s" $node.tag | safeHTML }}{{ with $node.id }} id="{{ . }}"{{ end }} class="content-node {{ $node.class_name }}"
+  {{- range $name, $value := $node.attributes -}}
+    {{- printf "%s=%q" $name $value | safeHTMLAttr -}}
+  {{- end -}}>
+  {{- range $node.children -}}
+    {{- partial "node.html" . | safeHTML -}}
+  {{- end -}}
+{{ printf "</%s>" $node.tag | safeHTML }}
+{{- end -}}

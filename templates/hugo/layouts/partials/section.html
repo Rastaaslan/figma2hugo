@@ -1,0 +1,8 @@
+{{- $section := . -}}
+{{ printf "<%s" $section.tag | safeHTML }} id="{{ $section.anchor }}" class="page-section {{ $section.class_name }}">
+  <div class="page-section__inner">
+    {{- range $section.children -}}
+      {{- partial "node.html" . | safeHTML -}}
+    {{- end -}}
+  </div>
+{{ printf "</%s>" $section.tag | safeHTML }}

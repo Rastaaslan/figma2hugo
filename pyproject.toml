@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "figma2hugo"
+version = "0.1.0"
+description = "CLI scaffold for extracting Figma pages into Hugo or static site outputs."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+  { name = "OpenAI Codex" },
+]
+dependencies = [
+  "typer>=0.12,<1.0",
+  "pydantic>=2.7,<3.0",
+  "httpx>=0.27,<1.0",
+  "lxml>=5.2,<6.0",
+  "jinja2>=3.1,<4.0",
+  "pillow>=10.4,<12.0",
+  "playwright>=1.49,<2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2,<9.0",
+  "ruff>=0.6,<1.0",
+  "mypy>=1.11,<2.0",
+]
+mcp = [
+  "mcp>=1.10,<2.0",
+]
+
+[project.scripts]
+figma2hugo = "figma2hugo.cli:app"
+figma2hugo-ui = "figma2hugo.gui:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/figma2hugo"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["figma2hugo"]
+strict = true

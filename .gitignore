@@ -1,0 +1,12 @@
+.pytest_cache/
+__pycache__/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.venv/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+figma2hugo.local.json

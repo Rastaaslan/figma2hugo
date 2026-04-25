@@ -1,0 +1,9 @@
+{{- $asset := . -}}
+{{- if ne $asset.render false -}}
+<figure class="content-asset {{ $asset.class_name }}{{ if $asset.aria_hidden }} is-decorative{{ end }}">
+  <img src="{{ $asset.public_path | relURL }}" alt="{{ $asset.alt }}"{{ if $asset.aria_hidden }} aria-hidden="true"{{ end }}{{ with $asset.width }} width="{{ . }}"{{ end }}{{ with $asset.height }} height="{{ . }}"{{ end }}
+    {{- range $name, $value := $asset.attributes -}}
+      {{- printf "%s=%q" $name $value | safeHTMLAttr -}}
+    {{- end -}}>
+</figure>
+{{- end -}}

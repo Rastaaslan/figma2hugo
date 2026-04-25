@@ -1,0 +1,6 @@
+baseURL = "https://example.org/"
+languageCode = "en-us"
+title = "figma2hugo site"
+
+[outputs]
+home = ["HTML"]

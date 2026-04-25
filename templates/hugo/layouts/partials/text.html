@@ -1,0 +1,13 @@
+{{- $text := . -}}
+{{ printf "<%s" $text.tag | safeHTML }}{{ with $text.id }} id="{{ . }}"{{ end }} class="content-text {{ $text.class_name }}"
+  {{- range $name, $value := $text.attributes -}}
+    {{- printf "%s=%q" $name $value | safeHTMLAttr -}}
+  {{- end -}}>
+  {{- if gt (len $text.segments) 0 -}}
+    {{- range $text.segments -}}
+      <span class="{{ .class_name }}"{{ with .style }} style="{{ . | safeCSS }}"{{ end }}>{{ .html | safeHTML }}</span>
+    {{- end -}}
+  {{- else -}}
+    {{- $text.html | safeHTML -}}
+  {{- end -}}
+{{ printf "</%s>" $text.tag | safeHTML }}
