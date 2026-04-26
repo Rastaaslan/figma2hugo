@@ -35,9 +35,9 @@ class StaticGenerator:
         context = {
             "page": page_data["page"],
             "sections": page_data["sections"],
-            "header_sections": [section for section in page_data["sections"] if section["tag"] == "header"],
+            "header_sections": [section for section in page_data["sections"] if section["tag"] in {"header", "nav"}],
             "body_sections": [
-                section for section in page_data["sections"] if section["tag"] not in {"header", "footer"}
+                section for section in page_data["sections"] if section["tag"] not in {"header", "nav", "footer"}
             ],
             "footer_sections": [section for section in page_data["sections"] if section["tag"] == "footer"],
             "warnings": page_data["warnings"],
@@ -146,6 +146,8 @@ class StaticGenerator:
         figure_class = f'content-asset {asset["class_name"]}'
         if asset.get("aria_hidden"):
             figure_class += " is-decorative"
+        if asset.get("render_mode") == "shape" or asset.get("format") == "shape":
+            return [f'{indent}<figure class="{html.escape(figure_class)}"></figure>']
         img_attributes = {
             "src": asset["public_path"],
             "alt": asset["alt"],

@@ -15,7 +15,9 @@
 {% macro render_asset(asset) -%}
 {%- if asset.render is not sameas false -%}
 <figure class="content-asset {{ asset.class_name | e }}{% if asset.aria_hidden %} is-decorative{% endif %}">
+  {%- if asset.render_mode != "shape" and asset.format != "shape" -%}
   <img src="{{ asset.public_path | e }}" alt="{{ asset.alt | e }}"{% if asset.aria_hidden %} aria-hidden="true"{% endif %}{% if asset.width %} width="{{ asset.width | e }}"{% endif %}{% if asset.height %} height="{{ asset.height | e }}"{% endif %}{{ render_attributes(asset.attributes) }}>
+  {%- endif -%}
 </figure>
 {%- endif -%}
 {%- endmacro %}

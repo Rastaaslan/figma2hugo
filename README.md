@@ -49,10 +49,20 @@ figma2hugo build "https://www.figma.com/design/FILEKEY/Page?node-id=3-964" ./sit
 figma2hugo generate "https://www.figma.com/design/FILEKEY/Page?node-id=3-964" ./site
 figma2hugo generate "https://www.figma.com/design/FILEKEY/Page?node-id=3-964" ./dist --mode static
 figma2hugo inspect "https://www.figma.com/design/FILEKEY/Page?node-id=3-964"
-figma2hugo extract "https://www.figma.com/design/FILEKEY/Page?node-id=3-964" --out ./figma-extract
+figma2hugo extract "https://www.figma.com/design/FILEKEY/Page?node-id=3-964" --out ./.figma2hugo-scratch/extract
 figma2hugo validate ./site --against "https://www.figma.com/design/FILEKEY/Page?node-id=3-964"
 figma2hugo report ./site
 ```
+
+For manual experiments and regression runs, prefer a hidden scratch root instead of ad-hoc `tmp-*` folders at the repository root:
+
+```bash
+figma2hugo generate "<figma-url>" ./.figma2hugo-scratch/run-hugo
+figma2hugo generate "<figma-url>" ./.figma2hugo-scratch/run-static --mode static
+figma2hugo extract "<figma-url>" --out ./.figma2hugo-scratch/extract
+```
+
+That keeps the repository clean while still preserving inspectable outputs when you want them. Internal generation workspaces already stay isolated in per-output `.figma2hugo-tmp/` folders and are cleaned automatically after successful runs.
 
 ## Main Workflow
 
@@ -152,3 +162,27 @@ What the real Hugo build is specifically checked for in tests:
 - styled text segments survive Hugo escaping rules
 - mask-only assets are omitted from final markup
 - external `SVG` and raster assets stay referenced through `<img>` tags rather than being expanded inline into the HTML
+
+## Consolidated Heuristics
+
+The current extraction pipeline already folds in the lessons from two manual validation passes:
+
+- a real-world dense page exported to both static HTML and Hugo
+- a Figma Community one-pager used as a cleaner regression target for layout fidelity
+
+The main heuristics consolidated from those passes are:
+
+- section detection can keep small top-level nav groups and can attach otherwise orphan top-level nodes to the nearest section
+- masked or composite-compatible groups are flattened into one exported asset instead of leaking mask internals into the HTML
+- large textless graphic subtrees are also flattened into composite assets when exploding them would otherwise create hundreds of tiny vector files; this keeps dirty illustration-heavy files much faster to export and far easier to render consistently
+- simple solid rectangles can stay as CSS-rendered shape assets instead of becoming unnecessary raster files
+- generated class names are globally disambiguated so repeated layer names like `Rectangle 1`, `title here`, or `read more` do not overwrite each other in CSS
+- repeated spaces in single-line nav-style labels are preserved deliberately, and `justify` is neutralized there so hover indicators and highlighted items stay aligned with the intended Figma spacing
+- text clipping now balances Figma `absoluteBoundingBox` and `absoluteRenderBounds`, but it also preserves full bounds for paragraph blocks whose segment overrides carry tighter line heights than the parent text style
+- segment-level text overrides are normalized beyond weight and font family; compact `line-height` overrides now flow through to both the inline spans and the parent text block so multi-paragraph copy does not artificially stretch and collide with nearby buttons
+- large decorative blobs are not automatically promoted above content just because they overlap it; overlay promotion stays limited to smaller decorative assets that really behave like foreground shards
+- very large decorative blobs from `GROUP` sections are treated as background bleeds instead of foreground overlays, so they stay behind the section background/content and only reappear where they genuinely overflow below the block
+- Hugo output keeps external asset references and relative paths so the generated site stays close to the static export behavior
+- asset downloads reuse a single HTTP client per generation pass and keep already materialized files when possible, which makes heavy reruns much faster on large Figma files
+
+These are still heuristics, not a full semantic reconstruction of every Figma construct, but they make the exporter much cleaner and more stable on the patterns we validated repeatedly.

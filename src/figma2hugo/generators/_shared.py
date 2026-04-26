@@ -190,7 +190,8 @@ def sort_by_bounds(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def html_with_line_breaks(value: str) -> str:
-    normalized = value.replace("\u2028", "\n").replace("\u2029", "\n")
+    normalized = value.replace("\r\n", "\n").replace("\r", "\n")
+    normalized = normalized.replace("\u2028", "\n").replace("\u2029", "\n")
     return html.escape(normalized).replace("\n", "<br>\n")
 
 
@@ -318,8 +319,6 @@ def asset_relative_path(candidate: str, fallback_name: str, fallback_format: str
 
 def normalize_public_path(relative_path: str, mode: str) -> str:
     path = normalize_path_fragment(relative_path)
-    if mode == "hugo":
-        return f"/{path.lstrip('/')}"
     return path.lstrip("/")
 
 
@@ -430,6 +429,18 @@ def style_map_to_css(value: Any) -> str:
     background = extract_scalar_token(coalesce(data, "background", "backgroundColor"))
     if background:
         declarations.append(f"background: {background};")
+    border = coalesce(data, "border")
+    if border:
+        declarations.append(f"border: {ensure_text(border)};")
+    border_radius = coalesce(data, "borderRadius", "border_radius")
+    if border_radius not in (None, ""):
+        declarations.append(f"border-radius: {ensure_unit(border_radius)};")
+    box_shadow = coalesce(data, "boxShadow", "box_shadow")
+    if box_shadow:
+        declarations.append(f"box-shadow: {ensure_text(box_shadow)};")
+    opacity = coalesce(data, "opacity")
+    if opacity not in (None, ""):
+        declarations.append(f"opacity: {ensure_text(opacity)};")
     return " ".join(declarations)
 
 
@@ -474,9 +485,16 @@ class CanonicalModelBuilder:
         self._asset_index: dict[str, dict[str, Any]] = {}
         self._global_texts: dict[str, Any] = {}
         self._global_assets: dict[str, Any] = {}
+        self._class_registry: dict[tuple[str, str], str] = {}
+        self._used_class_names: set[str] = set()
 
     def build(self, model: Any) -> dict[str, Any]:
         source = as_mapping(model)
+        self._warnings = []
+        self._text_index = {}
+        self._asset_index = {}
+        self._class_registry = {}
+        self._used_class_names = set()
         self._global_texts = self._index_by_identifier(source.get("texts"))
         self._global_assets = self._index_by_identifier(source.get("assets"))
         source_sections = [as_mapping(section) for section in coerce_list(source.get("sections"))]
@@ -622,8 +640,9 @@ class CanonicalModelBuilder:
             "role": section_role,
             "tag": section_tag,
             "anchor": slugify(coalesce(data, "anchor", "slug", default=section_name), default=section_id),
-            "class_name": class_name("section", section_name),
+            "class_name": self._unique_class_name("section", section_name, section_id),
             "bounds": normalize_bounds(coalesce(data, "bounds", "absoluteBoundingBox", default={})),
+            "metadata": as_mapping(data.get("metadata")),
             "texts": sort_by_bounds(section_texts),
             "assets": sort_by_bounds(section_assets),
             "decorative_assets": sort_by_bounds(decorative_assets),
@@ -676,7 +695,7 @@ class CanonicalModelBuilder:
                 "kind": "text",
                 "tag": text["tag"],
                 "role": text["role"],
-                "class_name": class_name("node", text["id"]),
+                "class_name": self._unique_class_name("node", text["id"], node_id),
                 "bounds": text["bounds"],
                 "attributes": {},
                 "children": [],
@@ -693,7 +712,7 @@ class CanonicalModelBuilder:
                 "kind": "asset",
                 "tag": "figure",
                 "role": asset["purpose"],
-                "class_name": class_name("node", asset["id"]),
+                "class_name": self._unique_class_name("node", asset["id"], node_id),
                 "bounds": asset["bounds"],
                 "attributes": {},
                 "children": [],
@@ -742,7 +761,11 @@ class CanonicalModelBuilder:
             "kind": "container",
             "tag": ensure_text(coalesce(data, "tag", default=semantic_container_tag(kind, role)), default="div"),
             "role": role,
-            "class_name": class_name("node", coalesce(data, "name", default=node_id)),
+            "class_name": self._unique_class_name(
+                "node",
+                ensure_text(coalesce(data, "name", default=node_id), default=node_id),
+                node_id,
+            ),
             "bounds": normalize_bounds(coalesce(data, "bounds", "absoluteBoundingBox", default={})),
             "attributes": attrs,
             "children": children,
@@ -787,8 +810,13 @@ class CanonicalModelBuilder:
             "tag": tag,
             "role": role,
             "section_id": section_id,
-            "class_name": class_name("text", coalesce(data, "name", default=text_id)),
+            "class_name": self._unique_class_name(
+                "text",
+                ensure_text(coalesce(data, "name", default=text_id), default=text_id),
+                text_id,
+            ),
             "bounds": normalize_bounds(coalesce(data, "bounds", "absoluteBoundingBox", default={})),
+            "render_bounds": normalize_bounds(coalesce(data, "renderBounds", "render_bounds", default={})),
             "attributes": attrs,
             "style": as_mapping(coalesce(data, "style", default={})),
             "style_css": style_map_to_css(coalesce(data, "style", default={})),
@@ -798,6 +826,7 @@ class CanonicalModelBuilder:
                 normalize_bounds(coalesce(data, "bounds", "absoluteBoundingBox", default={})),
                 as_mapping(coalesce(data, "style", default={})),
             ),
+            "preserve_spaces": self._should_preserve_spaces(raw_value),
             "segments": segments,
         }
         self._text_index[text_id] = normalized
@@ -806,25 +835,63 @@ class CanonicalModelBuilder:
     def _normalize_segments(self, text_value: str, value: Any) -> list[dict[str, Any]]:
         runs = coerce_list(value)
         segments: list[dict[str, Any]] = []
-        for index, run in enumerate(runs):
-            data = as_mapping(run)
-            segment_text = ensure_text(coalesce(data, "text", "value"))
-            if not segment_text:
-                start = data.get("start", data.get("startIndex"))
-                end = data.get("end", data.get("endIndex"))
-                if isinstance(start, int) and isinstance(end, int):
-                    segment_text = text_value[start:end]
+        cursor = 0
+        used_indexed_ranges = False
+        ordered_runs = sorted(
+            (as_mapping(run) for run in runs),
+            key=lambda run: (
+                int(run.get("start", run.get("startIndex", 0)) or 0),
+                int(run.get("end", run.get("endIndex", 0)) or 0),
+            ),
+        )
+        for index, data in enumerate(ordered_runs):
+            start = data.get("start", data.get("startIndex"))
+            end = data.get("end", data.get("endIndex"))
+            if isinstance(start, int) and isinstance(end, int):
+                used_indexed_ranges = True
+                bounded_start = max(0, min(start, len(text_value)))
+                bounded_end = max(bounded_start, min(end, len(text_value)))
+                if bounded_start > cursor:
+                    plain_text = text_value[cursor:bounded_start]
+                    if plain_text:
+                        segments.append(
+                            {
+                                "id": f"segment-gap-{len(segments) + 1}",
+                                "value": plain_text,
+                                "html": html_with_line_breaks(plain_text),
+                                "class_name": class_name("segment", f"segment-gap-{len(segments) + 1}"),
+                                "style": "",
+                            }
+                        )
+                segment_text = text_value[bounded_start:bounded_end]
+                cursor = max(cursor, bounded_end)
+            else:
+                segment_text = ensure_text(coalesce(data, "text", "value"))
+
             if not segment_text:
                 continue
+            segment_name = ensure_text(coalesce(data, "name", default=f"segment-{index + 1}"))
             segments.append(
                 {
                     "id": ensure_text(coalesce(data, "id", default=f"segment-{index + 1}")),
                     "value": segment_text,
                     "html": html_with_line_breaks(segment_text),
-                    "class_name": class_name("segment", coalesce(data, "name", default=f"segment-{index + 1}")),
+                    "class_name": class_name("segment", segment_name),
                     "style": style_map_to_css(coalesce(data, "style", default=data)),
                 }
             )
+        if used_indexed_ranges and cursor < len(text_value):
+            trailing_text = text_value[cursor:]
+            if trailing_text:
+                segments.append(
+                    {
+                        "id": f"segment-gap-{len(segments) + 1}",
+                        "value": trailing_text,
+                        "html": html_with_line_breaks(trailing_text),
+                        "class_name": class_name("segment", f"segment-gap-{len(segments) + 1}"),
+                        "style": "",
+                    }
+                )
         return segments
 
     def _normalize_asset(
@@ -845,32 +912,38 @@ class CanonicalModelBuilder:
         if asset_id in self._asset_index:
             return self._asset_index[asset_id]
         asset_name = ensure_text(coalesce(data, "name", default=asset_id), default=asset_id)
+        render_mode = ensure_text(coalesce(data, "renderMode", "render_mode", default="image"), default="image")
         asset_format = ensure_text(
             coalesce(data, "format", "extension", default=PurePosixPath(ensure_text(data.get("local_path"))).suffix.lstrip(".")),
             default="png",
         ).lstrip(".")
-        relative_path = asset_relative_path(
-            ensure_text(coalesce(data, "local_path", "localPath", "path", "file", "src", "url")),
-            fallback_name=asset_name,
-            fallback_format=asset_format or "png",
-        )
+        if render_mode == "shape" or asset_format == "shape":
+            relative_path = ""
+        else:
+            relative_path = asset_relative_path(
+                ensure_text(coalesce(data, "local_path", "localPath", "path", "file", "src", "url")),
+                fallback_name=asset_name,
+                fallback_format=asset_format or "png",
+            )
         purpose = ensure_text(coalesce(data, "purpose", "function", "role", default=default_purpose), default=default_purpose).lower()
         attrs = sanitize_attributes(data.get("attributes"))
         append_attribute(attrs, "loading", coalesce(data, "loading", default="lazy"))
+        style = as_mapping(coalesce(data, "style", default={}))
         normalized = {
             "id": asset_id,
             "node_id": ensure_text(coalesce(data, "nodeId", "node_id", default=asset_id), default=asset_id),
             "name": asset_name,
             "format": asset_format or "png",
-            "source_url": ensure_text(coalesce(data, "url", "source_url")),
+            "render_mode": render_mode,
+            "source_url": coalesce(data, "url", "source_url"),
             "source_local_path": ensure_text(coalesce(data, "local_path", "localPath", "path", "file", "src")),
             "local_path": relative_path,
-            "public_path": normalize_public_path(relative_path, self.mode),
+            "public_path": normalize_public_path(relative_path, self.mode) if relative_path else "",
             "purpose": purpose,
             "alt": "" if purpose in DECORATIVE_PURPOSES else ensure_text(coalesce(data, "alt", default=asset_name), default=asset_name),
             "aria_hidden": purpose in DECORATIVE_PURPOSES,
             "render": purpose != "mask",
-            "class_name": class_name("asset", asset_name),
+            "class_name": self._unique_class_name("asset", asset_name, asset_id),
             "bounds": normalize_bounds(coalesce(data, "bounds", "absoluteBoundingBox", default={})),
             "width": int(
                 coalesce(
@@ -893,9 +966,34 @@ class CanonicalModelBuilder:
                 or 0
             ),
             "attributes": attrs,
+            "style": style,
+            "style_css": style_map_to_css(style),
         }
         self._asset_index[asset_id] = normalized
         return normalized
+
+    def _unique_class_name(self, prefix: str, label: str, identifier: str) -> str:
+        key = (prefix, identifier)
+        existing = self._class_registry.get(key)
+        if existing:
+            return existing
+
+        base_name = class_name(prefix, label)
+        if not base_name:
+            base_name = class_name(prefix, identifier)
+
+        candidate = base_name
+        if candidate in self._used_class_names:
+            identifier_part = css_escape_identifier(identifier, default="item")
+            candidate = class_name(base_name, identifier_part)
+            suffix = 2
+            while candidate in self._used_class_names:
+                candidate = class_name(base_name, identifier_part, str(suffix))
+                suffix += 1
+
+        self._class_registry[key] = candidate
+        self._used_class_names.add(candidate)
+        return candidate
 
     def _resolve_items(self, value: Any, registry: dict[str, Any]) -> list[Any]:
         items: list[Any] = []
@@ -933,6 +1031,15 @@ class CanonicalModelBuilder:
         if height <= 0:
             return False
         return height <= line_height_value * 1.35
+
+    def _should_preserve_spaces(self, raw_value: str) -> bool:
+        if not raw_value:
+            return False
+        if "\t" in raw_value:
+            return True
+        if raw_value != raw_value.strip():
+            return True
+        return "  " in raw_value
 
     def _has_hard_breaks(self, raw_value: str) -> bool:
         return any(marker in raw_value for marker in ("\n", "\u2028", "\u2029"))

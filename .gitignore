@@ -10,3 +10,10 @@ build/
 dist/
 
 figma2hugo.local.json
+.figma2hugo-scratch/
+.figma2hugo-debug/
+.figma2hugo-tmp/
+figma-extract/
+/tmp-*/
+/tmp-*.png
+/tmp-*.webp

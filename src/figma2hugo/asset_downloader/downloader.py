@@ -30,48 +30,52 @@ class AssetDownloader:
         render_queue_png: list[str] = []
         asset_map = {asset["nodeId"]: asset for asset in assets if asset.get("nodeId")}
 
-        for asset in assets:
-            source_url = asset.get("sourceUrl")
-            if source_url:
-                asset["localPath"] = self._download_url(
-                    source_url,
-                    assets_dir / self._asset_filename(asset),
+        with httpx.Client(timeout=60.0, follow_redirects=True) as client:
+            for asset in assets:
+                if asset.get("renderMode") == "shape" or asset.get("format") == "shape":
+                    continue
+                source_url = asset.get("sourceUrl")
+                if source_url:
+                    asset["localPath"] = self._download_url(
+                        source_url,
+                        assets_dir / self._asset_filename(asset),
+                        client,
+                    )
+                    continue
+
+                if not self.rest_client.available or not asset.get("nodeId"):
+                    continue
+
+                if asset_mode == "svg-first" and asset.get("isVector"):
+                    render_queue_svg.append(asset["nodeId"])
+                elif asset_mode == "raster-first":
+                    render_queue_png.append(asset["nodeId"])
+                elif asset.get("isVector"):
+                    render_queue_svg.append(asset["nodeId"])
+                else:
+                    render_queue_png.append(asset["nodeId"])
+
+            if self.rest_client.available and render_queue_svg:
+                render_urls = self.rest_client.get_render_urls(
+                    file_key,
+                    render_queue_svg,
+                    image_format="svg",
+                    scale=1,
+                    use_absolute_bounds=False,
+                    contents_only=True,
                 )
-                continue
+                self._download_rendered_assets(render_urls, asset_map, assets_dir, client)
 
-            if not self.rest_client.available or not asset.get("nodeId"):
-                continue
-
-            if asset_mode == "svg-first" and asset.get("isVector"):
-                render_queue_svg.append(asset["nodeId"])
-            elif asset_mode == "raster-first":
-                render_queue_png.append(asset["nodeId"])
-            elif asset.get("isVector"):
-                render_queue_svg.append(asset["nodeId"])
-            else:
-                render_queue_png.append(asset["nodeId"])
-
-        if self.rest_client.available and render_queue_svg:
-            render_urls = self.rest_client.get_render_urls(
-                file_key,
-                render_queue_svg,
-                image_format="svg",
-                scale=1,
-                use_absolute_bounds=False,
-                contents_only=True,
-            )
-            self._download_rendered_assets(render_urls, asset_map, assets_dir)
-
-        if self.rest_client.available and render_queue_png:
-            render_urls = self.rest_client.get_render_urls(
-                file_key,
-                render_queue_png,
-                image_format="png",
-                scale=2,
-                use_absolute_bounds=False,
-                contents_only=True,
-            )
-            self._download_rendered_assets(render_urls, asset_map, assets_dir)
+            if self.rest_client.available and render_queue_png:
+                render_urls = self.rest_client.get_render_urls(
+                    file_key,
+                    render_queue_png,
+                    image_format="png",
+                    scale=2,
+                    use_absolute_bounds=False,
+                    contents_only=True,
+                )
+                self._download_rendered_assets(render_urls, asset_map, assets_dir, client)
 
         return assets
 
@@ -80,18 +84,20 @@ class AssetDownloader:
         render_urls: dict[str, str | None],
         asset_map: dict[str, dict[str, Any]],
         assets_dir: Path,
+        client: httpx.Client,
     ) -> None:
         for node_id, url in render_urls.items():
             if not url or node_id not in asset_map:
                 continue
             asset = asset_map[node_id]
             target = assets_dir / self._asset_filename(asset)
-            asset["localPath"] = self._download_url(url, target)
+            asset["localPath"] = self._download_url(url, target, client)
 
-    def _download_url(self, url: str, target: Path) -> str:
+    def _download_url(self, url: str, target: Path, client: httpx.Client) -> str:
         target.parent.mkdir(parents=True, exist_ok=True)
-        with httpx.Client(timeout=60.0, follow_redirects=True) as client:
-            response = client.get(url)
+        if target.exists() and target.stat().st_size > 0:
+            return target.as_posix()
+        response = client.get(url)
         response.raise_for_status()
         target.write_bytes(response.content)
         return target.as_posix()

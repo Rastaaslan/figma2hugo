@@ -3,23 +3,23 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    {{- $page := site.Data.page -}}
+    {{- $page := hugo.Data.page -}}
     <title>{{ $page.page.title }}</title>
     {{- $stylesheet := resources.Get "css/main.css" -}}
     {{- with $stylesheet -}}
     {{- $compiled := . | minify | fingerprint -}}
-    <link rel="stylesheet" href="{{ $compiled.RelPermalink }}">
+    <link rel="stylesheet" href="{{ $compiled.RelPermalink | strings.TrimPrefix "/" }}">
     {{- end -}}
   </head>
     <body class="page page--{{ $page.page.slug }}">
       {{- range $page.sections -}}
-        {{- if eq .tag "header" -}}
+        {{- if or (eq .tag "header") (eq .tag "nav") -}}
           {{- partial "section.html" . | safeHTML -}}
         {{- end -}}
       {{- end -}}
     <main class="page-main">
       {{- range $page.sections -}}
-        {{- if and (ne .tag "header") (ne .tag "footer") -}}
+        {{- if and (ne .tag "header") (ne .tag "nav") (ne .tag "footer") -}}
           {{- partial "section.html" . | safeHTML -}}
         {{- end -}}
       {{- end -}}

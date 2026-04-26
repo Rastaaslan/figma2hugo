@@ -106,6 +106,7 @@ class FigmaExtractionService:
                             for asset in assets
                             if asset.get("sectionId") == section.id and asset.get("nodeId")
                         },
+                        extra_nodes=section.extra_nodes,
                     ),
                     "texts": [
                         text_id
@@ -123,9 +124,16 @@ class FigmaExtractionService:
                         if asset.get("sectionId") == section.id and asset.get("function") == "decorative"
                     ],
                     "metadata": {
+                        "sourceNodeType": section.node.get("type"),
+                        "clipsContent": bool(section.node.get("clipsContent", False)),
                         "rawChildIds": [
                             child.get("id")
                             for child in section.node.get("children", [])
+                            if child.get("visible", True)
+                        ]
+                        + [
+                            child.get("id")
+                            for child in section.extra_nodes
                             if child.get("visible", True)
                         ]
                     },
@@ -286,6 +294,7 @@ class FigmaExtractionService:
         *,
         text_ids: set[str],
         asset_ids: set[str],
+        extra_nodes: list[dict[str, Any]] | None = None,
     ) -> list[str]:
         ordered: list[str] = []
 
@@ -300,6 +309,19 @@ class FigmaExtractionService:
             for child in node.get("children", []):
                 visit(child)
 
+        root_node_id = root_node.get("id")
+        if root_node_id in asset_ids:
+            ordered.append(root_node_id)
+
         for child in root_node.get("children", []):
             visit(child)
+        for child in sorted(extra_nodes or [], key=self._node_sort_key):
+            visit(child)
         return ordered
+
+    def _node_sort_key(self, node: dict[str, Any]) -> tuple[float, float]:
+        box = node.get("absoluteRenderBounds") or node.get("absoluteBoundingBox") or {}
+        return (
+            float(box.get("y", 0.0) or 0.0),
+            float(box.get("x", 0.0) or 0.0),
+        )
