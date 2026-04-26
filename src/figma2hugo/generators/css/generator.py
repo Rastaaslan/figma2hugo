@@ -279,9 +279,9 @@ class CssGenerator:
         style_css = ensure_text(text.get("style_css"))
         nowrap = bool(text.get("nowrap"))
         preserve_spaces = bool(text.get("preserve_spaces"))
-        force_nowrap = self._should_force_centered_single_line_text(text, bounds, render_bounds)
+        centered_single_line_height = self._centered_single_line_box_height(text, bounds, render_bounds)
         white_space = "nowrap" if nowrap else "normal"
-        if force_nowrap:
+        if centered_single_line_height > 0:
             white_space = "nowrap"
         if preserve_spaces and nowrap:
             white_space = "pre"
@@ -296,7 +296,11 @@ class CssGenerator:
         if preferred_height > 0:
             lines.append(f"  height: {preferred_height:.2f}px;")
             lines.append("  overflow: hidden;")
-        for declaration in self._effective_text_style_declarations(text, style_css):
+        for declaration in self._effective_text_style_declarations(
+            text,
+            style_css,
+            centered_single_line_height=centered_single_line_height,
+        ):
                 lines.append(f"  {declaration}")
         lines.append("}")
         return lines
@@ -315,34 +319,34 @@ class CssGenerator:
             return bounds_height
         return render_height
 
-    def _should_force_centered_single_line_text(
+    def _centered_single_line_box_height(
         self,
         text: dict[str, Any],
         bounds: dict[str, Any],
         render_bounds: dict[str, Any],
-    ) -> bool:
+    ) -> float:
         style = text.get("style", {}) or {}
         vertical_align = ensure_text(style.get("textAlignVertical")).strip().upper()
         if vertical_align != "CENTER":
-            return False
+            return 0.0
         value = ensure_text(text.get("value") or text.get("plain_text"))
         if not value or self._has_spacer_breaks(text):
-            return False
+            return 0.0
         if "\n" in value.replace("\r\n", "\n").replace("\r", "\n"):
-            return False
+            return 0.0
         bounds_height = float(bounds.get("height", 0) or 0)
         render_height = float(render_bounds.get("height", 0) or 0)
         font_size = float(style.get("fontSize", 0) or 0)
         line_height = self._numeric_line_height(style)
         if bounds_height <= 0 or font_size <= 0 or line_height <= 0:
-            return False
+            return 0.0
         if render_height <= 0:
             render_height = min(bounds_height, font_size)
         if render_height > max(font_size * 1.35, line_height * 1.6):
-            return False
+            return 0.0
         if bounds_height <= max(line_height * 1.35, render_height * 1.05):
-            return False
-        return True
+            return 0.0
+        return bounds_height
 
     def _has_spacer_breaks(self, text: dict[str, Any]) -> bool:
         value = ensure_text(text.get("value") or text.get("plain_text"))
@@ -387,38 +391,19 @@ class CssGenerator:
                 return 0.0
         return 0.0
 
-    def _effective_text_style_declarations(self, text: dict[str, Any], style_css: str) -> list[str]:
+    def _effective_text_style_declarations(
+        self,
+        text: dict[str, Any],
+        style_css: str,
+        *,
+        centered_single_line_height: float = 0.0,
+    ) -> list[str]:
         declarations = self._split_css(style_css) if style_css else []
         compact_line_height = self._compact_segment_line_height(text)
         if compact_line_height > 0:
-            updated: list[str] = []
-            replaced = False
-            for declaration in declarations:
-                if declaration.startswith("line-height:"):
-                    updated.append(f"line-height: {compact_line_height:.2f}px;")
-                    replaced = True
-                else:
-                    updated.append(declaration)
-            if not replaced:
-                updated.append(f"line-height: {compact_line_height:.2f}px;")
-            declarations = updated
-        bounds = text.get("bounds", {}) or {}
-        render_bounds = text.get("render_bounds", {}) or {}
-        forced_single_line = self._should_force_centered_single_line_text(text, bounds, render_bounds)
-        if forced_single_line:
-            bounds_height = float(bounds.get("height", 0) or 0)
-            if bounds_height > 0:
-                updated = []
-                replaced = False
-                for declaration in declarations:
-                    if declaration.startswith("line-height:"):
-                        updated.append(f"line-height: {bounds_height:.2f}px;")
-                        replaced = True
-                    else:
-                        updated.append(declaration)
-                if not replaced:
-                    updated.append(f"line-height: {bounds_height:.2f}px;")
-                declarations = updated
+            declarations = self._replace_line_height(declarations, compact_line_height)
+        if centered_single_line_height > 0:
+            declarations = self._replace_line_height(declarations, centered_single_line_height)
         if bool(text.get("preserve_spaces")) and bool(text.get("nowrap")):
             adjusted: list[str] = []
             for declaration in declarations:
@@ -428,6 +413,19 @@ class CssGenerator:
                     adjusted.append(declaration)
             declarations = adjusted
         return declarations
+
+    def _replace_line_height(self, declarations: list[str], line_height: float) -> list[str]:
+        updated: list[str] = []
+        replaced = False
+        for declaration in declarations:
+            if declaration.startswith("line-height:"):
+                updated.append(f"line-height: {line_height:.2f}px;")
+                replaced = True
+            else:
+                updated.append(declaration)
+        if not replaced:
+            updated.append(f"line-height: {line_height:.2f}px;")
+        return updated
 
     def _section_inner_overflow(self, section: dict[str, Any]) -> str:
         metadata = section.get("metadata", {}) or {}

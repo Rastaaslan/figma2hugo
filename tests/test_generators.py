@@ -331,21 +331,21 @@ class CssGeneratorTests(unittest.TestCase):
         self.assertIn(".text-ideas-label {", css)
         self.assertIn("white-space: nowrap;", css)
 
-    def test_css_generator_expands_centered_ui_label_line_height_to_its_box_height(self) -> None:
+    def test_css_generator_expands_centered_single_line_label_to_its_box_height(self) -> None:
         model = {
             "page": {"id": "page", "name": "Page", "width": 1440, "height": 240},
             "sections": [
                 {
-                    "id": "contact",
-                    "name": "Contact",
+                    "id": "actions",
+                    "name": "Actions",
                     "role": "section",
                     "bounds": {"x": 0, "y": 0, "width": 1440, "height": 240},
                     "texts": [
                         {
-                            "id": "cv-label",
-                            "name": "Mon C.V",
+                            "id": "primary-label",
+                            "name": "Primary Label",
                             "role": "label",
-                            "value": "Mon C.V",
+                            "value": "Learn More",
                             "bounds": {"x": 971, "y": 819, "width": 166, "height": 65},
                             "renderBounds": {"x": 974.35, "y": 836.99, "width": 146.6, "height": 28.45},
                             "style": {
@@ -356,7 +356,7 @@ class CssGeneratorTests(unittest.TestCase):
                             },
                         }
                     ],
-                    "children": ["cv-label"],
+                    "children": ["primary-label"],
                 }
             ],
             "texts": {},
@@ -368,7 +368,7 @@ class CssGeneratorTests(unittest.TestCase):
         canonical = CanonicalModelBuilder(mode="static").build(model)
         css = CssGenerator().generate(canonical)
 
-        self.assertIn(".text-mon-c-v {", css)
+        self.assertIn(".text-primary-label {", css)
         self.assertIn("white-space: nowrap;", css)
         self.assertIn("line-height: 65.00px;", css)
         self.assertNotIn("line-height: 24px;", css)
@@ -378,16 +378,16 @@ class CssGeneratorTests(unittest.TestCase):
             "page": {"id": "page", "name": "Page", "width": 1440, "height": 400},
             "sections": [
                 {
-                    "id": "embedded",
-                    "name": "Embedded",
+                    "id": "features",
+                    "name": "Features",
                     "role": "section",
                     "bounds": {"x": 0, "y": 0, "width": 1440, "height": 400},
                     "texts": [
                         {
-                            "id": "labo-title",
-                            "name": "Le Labo",
+                            "id": "feature-title",
+                            "name": "Feature Title",
                             "role": "heading",
-                            "value": "Le Labo",
+                            "value": "Feature Lab",
                             "bounds": {"x": 401, "y": 782.83, "width": 142, "height": 66},
                             "renderBounds": {"x": 404.56, "y": 801.47, "width": 136.31, "height": 28.86},
                             "style": {
@@ -399,7 +399,7 @@ class CssGeneratorTests(unittest.TestCase):
                             },
                         }
                     ],
-                    "children": ["labo-title"],
+                    "children": ["feature-title"],
                 }
             ],
             "texts": {},
@@ -411,26 +411,26 @@ class CssGeneratorTests(unittest.TestCase):
         canonical = CanonicalModelBuilder(mode="static").build(model)
         css = CssGenerator().generate(canonical)
 
-        self.assertIn(".text-le-labo {", css)
+        self.assertIn(".text-feature-title {", css)
         self.assertIn("white-space: nowrap;", css)
         self.assertIn("line-height: 66.00px;", css)
         self.assertNotIn("line-height: 24.0px;", css)
 
-    def test_css_generator_expands_centered_single_line_display_name_to_its_box_height(self) -> None:
+    def test_css_generator_expands_centered_single_line_display_text_to_its_box_height(self) -> None:
         model = {
             "page": {"id": "page", "name": "Page", "width": 1440, "height": 400},
             "sections": [
                 {
-                    "id": "contact",
-                    "name": "Contact",
+                    "id": "team",
+                    "name": "Team",
                     "role": "section",
                     "bounds": {"x": 0, "y": 0, "width": 1440, "height": 400},
                     "texts": [
                         {
-                            "id": "founder-name",
-                            "name": "Bastien Blochet",
+                            "id": "display-name",
+                            "name": "Display Name",
                             "role": "hero-title",
-                            "value": "Bastien Blochet",
+                            "value": "Jordan Rivers",
                             "bounds": {"x": 257, "y": 1054, "width": 742, "height": 117},
                             "renderBounds": {"x": 265.54, "y": 1075.25, "width": 729.13, "height": 73.99},
                             "style": {
@@ -441,7 +441,7 @@ class CssGeneratorTests(unittest.TestCase):
                             },
                         }
                     ],
-                    "children": ["founder-name"],
+                    "children": ["display-name"],
                 }
             ],
             "texts": {},
@@ -453,7 +453,7 @@ class CssGeneratorTests(unittest.TestCase):
         canonical = CanonicalModelBuilder(mode="static").build(model)
         css = CssGenerator().generate(canonical)
 
-        self.assertIn(".text-bastien-blochet {", css)
+        self.assertIn(".text-display-name {", css)
         self.assertIn("white-space: nowrap;", css)
         self.assertIn("line-height: 117.00px;", css)
         self.assertNotIn("line-height: 60.0px;", css)
@@ -616,7 +616,7 @@ class CssGeneratorTests(unittest.TestCase):
                             "id": "nav-link",
                             "name": "Nav Link",
                             "role": "body",
-                            "value": "what we do",
+                            "value": "product tour",
                             "bounds": {"x": 860, "y": 24, "width": 120, "height": 21},
                             "renderBounds": {"x": 862, "y": 29, "width": 112, "height": 12.5},
                             "style": {"fontFamily": "Roboto Slab", "fontSize": 16, "lineHeight": 21.1},
@@ -653,7 +653,7 @@ class CssGeneratorTests(unittest.TestCase):
                             "id": "nav-links",
                             "name": "Nav Links",
                             "role": "body",
-                            "value": "home     about     what we do     services     references",
+                            "value": "home     company     product tour     pricing     contact",
                             "bounds": {"x": 666, "y": 0, "width": 574, "height": 21},
                             "style": {
                                 "fontFamily": "Roboto Slab",

@@ -146,7 +146,7 @@ def test_layout_analyzer_unwraps_single_canvas_wrapper_frame_into_inner_sections
                     },
                     {
                         "id": "3:71",
-                        "name": "breaker",
+                        "name": "callout",
                         "type": "GROUP",
                         "visible": True,
                         "absoluteBoundingBox": {"x": -721, "y": 1052, "width": 1440, "height": 465},
@@ -166,7 +166,7 @@ def test_layout_analyzer_unwraps_single_canvas_wrapper_frame_into_inner_sections
 def test_layout_analyzer_unwraps_single_frame_wrapper_chain_into_inner_sections() -> None:
     root_node = {
         "id": "1:2",
-        "name": "maquette_embedded_final 1",
+        "name": "Imported Landing Page",
         "type": "FRAME",
         "visible": True,
         "absoluteBoundingBox": {"x": -1121, "y": -4033, "width": 1920, "height": 7423},
@@ -194,7 +194,7 @@ def test_layout_analyzer_unwraps_single_frame_wrapper_chain_into_inner_sections(
                             },
                             {
                                 "id": "1:7",
-                                "name": "footer",
+                                "name": "legal-footer",
                                 "type": "GROUP",
                                 "visible": True,
                                 "absoluteBoundingBox": {"x": -1120.0, "y": 3292.0, "width": 1919.2, "height": 96.1},
@@ -202,7 +202,7 @@ def test_layout_analyzer_unwraps_single_frame_wrapper_chain_into_inner_sections(
                             },
                             {
                                 "id": "1:10",
-                                "name": "contact",
+                                "name": "contact-panel",
                                 "type": "GROUP",
                                 "visible": True,
                                 "absoluteBoundingBox": {"x": -1174.0, "y": -71.0, "width": 2109.6, "height": 3448.8},
@@ -210,7 +210,7 @@ def test_layout_analyzer_unwraps_single_frame_wrapper_chain_into_inner_sections(
                             },
                             {
                                 "id": "1:109",
-                                "name": "embedded",
+                                "name": "feature-strip",
                                 "type": "GROUP",
                                 "visible": True,
                                 "absoluteBoundingBox": {"x": -1076.0, "y": -1578.8, "width": 1869.0, "height": 1450.3},
@@ -218,7 +218,7 @@ def test_layout_analyzer_unwraps_single_frame_wrapper_chain_into_inner_sections(
                             },
                             {
                                 "id": "1:236",
-                                "name": "intro-accompagnement",
+                                "name": "hero-panel",
                                 "type": "GROUP",
                                 "visible": True,
                                 "absoluteBoundingBox": {"x": -1225.7, "y": -4201.0, "width": 2302.6, "height": 2685.1},
