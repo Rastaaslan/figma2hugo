@@ -331,6 +331,133 @@ class CssGeneratorTests(unittest.TestCase):
         self.assertIn(".text-ideas-label {", css)
         self.assertIn("white-space: nowrap;", css)
 
+    def test_css_generator_expands_centered_ui_label_line_height_to_its_box_height(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Page", "width": 1440, "height": 240},
+            "sections": [
+                {
+                    "id": "contact",
+                    "name": "Contact",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1440, "height": 240},
+                    "texts": [
+                        {
+                            "id": "cv-label",
+                            "name": "Mon C.V",
+                            "role": "label",
+                            "value": "Mon C.V",
+                            "bounds": {"x": 971, "y": 819, "width": 166, "height": 65},
+                            "renderBounds": {"x": 974.35, "y": 836.99, "width": 146.6, "height": 28.45},
+                            "style": {
+                                "fontFamily": "Inter",
+                                "fontSize": 38,
+                                "lineHeight": 24,
+                                "textAlignVertical": "CENTER",
+                            },
+                        }
+                    ],
+                    "children": ["cv-label"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        canonical = CanonicalModelBuilder(mode="static").build(model)
+        css = CssGenerator().generate(canonical)
+
+        self.assertIn(".text-mon-c-v {", css)
+        self.assertIn("white-space: nowrap;", css)
+        self.assertIn("line-height: 65.00px;", css)
+        self.assertNotIn("line-height: 24px;", css)
+
+    def test_css_generator_expands_centered_single_line_heading_line_height_to_its_box_height(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Page", "width": 1440, "height": 400},
+            "sections": [
+                {
+                    "id": "embedded",
+                    "name": "Embedded",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1440, "height": 400},
+                    "texts": [
+                        {
+                            "id": "labo-title",
+                            "name": "Le Labo",
+                            "role": "heading",
+                            "value": "Le Labo",
+                            "bounds": {"x": 401, "y": 782.83, "width": 142, "height": 66},
+                            "renderBounds": {"x": 404.56, "y": 801.47, "width": 136.31, "height": 28.86},
+                            "style": {
+                                "fontFamily": "Inter",
+                                "fontSize": 39,
+                                "lineHeight": 24,
+                                "textAlignHorizontal": "CENTER",
+                                "textAlignVertical": "CENTER",
+                            },
+                        }
+                    ],
+                    "children": ["labo-title"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        canonical = CanonicalModelBuilder(mode="static").build(model)
+        css = CssGenerator().generate(canonical)
+
+        self.assertIn(".text-le-labo {", css)
+        self.assertIn("white-space: nowrap;", css)
+        self.assertIn("line-height: 66.00px;", css)
+        self.assertNotIn("line-height: 24.0px;", css)
+
+    def test_css_generator_expands_centered_single_line_display_name_to_its_box_height(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Page", "width": 1440, "height": 400},
+            "sections": [
+                {
+                    "id": "contact",
+                    "name": "Contact",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1440, "height": 400},
+                    "texts": [
+                        {
+                            "id": "founder-name",
+                            "name": "Bastien Blochet",
+                            "role": "hero-title",
+                            "value": "Bastien Blochet",
+                            "bounds": {"x": 257, "y": 1054, "width": 742, "height": 117},
+                            "renderBounds": {"x": 265.54, "y": 1075.25, "width": 729.13, "height": 73.99},
+                            "style": {
+                                "fontFamily": "Inter",
+                                "fontSize": 97,
+                                "lineHeight": 60,
+                                "textAlignVertical": "CENTER",
+                            },
+                        }
+                    ],
+                    "children": ["founder-name"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        canonical = CanonicalModelBuilder(mode="static").build(model)
+        css = CssGenerator().generate(canonical)
+
+        self.assertIn(".text-bastien-blochet {", css)
+        self.assertIn("white-space: nowrap;", css)
+        self.assertIn("line-height: 117.00px;", css)
+        self.assertNotIn("line-height: 60.0px;", css)
+
     def test_css_generator_respects_hard_line_breaks_without_extra_wrapping(self) -> None:
         model = {
             "page": {"id": "page", "name": "Page", "width": 1440, "height": 500},

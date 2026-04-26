@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -38,12 +39,24 @@ class FigmaRestClient:
 
     def _request(self, method: str, path: str, *, params: dict[str, Any] | None = None) -> dict[str, Any]:
         url = f"{self.base_url.rstrip('/')}/{path.lstrip('/')}"
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.request(method, url, headers=self._headers(), params=params)
-        if response.is_error:
-            detail = response.text.strip() or response.reason_phrase
-            raise FigmaRestError(f"{method} {url} failed with {response.status_code}: {detail}")
-        return response.json()
+        retry_delay = 1.0
+        for attempt in range(4):
+            with httpx.Client(timeout=self.timeout_seconds) as client:
+                response = client.request(method, url, headers=self._headers(), params=params)
+            if response.status_code == 429 and attempt < 3:
+                retry_after = response.headers.get("Retry-After")
+                try:
+                    delay = float(retry_after) if retry_after is not None else retry_delay
+                except ValueError:
+                    delay = retry_delay
+                time.sleep(delay)
+                retry_delay = min(retry_delay * 2.0, 8.0)
+                continue
+            if response.is_error:
+                detail = response.text.strip() or response.reason_phrase
+                raise FigmaRestError(f"{method} {url} failed with {response.status_code}: {detail}")
+            return response.json()
+        raise FigmaRestError(f"{method} {url} failed after retries.")
 
     def get_file_nodes(
         self,

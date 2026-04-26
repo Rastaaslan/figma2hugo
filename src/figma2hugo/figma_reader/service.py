@@ -18,6 +18,8 @@ from figma2hugo.figma_reader.url_tools import ParsedFigmaUrl, parse_figma_url
 from figma2hugo.layout_analyzer import LayoutAnalyzer
 from figma2hugo.model import IntermediateDocument
 
+SECTION_LIKE_TYPES = {"FRAME", "SECTION", "GROUP", "INSTANCE", "COMPONENT", "COMPONENT_SET"}
+
 
 class FigmaExtractionService:
     def __init__(
@@ -61,6 +63,7 @@ class FigmaExtractionService:
         warnings: list[str] = []
         raw_payload = self._collect_raw_payload(parsed_url, store, warnings)
         root_node = self._select_root_node(raw_payload, parsed_url)
+        self._validate_root_structure(root_node)
         sections = self.layout_analyzer.identify_sections(root_node)
         extracted = self.content_extractor.extract(
             sections,
@@ -254,6 +257,29 @@ class FigmaExtractionService:
         root = etree.fromstring(xml_text.encode("utf-8"))
         document = self._xml_node_to_tree(root)
         return {"document": document}
+
+    def _validate_root_structure(self, root_node: dict[str, Any]) -> None:
+        visible_children = [
+            child
+            for child in root_node.get("children", [])
+            if isinstance(child, dict) and child.get("visible", True)
+        ]
+        if len(visible_children) < 250:
+            return
+
+        container_children = [child for child in visible_children if child.get("type") in SECTION_LIKE_TYPES]
+        if container_children:
+            return
+
+        text_children = [child for child in visible_children if child.get("type") == "TEXT"]
+        if text_children:
+            return
+
+        raise RuntimeError(
+            "Selected Figma node is too flat for structured extraction: "
+            f"{len(visible_children)} visible children are placed at the same level with no grouping frames or sections. "
+            "Please restructure the file so the page is grouped into frames/sections instead of keeping everything at one level."
+        )
 
     def _xml_node_to_tree(self, element: Any) -> dict[str, Any]:
         width = float(element.attrib.get("width", 0))

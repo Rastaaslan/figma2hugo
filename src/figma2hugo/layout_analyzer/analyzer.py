@@ -5,6 +5,7 @@ from typing import Any
 
 
 SECTION_LIKE_TYPES = {"FRAME", "SECTION", "GROUP", "INSTANCE", "COMPONENT", "COMPONENT_SET"}
+SECTION_NAME_HINTS = ("hero", "header", "footer", "section", "feature", "contact", "nav", "menu")
 
 
 @dataclass(slots=True)
@@ -28,6 +29,7 @@ class SectionCandidate:
 class LayoutAnalyzer:
     def identify_sections(self, root_node: dict[str, Any]) -> list[SectionCandidate]:
         analysis_root = self._unwrap_single_section_wrapper(root_node)
+        wrapper_chain_ids = self._wrapper_chain_ids(root_node, analysis_root)
         visible_children = [
             child
             for child in analysis_root.get("children", [])
@@ -37,6 +39,17 @@ class LayoutAnalyzer:
         if self._is_container(analysis_root) and visible_children:
             candidates = [child for child in visible_children if self._looks_like_section(child, analysis_root)]
         else:
+            candidates = []
+
+        # Imported SVGs and other vectorized exports often expose a frame that
+        # contains only graphic groups. Splitting those groups into standalone
+        # sections destroys the original stacking order, so we preserve the root
+        # as a single visual section when no visible text exists anywhere.
+        if (
+            candidates
+            and not self._subtree_contains_visible_text(analysis_root)
+            and not any(self._has_section_name_hint(candidate) for candidate in candidates)
+        ):
             candidates = []
 
         if not candidates:
@@ -57,32 +70,76 @@ class LayoutAnalyzer:
             )
         self._attach_orphan_nodes(analysis_root, result)
         if analysis_root is not root_node:
-            self._attach_orphan_nodes(root_node, result, ignored_ids={analysis_root.get("id")})
+            ignored_ids = {analysis_root.get("id"), *wrapper_chain_ids}
+            self._attach_orphan_nodes(root_node, result, ignored_ids={node_id for node_id in ignored_ids if node_id})
         return result
 
     def _unwrap_single_section_wrapper(self, root_node: dict[str, Any]) -> dict[str, Any]:
-        if root_node.get("type") not in {"DOCUMENT", "CANVAS", "PAGE"}:
-            return root_node
-        visible_children = [
+        current = root_node
+        visited: set[str] = set()
+
+        while current.get("type") in {"DOCUMENT", "CANVAS", "PAGE", "FRAME", "SECTION", "GROUP"}:
+            current_id = str(current.get("id") or "")
+            if current_id:
+                if current_id in visited:
+                    break
+                visited.add(current_id)
+
+            visible_children = self._visible_section_children(current)
+            if len(visible_children) != 1:
+                return current
+
+            wrapper = visible_children[0]
+            wrapper_children = self._visible_section_children(wrapper)
+            section_like_children = [child for child in wrapper_children if self._looks_like_section(child, wrapper)]
+            if len(section_like_children) >= 2:
+                return wrapper
+
+            if not self._is_trivial_single_child_wrapper(current, wrapper):
+                return current
+
+            current = wrapper
+
+        return current
+
+    def _wrapper_chain_ids(self, root_node: dict[str, Any], analysis_root: dict[str, Any]) -> set[str]:
+        if root_node is analysis_root:
+            return set()
+
+        current = root_node
+        target_id = analysis_root.get("id")
+        wrapper_ids: set[str] = set()
+
+        while current is not analysis_root and current.get("id") != target_id:
+            visible_children = self._visible_section_children(current)
+            if len(visible_children) != 1:
+                break
+            child = visible_children[0]
+            child_id = child.get("id")
+            if child_id == target_id:
+                break
+            if child_id:
+                wrapper_ids.add(child_id)
+            current = child
+
+        return wrapper_ids
+
+    def _visible_section_children(self, node: dict[str, Any]) -> list[dict[str, Any]]:
+        return [
             child
-            for child in root_node.get("children", [])
+            for child in node.get("children", [])
             if child.get("visible", True) and child.get("type") in SECTION_LIKE_TYPES
         ]
-        if len(visible_children) != 1:
-            return root_node
-        wrapper = visible_children[0]
-        wrapper_children = [
-            child
-            for child in wrapper.get("children", [])
-            if child.get("visible", True) and child.get("type") in SECTION_LIKE_TYPES
-        ]
-        section_like_children = [child for child in wrapper_children if self._looks_like_section(child, wrapper)]
-        if len(section_like_children) >= 2:
-            return wrapper
-        return root_node
+
+    def _is_trivial_single_child_wrapper(self, node: dict[str, Any], child: dict[str, Any]) -> bool:
+        node_bounds = self._bounds(node)
+        child_bounds = self._bounds(child)
+        node_area = max(node_bounds["width"] * node_bounds["height"], 1.0)
+        child_area = child_bounds["width"] * child_bounds["height"]
+        return (child_area / node_area) >= 0.6
 
     def _is_container(self, node: dict[str, Any]) -> bool:
-        return node.get("type") in {"DOCUMENT", "CANVAS", "PAGE", "FRAME", "SECTION"}
+        return node.get("type") in {"DOCUMENT", "CANVAS", "PAGE", "FRAME", "SECTION", "GROUP"}
 
     def _looks_like_section(self, node: dict[str, Any], parent: dict[str, Any]) -> bool:
         bounds = self._bounds(node)
@@ -92,9 +149,13 @@ class LayoutAnalyzer:
         if area / parent_area >= 0.03:
             return True
         name = (node.get("name") or "").lower()
-        if any(token in name for token in ("hero", "header", "footer", "section", "feature", "contact", "nav", "menu")):
+        if any(token in name for token in SECTION_NAME_HINTS):
             return True
         return self._subtree_contains_visible_text(node)
+
+    def _has_section_name_hint(self, node: dict[str, Any]) -> bool:
+        name = (node.get("name") or "").lower()
+        return any(token in name for token in SECTION_NAME_HINTS)
 
     def _guess_role(self, node: dict[str, Any], index: int, total: int) -> str:
         name = (node.get("name") or "").lower()
