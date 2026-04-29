@@ -2,7 +2,7 @@
 {%- for name, value in attributes.items() %} {{ name | e }}="{{ value | e }}"{%- endfor -%}
 {%- endmacro %}
 {% macro render_text(text) -%}
-<{{ text.tag | e }}{% if text.id %} id="{{ text.id | e }}"{% endif %} class="content-text {{ text.class_name | e }}"{{ render_attributes(text.attributes) }}>
+<{{ text.tag | e }}{% if text.dom_id %} id="{{ text.dom_id | e }}"{% endif %}{% if text.id and text.dom_id and text.id != text.dom_id %} data-node-id="{{ text.id | e }}"{% endif %} class="content-text {{ text.class_name | e }}"{{ render_attributes(text.attributes) }}>
   {%- if text.segments -%}
     {%- for segment in text.segments -%}
     <span class="{{ segment.class_name | e }}"{% if segment.style %} style="{{ segment.style | e }}"{% endif %}>{{ segment.html | safe }}</span>
@@ -14,11 +14,23 @@
 {%- endmacro %}
 {% macro render_asset(asset) -%}
 {%- if asset.render is not sameas false -%}
-<figure class="content-asset {{ asset.class_name | e }}{% if asset.aria_hidden %} is-decorative{% endif %}">
-  {%- if asset.render_mode != "shape" and asset.format != "shape" -%}
+{%- set asset_classes -%}content-asset {{ asset.class_name | e }}{% if asset.purpose == "background" %} bg{% endif %}{% if asset.aria_hidden %} is-decorative{% endif %}{%- endset -%}
+{%- set wrapper_tag = "figure" -%}
+{%- if asset.purpose == "background" or asset.aria_hidden -%}
+  {%- set wrapper_tag = "div" -%}
+{%- endif -%}
+{%- set wrapper_attributes = dict() -%}
+{%- if asset.aria_hidden -%}
+  {%- set _ = wrapper_attributes.update({"aria-hidden": "true", "role": "presentation"}) -%}
+{%- endif -%}
+{%- if asset.purpose == "background" and asset.render_mode != "shape" and asset.format != "shape" -%}
+  {%- set _ = wrapper_attributes.update({"style": "background-image: url('" ~ asset.public_path ~ "');"}) -%}
+{%- endif -%}
+<{{ wrapper_tag }}{% if asset.dom_id %} id="{{ asset.dom_id | e }}"{% endif %}{% if asset.id and asset.dom_id and asset.id != asset.dom_id %} data-node-id="{{ asset.id | e }}"{% endif %} class="{{ asset_classes }}" data-purpose="{{ asset.purpose | e }}"{% if asset.render_mode %} data-render-mode="{{ asset.render_mode | e }}"{% endif %}{{ render_attributes(wrapper_attributes) }}>
+  {%- if asset.purpose != "background" and asset.render_mode != "shape" and asset.format != "shape" -%}
   <img src="{{ asset.public_path | e }}" alt="{{ asset.alt | e }}"{% if asset.aria_hidden %} aria-hidden="true"{% endif %}{% if asset.width %} width="{{ asset.width | e }}"{% endif %}{% if asset.height %} height="{{ asset.height | e }}"{% endif %}{{ render_attributes(asset.attributes) }}>
   {%- endif -%}
-</figure>
+</{{ wrapper_tag }}>
 {%- endif -%}
 {%- endmacro %}
 {% macro render_node(node) -%}
@@ -27,10 +39,22 @@
   {%- elif node.kind == "asset" -%}
     {{ render_asset(node.asset) }}
   {%- else -%}
-<{{ node.tag | e }}{% if node.id %} id="{{ node.id | e }}"{% endif %} class="content-node {{ node.class_name | e }}"{{ render_attributes(node.attributes) }}>
-    {%- for child in node.children -%}
-      {{ render_node(child) }}
-    {%- endfor -%}
+<{{ node.tag | e }}{% if node.dom_id %} id="{{ node.dom_id | e }}"{% endif %}{% if node.id and node.dom_id and node.id != node.dom_id %} data-node-id="{{ node.id | e }}"{% endif %} class="content-node {{ node.class_name | e }}"{{ render_attributes(node.attributes) }}>
+    {%- if node.role == "accordion-item" -%}
+      {%- for child in node.children if child.role == "accordion-trigger" -%}
+        {{ render_node(child) }}
+      {%- endfor -%}
+      {%- for child in node.children if child.role == "accordion-panel" -%}
+        {{ render_node(child) }}
+      {%- endfor -%}
+      {%- for child in node.children if child.role != "accordion-trigger" and child.role != "accordion-panel" -%}
+        {{ render_node(child) }}
+      {%- endfor -%}
+    {%- else -%}
+      {%- for child in node.children -%}
+        {{ render_node(child) }}
+      {%- endfor -%}
+    {%- endif -%}
 </{{ node.tag | e }}>
   {%- endif -%}
 {%- endmacro %}
@@ -50,6 +74,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ page.title | e }}</title>
     <link rel="stylesheet" href="styles.css">
+    <script src="accordion.js" defer></script>
   </head>
   <body class="page page--{{ page.slug | e }}">
     {% for section in header_sections %}

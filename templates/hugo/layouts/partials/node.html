@@ -3,13 +3,26 @@
   {{- partial "text.html" $node.text | safeHTML -}}
 {{- else if eq $node.kind "asset" -}}
   {{- partial "asset.html" $node.asset | safeHTML -}}
+{{- else if $node.partial_template -}}
+  {{- partial $node.partial_template $node | safeHTML -}}
 {{- else -}}
-{{ printf "<%s" $node.tag | safeHTML }}{{ with $node.id }} id="{{ . }}"{{ end }} class="content-node {{ $node.class_name }}"
-  {{- range $name, $value := $node.attributes -}}
-    {{- printf "%s=%q" $name $value | safeHTMLAttr -}}
-  {{- end -}}>
-  {{- range $node.children -}}
-    {{- partial "node.html" . | safeHTML -}}
+{{- partial "node_open.html" $node | safeHTML -}}
+  {{- if eq $node.role "accordion-item" -}}
+    {{- range where $node.children "role" "accordion-trigger" -}}
+      {{- partial "node.html" . | safeHTML -}}
+    {{- end -}}
+    {{- range where $node.children "role" "accordion-panel" -}}
+      {{- partial "node.html" . | safeHTML -}}
+    {{- end -}}
+    {{- range $node.children -}}
+      {{- if and (ne .role "accordion-trigger") (ne .role "accordion-panel") -}}
+        {{- partial "node.html" . | safeHTML -}}
+      {{- end -}}
+    {{- end -}}
+  {{- else -}}
+    {{- range $node.children -}}
+      {{- partial "node.html" . | safeHTML -}}
+    {{- end -}}
   {{- end -}}
-{{ printf "</%s>" $node.tag | safeHTML }}
+{{- partial "node_close.html" $node | safeHTML -}}
 {{- end -}}

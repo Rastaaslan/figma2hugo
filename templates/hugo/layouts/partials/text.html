@@ -1,8 +1,15 @@
 {{- $text := . -}}
-{{ printf "<%s" $text.tag | safeHTML }}{{ with $text.id }} id="{{ . }}"{{ end }} class="content-text {{ $text.class_name }}"
-  {{- range $name, $value := $text.attributes -}}
-    {{- printf "%s=%q" $name $value | safeHTMLAttr -}}
-  {{- end -}}>
+{{- $attrs := slice (printf "class=%q" (printf "content-text %s" $text.class_name)) -}}
+{{- with $text.dom_id -}}
+  {{- $attrs = $attrs | append (printf "id=%q" .) -}}
+{{- end -}}
+{{- if and $text.id $text.dom_id (ne $text.id $text.dom_id) -}}
+  {{- $attrs = $attrs | append (printf "data-node-id=%q" $text.id) -}}
+{{- end -}}
+{{- range $name, $value := $text.attributes -}}
+  {{- $attrs = $attrs | append (printf "%s=%q" $name $value) -}}
+{{- end -}}
+{{ printf "<%s %s>" $text.tag (delimit $attrs " ") | safeHTML }}
   {{- if gt (len $text.segments) 0 -}}
     {{- range $text.segments -}}
       <span class="{{ .class_name }}"{{ with .style }} style="{{ . | safeCSS }}"{{ end }}>{{ .html | safeHTML }}</span>

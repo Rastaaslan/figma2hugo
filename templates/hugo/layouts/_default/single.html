@@ -9,23 +9,6 @@
   {{- $page := partial "resolve_page_data.html" . -}}
   {{- if gt (len $page) 0 -}}
     {{- partial "page_region.html" (dict "page" $page "exclude" (slice "header" "nav" "footer")) -}}
-  {{- else -}}
-    <section class="site-home">
-      <div class="site-home__inner">
-        <h1 class="site-home__title">{{ .Title | default site.Title }}</h1>
-        {{- if gt (len site.RegularPages) 0 -}}
-        <nav class="site-home__nav" aria-label="Pages">
-          <ul class="site-home__list">
-            {{- range site.RegularPages.ByWeight -}}
-            <li class="site-home__item">
-              <a class="site-home__link" href="{{ .RelPermalink }}">{{ .LinkTitle | default .Title }}</a>
-            </li>
-            {{- end -}}
-          </ul>
-        </nav>
-        {{- end -}}
-      </div>
-    </section>
   {{- end -}}
 {{- end -}}
 

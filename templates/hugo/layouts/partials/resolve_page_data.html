@@ -1,0 +1,10 @@
+{{- $page := dict -}}
+{{- $pageKey := .Params.page_key | default "" -}}
+{{- if eq $pageKey "page" -}}
+  {{- $page = hugo.Data.page -}}
+{{- else if $pageKey -}}
+  {{- with index hugo.Data.pages $pageKey -}}
+    {{- $page = . -}}
+  {{- end -}}
+{{- end -}}
+{{- return $page -}}

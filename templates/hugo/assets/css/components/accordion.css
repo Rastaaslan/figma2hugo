@@ -1,0 +1,23 @@
+/* Style de base pour les accordéons. */
+
+[data-accordion="true"] {
+  position: relative;
+}
+
+[data-accordion-item="true"] {
+  overflow: hidden;
+  border-bottom: 1px solid rgba(23, 23, 23, 0.12);
+}
+
+button.content-node[data-accordion-trigger="true"] {
+  cursor: pointer;
+}
+
+button.content-node[data-accordion-trigger="true"]:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+}
+
+[data-accordion-panel="true"] {
+  transition: opacity 180ms ease;
+}

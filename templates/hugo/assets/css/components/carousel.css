@@ -1,0 +1,45 @@
+/* Style de base pour les carrousels. */
+
+[data-carousel-stage="true"] {
+  overflow: hidden;
+  isolation: isolate;
+}
+
+[data-carousel-stage="true"] > [data-carousel-slide] {
+  z-index: 1;
+}
+
+[data-carousel-nav="true"] {
+  position: relative;
+  z-index: 2;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+}
+
+button.content-node[data-carousel-thumb] {
+  cursor: pointer;
+  z-index: 1;
+  transition: opacity 180ms ease;
+}
+
+button.content-node[data-carousel-thumb][data-carousel-active="false"] {
+  opacity: 0.72;
+}
+
+button.content-node[data-carousel-thumb][data-carousel-active="true"] {
+  opacity: 1;
+}
+
+button.content-node[data-carousel-thumb]:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+}
+
+button.content-node[data-carousel-thumb] > .content-text,
+button.content-node[data-carousel-thumb] > .content-asset,
+button.content-node[data-carousel-thumb] > .content-node {
+  pointer-events: none;
+}

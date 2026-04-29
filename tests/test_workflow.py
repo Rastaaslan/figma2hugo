@@ -68,6 +68,18 @@ class FakeGenerator:
         return FakeArtifacts(written_files=(index,), page_data={})
 
 
+class FakeMultiGenerator:
+    def generate_many(self, documents, out_dir: Path) -> FakeArtifacts:
+        del documents
+        out_dir.mkdir(parents=True, exist_ok=True)
+        index = out_dir / "index.html"
+        about = out_dir / "about" / "index.html"
+        about.parent.mkdir(parents=True, exist_ok=True)
+        index.write_text("<html></html>", encoding="utf-8")
+        about.write_text("<html></html>", encoding="utf-8")
+        return FakeArtifacts(written_files=(index, about), page_data={})
+
+
 class FakeValidator:
     def validate(self, target_dir: Path, *, mode: str, against_reference: Path | None = None) -> dict[str, object]:
         del target_dir, mode, against_reference
@@ -84,6 +96,28 @@ class FakeReportWriter:
     def write(self, target_dir: Path, payload: dict[str, object]) -> None:
         Path(target_dir, "report.json").write_text("{}", encoding="utf-8")
         del payload
+
+
+class SuccessfulMultiExtractionService:
+    def extract(
+        self,
+        figma_url: str,
+        out_dir: str | Path,
+        *,
+        asset_mode: str = "mixed",
+    ) -> dict[str, object]:
+        del asset_mode
+        Path(out_dir, "raw").mkdir(parents=True, exist_ok=True)
+        page_name = "About Page" if "about" in figma_url else "Contact Page"
+        Path(out_dir, "raw", f"{page_name}.txt").write_text("started", encoding="utf-8")
+        return {
+            "page": {"id": page_name.lower().replace(" ", "-"), "name": page_name, "width": 800, "height": 600, "meta": {}},
+            "sections": [],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
 
 
 def test_run_generation_persists_debug_artifacts_on_failure(monkeypatch) -> None:
@@ -134,3 +168,29 @@ def test_run_generation_cleans_destination_temp_workspace_on_success(monkeypatch
         assert result["buildOk"] is True
         assert not (temp_path / "site" / ".figma2hugo-tmp").exists()
         assert (temp_path / "site" / "index.html").exists()
+
+
+def test_run_generation_supports_multi_page_hugo_sites(monkeypatch) -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        monkeypatch.setattr(workflow_module, "_select_generator", lambda mode: FakeMultiGenerator())
+
+        result = run_generation(
+            GenerationOptions(
+                figma_url="https://www.figma.com/design/AbCdEf1234567890/About?node-id=1-1",
+                figma_urls=(
+                    "https://www.figma.com/design/AbCdEf1234567890/About?node-id=1-1",
+                    "https://www.figma.com/design/AbCdEf1234567890/Contact?node-id=1-2",
+                ),
+                out=temp_path / "site",
+                mode=OutputMode.HUGO,
+            ),
+            extraction_service=SuccessfulMultiExtractionService(),
+            validator=FakeValidator(),
+            report_writer=FakeReportWriter(),
+        )
+
+        assert result["buildOk"] is True
+        assert not (temp_path / "site" / ".figma2hugo-tmp").exists()
+        assert (temp_path / "site" / "index.html").exists()
+        assert (temp_path / "site" / "about" / "index.html").exists()

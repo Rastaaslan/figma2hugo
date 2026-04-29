@@ -3,6 +3,7 @@ from figma2hugo.model.geometry import Bounds
 from figma2hugo.model.intermediate import (
     AssetRef,
     IntermediateDocument,
+    LayoutMetadata,
     PageNode,
     SectionNode,
     TextNode,
@@ -17,6 +18,7 @@ __all__ = [
     "Bounds",
     "GenerationReport",
     "IntermediateDocument",
+    "LayoutMetadata",
     "PageNode",
     "SectionNode",
     "SectionRole",

@@ -1,0 +1,11 @@
+{{- $node := . -}}
+{{- partial "node_open.html" $node | safeHTML -}}
+  {{- range where $node.children "role" "accordion-item" -}}
+    {{- partial "node.html" . | safeHTML -}}
+  {{- end -}}
+  {{- range $node.children -}}
+    {{- if ne .role "accordion-item" -}}
+      {{- partial "node.html" . | safeHTML -}}
+    {{- end -}}
+  {{- end -}}
+{{- partial "node_close.html" $node | safeHTML -}}

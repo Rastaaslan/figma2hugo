@@ -26,6 +26,7 @@ class GenerationOptions:
     fidelity_mode: FidelityMode = FidelityMode.BALANCED
     asset_mode: AssetMode = AssetMode.MIXED
     content_mode: ContentMode = ContentMode.DATA_FILE
+    figma_urls: tuple[str, ...] = ()
 
 
 def validate_document(payload: dict[str, Any]) -> IntermediateDocument:
@@ -42,7 +43,9 @@ def run_generation(
     validator: SiteValidator | None = None,
     report_writer: ReportWriter | None = None,
 ) -> dict[str, Any]:
-    parse_figma_url(options.figma_url)
+    figma_urls = _normalized_figma_urls(options)
+    for figma_url in figma_urls:
+        parse_figma_url(figma_url)
     options.out.mkdir(parents=True, exist_ok=True)
 
     extraction_service = extraction_service or FigmaExtractionService()
@@ -53,31 +56,53 @@ def run_generation(
     stage = "initialization"
     try:
         stage = "extracting Figma data"
-        document_payload = extraction_service.extract(
-            options.figma_url,
-            temp_path,
-            asset_mode=options.asset_mode.value,
-        )
+        if len(figma_urls) == 1:
+            document_payload = extraction_service.extract(
+                figma_urls[0],
+                temp_path,
+                asset_mode=options.asset_mode.value,
+            )
 
-        stage = "validating the intermediate model"
-        document = validate_document(document_payload)
+            stage = "validating the intermediate model"
+            document = validate_document(document_payload)
+            documents = [document]
+        else:
+            if options.mode is not OutputMode.HUGO:
+                raise ValueError("Multi-page generation is only supported in Hugo mode.")
+            documents = []
+            for index, figma_url in enumerate(figma_urls):
+                page_workspace = temp_path / f"page-{index + 1}"
+                stage = f"extracting Figma data for page {index + 1}/{len(figma_urls)}"
+                document_payload = extraction_service.extract(
+                    figma_url,
+                    page_workspace,
+                    asset_mode=options.asset_mode.value,
+                )
+                stage = f"validating the intermediate model for page {index + 1}/{len(figma_urls)}"
+                documents.append(validate_document(document_payload))
 
         stage = "generating the output site"
         generator = _select_generator(options.mode)
-        artifacts = generator.generate(document, options.out)
+        if len(documents) == 1:
+            artifacts = generator.generate(documents[0], options.out)
+        else:
+            if not hasattr(generator, "generate_many"):
+                raise RuntimeError("Selected generator does not support multi-page generation.")
+            artifacts = generator.generate_many(documents, options.out)
 
         stage = "validating the generated site"
         reference_path = temp_path / "reference" / "figma-reference.png"
         report_payload = validator.validate(
             options.out,
             mode=options.mode.value,
-            against_reference=reference_path if reference_path.exists() else None,
+            against_reference=reference_path if len(figma_urls) == 1 and reference_path.exists() else None,
         )
     except Exception as exc:
         debug_dir = _persist_generation_debug_artifacts(
             temp_path,
             base_dir=options.out,
             options=options,
+            figma_urls=figma_urls,
             stage=stage,
             error=exc,
         )
@@ -169,6 +194,7 @@ def _persist_generation_debug_artifacts(
     *,
     base_dir: Path,
     options: GenerationOptions,
+    figma_urls: list[str],
     stage: str,
     error: Exception,
 ) -> Path:
@@ -184,6 +210,7 @@ def _persist_generation_debug_artifacts(
         "stage": stage,
         "mode": options.mode.value,
         "figmaUrl": options.figma_url,
+        "figmaUrls": figma_urls,
         "outDir": str(options.out),
         "error": str(error),
         "workspace": str(workspace_dir),
@@ -225,3 +252,10 @@ def _json_dump(payload: dict[str, Any]) -> str:
     import json
 
     return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+
+
+def _normalized_figma_urls(options: GenerationOptions) -> list[str]:
+    urls = [figma_url for figma_url in options.figma_urls if figma_url]
+    if urls:
+        return urls
+    return [options.figma_url]

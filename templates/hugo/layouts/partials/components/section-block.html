@@ -1,0 +1,6 @@
+{{- $node := . -}}
+{{- partial "node_open.html" $node | safeHTML -}}
+  {{- range $node.children -}}
+    {{- partial "node.html" . | safeHTML -}}
+  {{- end -}}
+{{- partial "node_close.html" $node | safeHTML -}}

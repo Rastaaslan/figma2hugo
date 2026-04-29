@@ -33,6 +33,7 @@ class AssetMode(StrEnum):
     SVG_FIRST = "svg-first"
     RASTER_FIRST = "raster-first"
     MIXED = "mixed"
+    LIGHTWEIGHT = "lightweight"
 
 
 class ContentMode(StrEnum):

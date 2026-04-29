@@ -99,6 +99,65 @@ def test_extract_detects_image_refs_from_fill_override_table() -> None:
     assert result.assets[0]["isVector"] is False
 
 
+def test_extract_emits_layout_metadata_for_texts_and_assets() -> None:
+    section_node = {
+        "id": "cards",
+        "name": "Cards",
+        "type": "FRAME",
+        "visible": True,
+        "layoutMode": "VERTICAL",
+        "itemSpacing": 24,
+        "paddingTop": 32,
+        "paddingRight": 40,
+        "paddingBottom": 32,
+        "paddingLeft": 40,
+        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 960, "height": 640},
+        "children": [
+            {
+                "id": "cards-title",
+                "name": "Cards Title",
+                "type": "TEXT",
+                "visible": True,
+                "characters": "Responsive cards",
+                "textAutoResize": "HEIGHT",
+                "layoutSizingHorizontal": "FILL",
+                "constraints": {"horizontal": "STRETCH", "vertical": "TOP"},
+                "style": {"fontFamily": "Inter", "fontSize": 32},
+                "absoluteBoundingBox": {"x": 40, "y": 32, "width": 420, "height": 48},
+            },
+            {
+                "id": "cards-image",
+                "name": "cards-image",
+                "type": "RECTANGLE",
+                "visible": True,
+                "layoutSizingHorizontal": "FILL",
+                "layoutSizingVertical": "FIXED",
+                "constraints": {"horizontal": "STRETCH", "vertical": "TOP"},
+                "fills": [{"type": "IMAGE", "visible": True, "imageRef": "cards-image-ref"}],
+                "absoluteBoundingBox": {"x": 40, "y": 120, "width": 880, "height": 320},
+            },
+        ],
+    }
+    section = SectionCandidate(
+        id="cards",
+        name="Cards",
+        role="section",
+        node=section_node,
+        bounds={"x": 0.0, "y": 0.0, "width": 960.0, "height": 640.0},
+    )
+
+    result = ContentExtractor().extract([section], image_fill_urls={"cards-image-ref": "https://example.com/card.png"})
+
+    assert result.texts["cards-title"]["layout"]["text_auto_resize"] == "HEIGHT"
+    assert result.texts["cards-title"]["layout"]["layout_sizing_horizontal"] == "FILL"
+    assert result.texts["cards-title"]["layout"]["constraints"]["horizontal"] == "STRETCH"
+    assert result.texts["cards-title"]["layout"]["inferred_strategy"] == "text"
+    assert result.assets[0]["layout"]["layout_sizing_horizontal"] == "FILL"
+    assert result.assets[0]["layout"]["layout_sizing_vertical"] == "FIXED"
+    assert result.assets[0]["layout"]["constraints"]["horizontal"] == "STRETCH"
+    assert result.assets[0]["layout"]["inferred_strategy"] == "leaf"
+
+
 def test_extract_captures_textless_section_root_with_masks_as_composite_asset() -> None:
     section_node = {
         "id": "hero",
@@ -195,7 +254,8 @@ def test_extract_collapses_complex_vector_only_groups_into_composite_assets() ->
 
     assert [asset["nodeId"] for asset in result.assets] == ["hero-decor"]
     assert result.assets[0]["renderMode"] == "composite"
-    assert result.assets[0]["format"] == "png"
+    assert result.assets[0]["format"] == "svg"
+    assert result.assets[0]["isVector"] is True
 
 
 def test_extract_collapses_textless_vector_only_section_roots_into_composite_assets() -> None:
@@ -228,6 +288,109 @@ def test_extract_collapses_textless_vector_only_section_roots_into_composite_ass
 
     assert [asset["nodeId"] for asset in result.assets] == ["decor"]
     assert result.assets[0]["renderMode"] == "composite"
+    assert result.assets[0]["format"] == "svg"
+    assert result.assets[0]["isVector"] is True
+
+
+def test_extract_preserves_editable_svg_subtrees_inside_masked_section_roots() -> None:
+    section_node = {
+        "id": "showcase",
+        "name": "visual-showcase",
+        "type": "GROUP",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1600, "height": 900},
+        "children": [
+            {
+                "id": "primary-graphic-cluster",
+                "name": "primary-graphic-cluster",
+                "type": "GROUP",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1200, "height": 720},
+                "children": [
+                    {
+                        "id": f"main-vector-{index}",
+                        "name": f"Vector {index}",
+                        "type": "VECTOR",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": 20 + (index * 24), "y": 40, "width": 60, "height": 60},
+                    }
+                    for index in range(8)
+                ],
+            },
+            {
+                "id": "hero-image",
+                "name": "Hero",
+                "type": "GROUP",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 940, "y": 80, "width": 520, "height": 540},
+                "children": [
+                    {
+                        "id": "hero-mask",
+                        "name": "hero-mask",
+                        "type": "VECTOR",
+                        "visible": True,
+                        "isMask": True,
+                        "absoluteBoundingBox": {"x": 940, "y": 80, "width": 520, "height": 540},
+                    },
+                    {
+                        "id": "hero-photo",
+                        "name": "hero-photo",
+                        "type": "RECTANGLE",
+                        "visible": True,
+                        "fills": [{"type": "IMAGE", "visible": True, "imageRef": "hero-ref"}],
+                        "absoluteBoundingBox": {"x": 940, "y": 80, "width": 520, "height": 540},
+                    },
+                ],
+            },
+            {
+                "id": "overlay-cluster",
+                "name": "overlay-cluster",
+                "type": "GROUP",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 1080, "y": 0, "width": 360, "height": 260},
+                "children": [
+                    {
+                        "id": f"overlay-vector-{index}",
+                        "name": f"Vector {index}",
+                        "type": "VECTOR",
+                        "visible": True,
+                        "absoluteBoundingBox": {
+                            "x": 1100 + (index * 16),
+                            "y": 20 + (index * 6),
+                            "width": 40,
+                            "height": 40,
+                        },
+                    }
+                    for index in range(6)
+                ],
+            },
+        ],
+    }
+    section = SectionCandidate(
+        id="showcase",
+        name="visual-showcase",
+        role="section",
+        node=section_node,
+        bounds={"x": 0.0, "y": 0.0, "width": 1600.0, "height": 900.0},
+    )
+
+    result = ContentExtractor().extract([section], image_fill_urls={})
+
+    assert [asset["nodeId"] for asset in result.assets] == [
+        "primary-graphic-cluster",
+        "hero-image",
+        "overlay-cluster",
+    ]
+    assert result.assets[0]["format"] == "svg"
+    assert result.assets[0]["renderMode"] == "composite"
+    assert result.assets[0]["isVector"] is True
+    assert result.assets[0]["function"] == "content"
+    assert result.assets[1]["format"] == "png"
+    assert result.assets[1]["renderMode"] == "composite"
+    assert result.assets[2]["format"] == "svg"
+    assert result.assets[2]["renderMode"] == "composite"
+    assert result.assets[2]["isVector"] is True
+    assert result.assets[2]["function"] == "content"
 
 
 def test_extract_collapses_imported_image_wrapper_groups_into_composite_assets() -> None:
@@ -390,7 +553,7 @@ def test_extract_treats_composite_mask_groups_as_renderable_content() -> None:
     assert result.assets[0]["function"] == "content"
 
 
-def test_extract_classifies_foreground_assets_explicitly() -> None:
+def test_extract_classifies_decor_prefix_layers_as_decorative() -> None:
     section_node = {
         "id": "hero",
         "name": "Hero",
@@ -399,8 +562,8 @@ def test_extract_classifies_foreground_assets_explicitly() -> None:
         "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1440, "height": 720},
         "children": [
             {
-                "id": "hero-foreground",
-                "name": "foreground-overlay",
+                "id": "decor-page-accent",
+                "name": "decor-page-accent",
                 "type": "VECTOR",
                 "visible": True,
                 "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1200, "height": 700},
@@ -417,11 +580,334 @@ def test_extract_classifies_foreground_assets_explicitly() -> None:
 
     result = ContentExtractor().extract([section], image_fill_urls={})
 
-    assert [asset["nodeId"] for asset in result.assets] == ["hero-foreground"]
+    assert [asset["nodeId"] for asset in result.assets] == ["decor-page-accent"]
+    assert result.assets[0]["function"] == "decorative"
+
+
+def test_extract_classifies_foreground_prefix_layers() -> None:
+    section_node = {
+        "id": "hero",
+        "name": "Hero",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1440, "height": 720},
+        "children": [
+            {
+                "id": "fg-page-accent",
+                "name": "fg-page-accent",
+                "type": "VECTOR",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1200, "height": 700},
+            },
+            {
+                "id": "foreground-page-accent",
+                "name": "foreground-page-accent",
+                "type": "VECTOR",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 24, "y": 24, "width": 1180, "height": 680},
+            },
+        ],
+    }
+    section = SectionCandidate(
+        id="hero",
+        name="Hero",
+        role="section",
+        node=section_node,
+        bounds={"x": 0.0, "y": 0.0, "width": 1440.0, "height": 720.0},
+    )
+
+    result = ContentExtractor().extract([section], image_fill_urls={})
+
+    assert [asset["nodeId"] for asset in result.assets] == ["fg-page-accent", "foreground-page-accent"]
+    assert all(asset["function"] == "foreground" for asset in result.assets)
+
+
+def test_extract_classifies_background_prefix_layers() -> None:
+    section_node = {
+        "id": "hero",
+        "name": "Hero",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1440, "height": 720},
+        "children": [
+            {
+                "id": "bg-page-panel",
+                "name": "bg-page-panel",
+                "type": "VECTOR",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 120, "y": 120, "width": 320, "height": 180},
+            },
+            {
+                "id": "background-page-panel",
+                "name": "background-page-panel",
+                "type": "VECTOR",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 160, "y": 160, "width": 280, "height": 140},
+            },
+        ],
+    }
+    section = SectionCandidate(
+        id="hero",
+        name="Hero",
+        role="section",
+        node=section_node,
+        bounds={"x": 0.0, "y": 0.0, "width": 1440.0, "height": 720.0},
+    )
+
+    result = ContentExtractor().extract([section], image_fill_urls={})
+
+    assert [asset["nodeId"] for asset in result.assets] == ["bg-page-panel", "background-page-panel"]
+    assert all(asset["function"] == "background" for asset in result.assets)
+
+
+def test_extract_classifies_icon_prefix_layers() -> None:
+    section_node = {
+        "id": "features",
+        "name": "Features",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1440, "height": 720},
+        "children": [
+            {
+                "id": "icon-badge-mark",
+                "name": "icon-badge-mark",
+                "type": "VECTOR",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 120, "y": 120, "width": 180, "height": 180},
+            }
+        ],
+    }
+    section = SectionCandidate(
+        id="features",
+        name="Features",
+        role="section",
+        node=section_node,
+        bounds={"x": 0.0, "y": 0.0, "width": 1440.0, "height": 720.0},
+    )
+
+    result = ContentExtractor().extract([section], image_fill_urls={})
+
+    assert [asset["nodeId"] for asset in result.assets] == ["icon-badge-mark"]
+    assert result.assets[0]["function"] == "icon"
+
+
+def test_extract_keeps_foreground_named_editable_groups_as_svg_assets() -> None:
+    section_node = {
+        "id": "hero",
+        "name": "Hero",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1440, "height": 720},
+        "children": [
+            {
+                "id": "fg-page-cluster",
+                "name": "fg-page-cluster",
+                "type": "GROUP",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 880, "y": 40, "width": 420, "height": 360},
+                "children": [
+                    {
+                        "id": f"foreground-vector-{index}",
+                        "name": f"Vector {index}",
+                        "type": "VECTOR",
+                        "visible": True,
+                        "absoluteBoundingBox": {
+                            "x": 900 + (index * 24),
+                            "y": 70 + (index * 8),
+                            "width": 56,
+                            "height": 56,
+                        },
+                    }
+                    for index in range(8)
+                ],
+            }
+        ],
+    }
+    section = SectionCandidate(
+        id="hero",
+        name="Hero",
+        role="section",
+        node=section_node,
+        bounds={"x": 0.0, "y": 0.0, "width": 1440.0, "height": 720.0},
+    )
+
+    result = ContentExtractor().extract([section], image_fill_urls={})
+
+    assert [asset["nodeId"] for asset in result.assets] == ["fg-page-cluster"]
     assert result.assets[0]["function"] == "foreground"
+    assert result.assets[0]["format"] == "svg"
+    assert result.assets[0]["renderMode"] == "composite"
+    assert result.assets[0]["isVector"] is True
 
 
-def test_extract_uses_structural_background_heuristics_for_large_non_vector_assets() -> None:
+def test_extract_keeps_background_named_editable_groups_as_svg_assets() -> None:
+    section_node = {
+        "id": "hero",
+        "name": "Hero",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1440, "height": 720},
+        "children": [
+            {
+                "id": "bg-page-cluster",
+                "name": "bg-page-cluster",
+                "type": "GROUP",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 40, "y": 48, "width": 540, "height": 360},
+                "children": [
+                    {
+                        "id": f"background-vector-{index}",
+                        "name": f"Vector {index}",
+                        "type": "VECTOR",
+                        "visible": True,
+                        "absoluteBoundingBox": {
+                            "x": 60 + (index * 28),
+                            "y": 72 + (index * 10),
+                            "width": 72,
+                            "height": 72,
+                        },
+                    }
+                    for index in range(8)
+                ],
+            }
+        ],
+    }
+    section = SectionCandidate(
+        id="hero",
+        name="Hero",
+        role="section",
+        node=section_node,
+        bounds={"x": 0.0, "y": 0.0, "width": 1440.0, "height": 720.0},
+    )
+
+    result = ContentExtractor().extract([section], image_fill_urls={})
+
+    assert [asset["nodeId"] for asset in result.assets] == ["bg-page-cluster"]
+    assert result.assets[0]["function"] == "background"
+    assert result.assets[0]["format"] == "svg"
+    assert result.assets[0]["renderMode"] == "composite"
+    assert result.assets[0]["isVector"] is True
+
+
+def test_extract_keeps_large_graphic_clusters_as_editable_svg_assets() -> None:
+    section_node = {
+        "id": "hero",
+        "name": "Hero",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1440, "height": 720},
+        "children": [
+            {
+                "id": "graphic-cluster-left",
+                "name": "graphic-cluster-left",
+                "type": "GROUP",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 120, "y": 80, "width": 320, "height": 220},
+                "children": [
+                    {
+                        "id": f"shape-vector-{index}",
+                        "name": f"Vector {index}",
+                        "type": "VECTOR",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": 120 + (index * 12), "y": 80, "width": 40, "height": 40},
+                    }
+                    for index in range(14)
+                ],
+            }
+        ],
+    }
+    section = SectionCandidate(
+        id="hero",
+        name="Hero",
+        role="section",
+        node=section_node,
+        bounds={"x": 0.0, "y": 0.0, "width": 1440.0, "height": 720.0},
+    )
+
+    result = ContentExtractor().extract([section], image_fill_urls={})
+
+    assert [asset["nodeId"] for asset in result.assets] == ["graphic-cluster-left"]
+    assert result.assets[0]["format"] == "svg"
+    assert result.assets[0]["renderMode"] == "composite"
+    assert result.assets[0]["isVector"] is True
+    assert result.assets[0]["function"] == "content"
+
+
+def test_extract_keeps_small_graphic_cluster_groups_as_editable_svg_assets() -> None:
+    section_node = {
+        "id": "breaker",
+        "name": "Breaker",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1440, "height": 720},
+        "children": [
+            {
+                "id": "accent-cluster-alpha",
+                "name": "Accent Cluster Alpha",
+                "type": "GROUP",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 0, "y": 420, "width": 260, "height": 300},
+                "children": [
+                    {
+                        "id": f"accent-alpha-vector-{index}",
+                        "name": f"Vector {index}",
+                        "type": "VECTOR",
+                        "visible": True,
+                        "absoluteBoundingBox": {
+                            "x": 12 + (index * 16),
+                            "y": 452 + (index * 12),
+                            "width": 64,
+                            "height": 64,
+                        },
+                    }
+                    for index in range(6)
+                ],
+            },
+            {
+                "id": "accent-cluster-beta",
+                "name": "Accent Cluster Beta",
+                "type": "GROUP",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 1120, "y": 40, "width": 280, "height": 340},
+                "children": [
+                    {
+                        "id": f"accent-beta-vector-{index}",
+                        "name": f"Vector {index}",
+                        "type": "VECTOR",
+                        "visible": True,
+                        "absoluteBoundingBox": {
+                            "x": 1140 + (index * 18),
+                            "y": 72 + (index * 10),
+                            "width": 72,
+                            "height": 72,
+                        },
+                    }
+                    for index in range(6)
+                ],
+            },
+        ],
+    }
+    section = SectionCandidate(
+        id="breaker",
+        name="Breaker",
+        role="section",
+        node=section_node,
+        bounds={"x": 0.0, "y": 0.0, "width": 1440.0, "height": 720.0},
+    )
+
+    result = ContentExtractor().extract([section], image_fill_urls={})
+
+    assert [asset["nodeId"] for asset in result.assets] == [
+        "accent-cluster-alpha",
+        "accent-cluster-beta",
+    ]
+    assert all(asset["function"] == "content" for asset in result.assets)
+    assert all(asset["format"] == "svg" for asset in result.assets)
+    assert all(asset["renderMode"] == "composite" for asset in result.assets)
+    assert all(asset["isVector"] is True for asset in result.assets)
+
+
+def test_extract_keeps_unnamed_large_image_panels_as_content() -> None:
     section_node = {
         "id": "hero",
         "name": "Hero",
@@ -449,7 +935,7 @@ def test_extract_uses_structural_background_heuristics_for_large_non_vector_asse
 
     result = ContentExtractor().extract([section], image_fill_urls={})
 
-    assert result.assets[0]["function"] == "background"
+    assert result.assets[0]["function"] == "content"
 
 
 def test_extract_does_not_promote_partial_width_image_panels_to_backgrounds() -> None:
@@ -486,7 +972,7 @@ def test_extract_does_not_promote_partial_width_image_panels_to_backgrounds() ->
     assert result.assets[0]["function"] == "content"
 
 
-def test_extract_uses_structural_icon_heuristics_for_small_vector_assets() -> None:
+def test_extract_keeps_unnamed_small_vector_assets_as_content() -> None:
     section_node = {
         "id": "features",
         "name": "Features",
@@ -513,7 +999,7 @@ def test_extract_uses_structural_icon_heuristics_for_small_vector_assets() -> No
 
     result = ContentExtractor().extract([section], image_fill_urls={})
 
-    assert result.assets[0]["function"] == "icon"
+    assert result.assets[0]["function"] == "content"
 
 
 def test_extract_does_not_treat_debug_names_as_backgrounds() -> None:
@@ -858,6 +1344,50 @@ def test_extract_merges_multiline_paragraph_blocks_with_continuation_lines() -> 
         "diam nibh, hendrerit sit amet est eu, iaculis"
     )
     assert result.texts["copy-1"]["bounds"] == {"x": 80.0, "y": 120.0, "width": 758.0, "height": 264.0}
+
+
+def test_extract_does_not_merge_href_utility_text_into_card_copy() -> None:
+    shared_style = {"fontFamily": "Inter", "fontSize": 38, "fontWeight": 700, "lineHeightPx": 74}
+    section_node = {
+        "id": "cards",
+        "name": "Cards",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+        "children": [
+            {
+                "id": "copy-1",
+                "name": "texte-projet-1",
+                "type": "TEXT",
+                "visible": True,
+                "characters": "voila ma premiere carte cliquable",
+                "style": shared_style,
+                "absoluteBoundingBox": {"x": 120, "y": 120, "width": 700, "height": 74},
+            },
+            {
+                "id": "href-1",
+                "name": "href-projet-1",
+                "type": "TEXT",
+                "visible": True,
+                "characters": "https://example.com/galerie/bleu",
+                "style": shared_style,
+                "absoluteBoundingBox": {"x": 120, "y": 194, "width": 700, "height": 74},
+            },
+        ],
+    }
+    section = SectionCandidate(
+        id="cards",
+        name="Cards",
+        role="section",
+        node=section_node,
+        bounds={"x": 0.0, "y": 0.0, "width": 1920.0, "height": 1080.0},
+    )
+
+    result = ContentExtractor().extract([section], image_fill_urls={})
+
+    assert set(result.texts) == {"copy-1", "href-1"}
+    assert result.texts["copy-1"]["value"] == "voila ma premiere carte cliquable"
+    assert result.texts["href-1"]["value"] == "https://example.com/galerie/bleu"
 
 
 def test_extract_pads_truncated_style_override_arrays_for_trailing_default_text() -> None:

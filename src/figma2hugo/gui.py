@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -9,7 +10,7 @@ from pathlib import Path
 from queue import Empty, Queue
 from typing import Any
 
-from figma2hugo.config import OutputMode
+from figma2hugo.config import AssetMode, OutputMode
 from figma2hugo.local_config import get_local_config_path, get_local_figma_token
 from figma2hugo.workflow import GenerationOptions, run_generation
 
@@ -24,19 +25,23 @@ class Figma2HugoGUI:
         self._ttk = ttk
         self._root = tk.Tk()
         self._root.title("figma2hugo")
-        self._root.geometry("760x560")
-        self._root.minsize(720, 520)
+        self._root.geometry("820x620")
+        self._root.minsize(760, 560)
         self._root.configure(bg="#f3efe7")
 
         self._queue: Queue[tuple[str, Any]] = Queue()
         self._is_running = False
         self._last_output_dir: Path | None = None
 
-        self.url_var = tk.StringVar()
+        self.url_vars: list[Any] = [tk.StringVar()]
+        self.url_entries: list[Any] = []
+        self.url_add_buttons: list[Any] = []
+        self.url_remove_buttons: list[Any] = []
         self.destination_var = tk.StringVar(value=str(Path.cwd() / "site"))
         self.token_var = tk.StringVar(value=get_local_figma_token() or "")
+        self.asset_mode_var = tk.StringVar(value=AssetMode.MIXED.value)
         self.status_var = tk.StringVar(value="Pret")
-        self.summary_var = tk.StringVar(value="Saisis une URL Figma et un dossier de destination.")
+        self.summary_var = tk.StringVar(value="Saisis une ou plusieurs URLs Figma et un dossier de destination.")
 
         self._build_styles()
         self._build_layout(ScrolledText)
@@ -75,7 +80,7 @@ class Figma2HugoGUI:
         ttk.Label(hero, text="figma2hugo", style="Header.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             hero,
-            text="Une URL Figma, un dossier cible, puis lancement de la generation.",
+            text="Une ou plusieurs URLs Figma, un dossier cible, puis lancement de la generation.",
             style="Body.TLabel",
         ).grid(row=1, column=0, sticky="w", pady=(6, 0))
         ttk.Label(hero, textvariable=self.status_var, style="Status.TLabel").grid(row=0, column=1, rowspan=2, sticky="e")
@@ -88,13 +93,15 @@ class Figma2HugoGUI:
         ttk.Label(form_card, text="Generation", style="CardTitle.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(
             form_card,
-            text="Le mode Hugo est le chemin principal. Le statique reste disponible en second bouton.",
+            text="Le mode Hugo gere aussi le multi-pages. Le statique reste disponible pour une seule URL.",
             style="CardBody.TLabel",
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 14))
 
-        ttk.Label(form_card, text="URL Figma", style="Field.TLabel").grid(row=2, column=0, columnspan=2, sticky="w")
-        self.url_entry = ttk.Entry(form_card, textvariable=self.url_var, font=("Segoe UI", 10))
-        self.url_entry.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(6, 14), ipady=6)
+        ttk.Label(form_card, text="URLs Figma", style="Field.TLabel").grid(row=2, column=0, columnspan=2, sticky="w")
+        self.url_rows_frame = ttk.Frame(form_card, style="Card.TFrame")
+        self.url_rows_frame.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(6, 14))
+        self.url_rows_frame.columnconfigure(0, weight=1)
+        self._render_url_rows()
 
         ttk.Label(form_card, text="Dossier de destination", style="Field.TLabel").grid(row=4, column=0, columnspan=2, sticky="w")
         self.destination_entry = ttk.Entry(form_card, textvariable=self.destination_var, font=("Segoe UI", 10))
@@ -102,17 +109,32 @@ class Figma2HugoGUI:
         self.browse_button = ttk.Button(form_card, text="Parcourir", style="Secondary.TButton", command=self._choose_directory)
         self.browse_button.grid(row=5, column=1, sticky="ew")
 
-        ttk.Label(form_card, text="Token Figma", style="Field.TLabel").grid(row=6, column=0, columnspan=2, sticky="w", pady=(14, 0))
+        ttk.Label(form_card, text="Mode assets", style="Field.TLabel").grid(row=6, column=0, columnspan=2, sticky="w", pady=(14, 0))
+        self.asset_mode_combo = ttk.Combobox(
+            form_card,
+            textvariable=self.asset_mode_var,
+            values=[mode.value for mode in AssetMode],
+            state="readonly",
+            font=("Segoe UI", 10),
+        )
+        self.asset_mode_combo.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(6, 0), ipady=4)
+        ttk.Label(
+            form_card,
+            text="`lightweight` reduit le poids des gros rasters et baisse le rendu PNG Figma.",
+            style="CardBody.TLabel",
+        ).grid(row=8, column=0, columnspan=2, sticky="w", pady=(6, 0))
+
+        ttk.Label(form_card, text="Token Figma", style="Field.TLabel").grid(row=9, column=0, columnspan=2, sticky="w", pady=(14, 0))
         self.token_entry = ttk.Entry(form_card, textvariable=self.token_var, font=("Consolas", 10), show="*")
-        self.token_entry.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(6, 0), ipady=6)
+        self.token_entry.grid(row=10, column=0, columnspan=2, sticky="ew", pady=(6, 0), ipady=6)
         ttk.Label(
             form_card,
             text=f"Optionnel si present dans {get_local_config_path().name}, FIGMA_ACCESS_TOKEN, ou un bridge MCP.",
             style="CardBody.TLabel",
-        ).grid(row=8, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        ).grid(row=11, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
         actions = ttk.Frame(form_card, style="Card.TFrame")
-        actions.grid(row=9, column=0, columnspan=2, sticky="ew", pady=(18, 0))
+        actions.grid(row=12, column=0, columnspan=2, sticky="ew", pady=(18, 0))
         actions.columnconfigure(0, weight=1)
         actions.columnconfigure(1, weight=1)
         actions.columnconfigure(2, weight=1)
@@ -166,6 +188,7 @@ class Figma2HugoGUI:
         self.output_text.grid(row=2, column=0, sticky="nsew")
         self.output_text.insert("1.0", "Le rapport de generation apparaitra ici.\n")
         self.output_text.configure(state="disabled")
+        self._set_running_state(False)
 
     def _choose_directory(self) -> None:
         from tkinter import filedialog
@@ -180,13 +203,19 @@ class Figma2HugoGUI:
         if self._is_running:
             return
 
-        figma_url = self.url_var.get().strip()
+        figma_urls = _clean_figma_urls(self.url_vars)
         destination = self.destination_var.get().strip()
-        if not figma_url:
-            messagebox.showerror("URL manquante", "Saisis une URL Figma.")
+        if not figma_urls:
+            messagebox.showerror("URL manquante", "Saisis au moins une URL Figma.")
             return
         if not destination:
             messagebox.showerror("Destination manquante", "Choisis un dossier de destination.")
+            return
+        if mode is OutputMode.STATIC and len(figma_urls) > 1:
+            messagebox.showerror(
+                "Mode indisponible",
+                "L'export statique ne gere qu'une seule URL.\nUtilise le mode Hugo pour plusieurs pages.",
+            )
             return
         if not _has_figma_access(self.token_var.get()):
             messagebox.showerror(
@@ -203,25 +232,34 @@ class Figma2HugoGUI:
 
         self._set_running_state(True)
         self.status_var.set("Generation en cours")
-        self.summary_var.set(f"Lancement du mode {mode.value}...")
+        page_label = "page" if len(figma_urls) == 1 else "pages"
+        self.summary_var.set(f"Lancement du mode {mode.value} pour {len(figma_urls)} {page_label}...")
         self._set_output("Generation en cours, merci de patienter...\n")
 
         thread = threading.Thread(
             target=self._run_generation_job,
-            args=(figma_url, Path(destination), mode, self.token_var.get().strip()),
+            args=(figma_urls, Path(destination), mode, self.token_var.get().strip()),
             daemon=True,
         )
         thread.start()
 
-    def _run_generation_job(self, figma_url: str, destination: Path, mode: OutputMode, token: str) -> None:
+    def _run_generation_job(self, figma_urls: list[str], destination: Path, mode: OutputMode, token: str) -> None:
         try:
             previous_token = os.environ.get("FIGMA_ACCESS_TOKEN")
             if token:
                 os.environ["FIGMA_ACCESS_TOKEN"] = token
-            result = run_generation(GenerationOptions(figma_url=figma_url, out=destination, mode=mode))
+            result = run_generation(
+                GenerationOptions(
+                    figma_url=figma_urls[0],
+                    figma_urls=tuple(figma_urls),
+                    out=destination,
+                    mode=mode,
+                    asset_mode=AssetMode(self.asset_mode_var.get()),
+                )
+            )
             self._queue.put(("success", result))
         except Exception as exc:  # pragma: no cover - UI thread handoff
-            self._queue.put(("error", _format_generation_error(str(exc))))
+            self._queue.put(("error", _describe_generation_error(str(exc))))
         finally:
             if token:
                 if previous_token is None:
@@ -244,9 +282,10 @@ class Figma2HugoGUI:
                     self.open_folder_button.configure(state="normal")
                     self._set_running_state(False)
                 elif kind == "error":
-                    self.status_var.set("Erreur")
-                    self.summary_var.set("La generation a echoue.")
-                    self._set_output(str(payload))
+                    error_payload = payload if isinstance(payload, dict) else _describe_generation_error(str(payload))
+                    self.status_var.set(str(error_payload.get("status", "Erreur")))
+                    self.summary_var.set(str(error_payload.get("summary", "La generation a echoue.")))
+                    self._set_output(str(error_payload.get("details", payload)))
                     self._set_running_state(False)
         except Empty:
             pass
@@ -256,12 +295,81 @@ class Figma2HugoGUI:
     def _set_running_state(self, running: bool) -> None:
         state = "disabled" if running else "normal"
         self._is_running = running
-        self.url_entry.configure(state=state)
-        self.destination_entry.configure(state=state)
-        self.token_entry.configure(state=state)
-        self.browse_button.configure(state=state)
-        self.generate_hugo_button.configure(state=state)
-        self.generate_static_button.configure(state=state)
+        for entry in self.url_entries:
+            entry.configure(state=state)
+        for button in self.url_add_buttons + self.url_remove_buttons:
+            button.configure(state=state)
+        if hasattr(self, "destination_entry"):
+            self.destination_entry.configure(state=state)
+        if hasattr(self, "token_entry"):
+            self.token_entry.configure(state=state)
+        if hasattr(self, "asset_mode_combo"):
+            self.asset_mode_combo.configure(state="disabled" if running else "readonly")
+        if hasattr(self, "browse_button"):
+            self.browse_button.configure(state=state)
+        if hasattr(self, "generate_hugo_button"):
+            self.generate_hugo_button.configure(state=state)
+        static_state = state
+        if not running and len(_clean_figma_urls(self.url_vars)) > 1:
+            static_state = "disabled"
+        if hasattr(self, "generate_static_button"):
+            self.generate_static_button.configure(state=static_state)
+
+    def _render_url_rows(self) -> None:
+        ttk = self._ttk
+        for child in self.url_rows_frame.winfo_children():
+            child.destroy()
+        self.url_entries = []
+        self.url_add_buttons = []
+        self.url_remove_buttons = []
+
+        for index, variable in enumerate(self.url_vars):
+            row = ttk.Frame(self.url_rows_frame, style="Card.TFrame")
+            row.grid(row=index, column=0, sticky="ew", pady=(0, 8 if index < len(self.url_vars) - 1 else 0))
+            row.columnconfigure(0, weight=1)
+
+            entry = ttk.Entry(row, textvariable=variable, font=("Segoe UI", 10))
+            entry.grid(row=0, column=0, sticky="ew", ipady=6)
+            add_button = ttk.Button(
+                row,
+                text="+",
+                width=3,
+                style="Secondary.TButton",
+                command=self._add_url_row,
+            )
+            add_button.grid(row=0, column=1, padx=(8, 4))
+            remove_button = ttk.Button(
+                row,
+                text="-",
+                width=3,
+                style="Secondary.TButton",
+                command=lambda row_index=index: self._remove_url_row(row_index),
+            )
+            remove_button.grid(row=0, column=2)
+
+            if len(self.url_vars) == 1:
+                remove_button.configure(state="disabled")
+
+            self.url_entries.append(entry)
+            self.url_add_buttons.append(add_button)
+            self.url_remove_buttons.append(remove_button)
+
+        self._set_running_state(self._is_running)
+
+    def _add_url_row(self) -> None:
+        self.url_vars.append(self._tk.StringVar())
+        self._render_url_rows()
+        if self.url_entries:
+            self.url_entries[-1].focus_set()
+
+    def _remove_url_row(self, index: int) -> None:
+        if len(self.url_vars) <= 1:
+            return
+        self.url_vars.pop(index)
+        self._render_url_rows()
+        if self.url_entries:
+            focus_index = min(index, len(self.url_entries) - 1)
+            self.url_entries[focus_index].focus_set()
 
     def _set_output(self, content: str) -> None:
         self.output_text.configure(state="normal")
@@ -309,10 +417,157 @@ def _missing_access_message() -> str:
     )
 
 
+def _clean_figma_urls(values: list[Any]) -> list[str]:
+    cleaned: list[str] = []
+    for value in values:
+        candidate = value.get() if hasattr(value, "get") else value
+        text = str(candidate or "").strip()
+        if text:
+            cleaned.append(text)
+    return cleaned
+
+
 def _format_generation_error(message: str) -> str:
     if "Unable to extract Figma data" in message or "FIGMA_ACCESS_TOKEN" in message:
         return _missing_access_message() + "\n\nDetail technique:\n" + message
     return message
+
+
+def _describe_generation_error(message: str) -> dict[str, str]:
+    raw_message = str(message or "").strip() or "La generation a echoue."
+    details = _format_generation_error(raw_message)
+    stage, cause, debug_path = _split_generation_error(raw_message)
+    normalized = cause.lower()
+
+    if _looks_like_invalid_figma_url(normalized):
+        return {
+            "status": "URL invalide",
+            "summary": "Au moins une URL Figma est invalide. Verifie le format et le node-id.",
+            "details": details,
+        }
+
+    if (
+        "unable to extract figma data" in normalized
+        or "rest token missing" in normalized
+        or "figma_access_token" in normalized
+    ):
+        return {
+            "status": "Acces Figma manquant",
+            "summary": "Impossible d'acceder a Figma avec la configuration actuelle.",
+            "details": details,
+        }
+
+    if (
+        "multi-page generation is only supported in hugo mode" in normalized
+        or "does not support multi-page generation" in normalized
+    ):
+        return {
+            "status": "Mode incompatible",
+            "summary": "Le multi-pages n'est disponible qu'en mode Hugo.",
+            "details": details,
+        }
+
+    if "invalid intermediate model" in normalized:
+        return {
+            "status": "Modele invalide",
+            "summary": "Le modele intermediaire genere n'est pas valide.",
+            "details": details,
+        }
+
+    if "too flat for structured extraction" in normalized or "grouping frames or sections" in normalized:
+        return {
+            "status": "Structure Figma invalide",
+            "summary": "Le noeud choisi est trop plat pour une extraction structuree.",
+            "details": details,
+        }
+
+    if "playwright is not installed" in normalized:
+        return {
+            "status": "Validation indisponible",
+            "summary": "La validation visuelle n'est pas disponible dans cet environnement.",
+            "details": details,
+        }
+
+    if stage:
+        translated_stage = _translate_generation_stage(stage)
+        summary = f"La generation a echoue pendant {translated_stage}."
+        if debug_path:
+            summary += " Les fichiers de debug ont ete conserves."
+        return {
+            "status": _stage_status_label(stage),
+            "summary": summary,
+            "details": details,
+        }
+
+    return {
+        "status": "Erreur",
+        "summary": "La generation a echoue.",
+        "details": details,
+    }
+
+
+def _split_generation_error(message: str) -> tuple[str | None, str, str | None]:
+    match = re.match(
+        r"Generation failed during (?P<stage>.+?): (?P<cause>.+?)(?:\nDebug files written to: (?P<debug>.+))?$",
+        message,
+        re.S,
+    )
+    if not match:
+        return None, message.strip(), None
+    return (
+        str(match.group("stage") or "").strip() or None,
+        str(match.group("cause") or "").strip() or message.strip(),
+        str(match.group("debug") or "").strip() or None,
+    )
+
+
+def _looks_like_invalid_figma_url(normalized_message: str) -> bool:
+    return any(
+        token in normalized_message
+        for token in (
+            "figma url must start with http:// or https://",
+            "figma url host must be figma.com or www.figma.com",
+            "figma url path must look like",
+            "figma url must include a node-id query parameter",
+            "unsupported figma host",
+            "the provided figma url does not contain a file key",
+            "unsupported figma url type",
+            "unsupported figma url kind",
+        )
+    )
+
+
+def _translate_generation_stage(stage: str) -> str:
+    normalized = stage.strip().lower()
+    translations = {
+        "initialization": "l'initialisation",
+        "extracting figma data": "l'extraction Figma",
+        "generating the output site": "la generation du site",
+        "validating the generated site": "la validation du site genere",
+        "validating the intermediate model": "la validation du modele intermediaire",
+    }
+    if normalized in translations:
+        return translations[normalized]
+    if normalized.startswith("extracting figma data for page "):
+        return "l'extraction Figma"
+    if normalized.startswith("validating the intermediate model for page "):
+        return "la validation du modele intermediaire"
+    return stage
+
+
+def _stage_status_label(stage: str) -> str:
+    normalized = stage.strip().lower()
+    if normalized == "initialization":
+        return "Initialisation"
+    if normalized.startswith("extracting figma data"):
+        return "Echec extraction"
+    if normalized.startswith("validating the intermediate model"):
+        return "Modele invalide"
+    if normalized == "generating the output site":
+        return "Echec generation"
+    if normalized == "validating the generated site":
+        return "Echec validation"
+    return "Erreur"
 
 
 def launch_app() -> None:

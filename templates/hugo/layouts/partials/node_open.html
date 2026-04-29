@@ -1,0 +1,12 @@
+{{- $node := . -}}
+{{- $attrs := slice (printf "class=%q" (printf "content-node %s" $node.class_name)) -}}
+{{- with $node.dom_id -}}
+  {{- $attrs = $attrs | append (printf "id=%q" .) -}}
+{{- end -}}
+{{- if and $node.id $node.dom_id (ne $node.id $node.dom_id) -}}
+  {{- $attrs = $attrs | append (printf "data-node-id=%q" $node.id) -}}
+{{- end -}}
+{{- range $name, $value := $node.attributes -}}
+  {{- $attrs = $attrs | append (printf "%s=%q" $name $value) -}}
+{{- end -}}
+{{ printf "<%s %s>" $node.tag (delimit $attrs " ") | safeHTML }}

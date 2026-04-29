@@ -1,0 +1,15 @@
+{{- $node := . -}}
+{{- partial "node_open.html" $node | safeHTML -}}
+  {{/* Le stage avant la nav permet un HTML stable, quel que soit l'ordre Figma. */}}
+  {{- range where $node.children "role" "carousel-stage" -}}
+    {{- partial "node.html" . | safeHTML -}}
+  {{- end -}}
+  {{- range where $node.children "role" "carousel-nav" -}}
+    {{- partial "node.html" . | safeHTML -}}
+  {{- end -}}
+  {{- range $node.children -}}
+    {{- if and (ne .role "carousel-stage") (ne .role "carousel-nav") -}}
+      {{- partial "node.html" . | safeHTML -}}
+    {{- end -}}
+  {{- end -}}
+{{- partial "node_close.html" $node | safeHTML -}}

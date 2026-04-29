@@ -95,6 +95,33 @@ class StubExtractionService:
         return self.document
 
 
+class MultiPageExtractionService:
+    def __init__(self, asset_source: str) -> None:
+        self.asset_source = asset_source
+
+    def inspect(self, figma_url: str, out_dir: str | Path) -> dict[str, object]:
+        del figma_url, out_dir
+        return {"page": {}, "sectionCount": 0, "textCount": 0, "assetCount": 0, "warnings": []}
+
+    def extract(
+        self,
+        figma_url: str,
+        out_dir: str | Path,
+        *,
+        asset_mode: str = "mixed",
+    ) -> dict[str, object]:
+        del out_dir, asset_mode
+        if "About" in figma_url:
+            document = _sample_document(self.asset_source)
+            document["page"]["name"] = "About Page"
+            document["page"]["title"] = "About Page"
+            return document
+        document = _sample_document(self.asset_source)
+        document["page"]["name"] = "Contact Page"
+        document["page"]["title"] = "Contact Page"
+        return document
+
+
 def test_inspect_outputs_summary(monkeypatch) -> None:
     runner = CliRunner()
     monkeypatch.setattr(
@@ -185,6 +212,42 @@ def test_build_generates_hugo_site_with_url_and_destination_only(monkeypatch) ->
         assert Path("site/layouts/index.html").exists()
         assert Path("site/assets/css/main.css").exists()
         assert Path("site/data/page.json").exists()
+        assert Path("site/report.json").exists()
+
+
+def test_build_site_generates_multi_page_hugo_output(monkeypatch) -> None:
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        asset_source = Path("hero.png")
+        asset_source.write_bytes(b"png")
+        monkeypatch.setattr(
+            cli_module,
+            "_make_extraction_service",
+            lambda: MultiPageExtractionService(str(asset_source.resolve())),
+        )
+
+        result = runner.invoke(
+            app,
+            [
+                "build-site",
+                "site",
+                "--page",
+                "https://www.figma.com/design/AbCdEf1234567890/About?node-id=1-1",
+                "--page",
+                "https://www.figma.com/design/AbCdEf1234567890/Contact?node-id=1-2",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert Path("site/layouts/_default/single.html").exists()
+        assert Path("site/assets/css/site.css").exists()
+        assert Path("site/assets/css/pages/about-page.css").exists()
+        assert Path("site/assets/css/pages/contact-page.css").exists()
+        assert Path("site/content/about-page.md").exists()
+        assert Path("site/content/contact-page.md").exists()
+        assert Path("site/data/pages/about-page.json").exists()
+        assert Path("site/data/pages/contact-page.json").exists()
+        assert Path("site/data/site.json").exists()
         assert Path("site/report.json").exists()
 
 

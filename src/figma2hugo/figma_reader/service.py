@@ -19,6 +19,44 @@ from figma2hugo.layout_analyzer import LayoutAnalyzer
 from figma2hugo.model import IntermediateDocument
 
 SECTION_LIKE_TYPES = {"FRAME", "SECTION", "GROUP", "INSTANCE", "COMPONENT", "COMPONENT_SET"}
+NON_CONTENT_ASSET_FUNCTIONS = {"background", "decorative", "foreground", "icon", "mask"}
+GENERIC_CONTAINER_NAME_TOKENS = {
+    "auto",
+    "bloc",
+    "block",
+    "container",
+    "content",
+    "div",
+    "frame",
+    "group",
+    "groupe",
+    "inner",
+    "layout",
+    "node",
+    "outer",
+    "wrapper",
+}
+SEMANTIC_CONTAINER_ROLES = {
+    "carousel",
+    "carousel-nav",
+    "carousel-slide",
+    "carousel-stage",
+    "carousel-thumb",
+    "link-card",
+    "link-grid",
+    "accordion",
+    "accordion-item",
+    "accordion-panel",
+    "accordion-trigger",
+    "button",
+    "card",
+    "field",
+    "footer",
+    "form",
+    "header",
+    "nav",
+    "section",
+}
 
 
 class FigmaExtractionService:
@@ -86,6 +124,7 @@ class FigmaExtractionService:
                 "name": root_node.get("name") or parsed_url.page_hint or "Page",
                 "width": (root_node.get("absoluteBoundingBox") or {}).get("width", 0),
                 "height": (root_node.get("absoluteBoundingBox") or {}).get("height", 0),
+                "layout": self._layout_metadata(root_node, fallback_strategy="absolute"),
                 "meta": {
                     "figmaUrl": figma_url,
                     "fileKey": parsed_url.file_key,
@@ -97,7 +136,7 @@ class FigmaExtractionService:
             "sections": [
                 {
                     **section.to_dict(),
-                    "children": self._ordered_child_ids(
+                    "children": self._build_section_children(
                         section.node,
                         text_ids={
                             text_id
@@ -119,13 +158,14 @@ class FigmaExtractionService:
                     "assets": [
                         asset.get("nodeId")
                         for asset in assets
-                        if asset.get("sectionId") == section.id and asset.get("function") != "decorative"
+                        if asset.get("sectionId") == section.id and asset.get("function") not in NON_CONTENT_ASSET_FUNCTIONS
                     ],
                     "decorative_assets": [
                         asset.get("nodeId")
                         for asset in assets
-                        if asset.get("sectionId") == section.id and asset.get("function") == "decorative"
+                        if asset.get("sectionId") == section.id and asset.get("function") in NON_CONTENT_ASSET_FUNCTIONS
                     ],
+                    "layout": self._layout_metadata(section.node, fallback_strategy="absolute"),
                     "metadata": {
                         "sourceNodeType": section.node.get("type"),
                         "clipsContent": bool(section.node.get("clipsContent", False)),
@@ -138,7 +178,7 @@ class FigmaExtractionService:
                             child.get("id")
                             for child in section.extra_nodes
                             if child.get("visible", True)
-                        ]
+                        ],
                     },
                 }
                 for section in sections
@@ -314,36 +354,266 @@ class FigmaExtractionService:
             ordered.append(normalized)
         return ordered
 
-    def _ordered_child_ids(
+    def _build_section_children(
         self,
         root_node: dict[str, Any],
         *,
         text_ids: set[str],
         asset_ids: set[str],
         extra_nodes: list[dict[str, Any]] | None = None,
-    ) -> list[str]:
-        ordered: list[str] = []
-
-        def visit(node: dict[str, Any]) -> None:
-            if not node.get("visible", True):
-                return
-            node_id = node.get("id")
-            if node.get("type") == "TEXT" and node_id in text_ids:
-                ordered.append(node_id)
-            elif node_id in asset_ids:
-                ordered.append(node_id)
-            for child in node.get("children", []):
-                visit(child)
+    ) -> list[Any]:
+        ordered: list[Any] = []
+        section_bounds = root_node.get("absoluteBoundingBox") or root_node.get("absoluteRenderBounds") or {}
 
         root_node_id = root_node.get("id")
         if root_node_id in asset_ids:
             ordered.append(root_node_id)
 
         for child in root_node.get("children", []):
-            visit(child)
+            ordered.extend(
+                self._collect_child_descriptors(
+                    child,
+                    text_ids=text_ids,
+                    asset_ids=asset_ids,
+                    container_parent_bounds=section_bounds,
+                    leaf_parent_bounds=None,
+                    container_space="section",
+                )
+            )
         for child in sorted(extra_nodes or [], key=self._node_sort_key):
-            visit(child)
+            ordered.extend(
+                self._collect_child_descriptors(
+                    child,
+                    text_ids=text_ids,
+                    asset_ids=asset_ids,
+                    container_parent_bounds=section_bounds,
+                    leaf_parent_bounds=None,
+                    container_space="section",
+                )
+            )
         return ordered
+
+    def _collect_child_descriptors(
+        self,
+        node: dict[str, Any],
+        *,
+        text_ids: set[str],
+        asset_ids: set[str],
+        container_parent_bounds: dict[str, Any] | None = None,
+        leaf_parent_bounds: dict[str, Any] | None = None,
+        container_space: str = "section",
+    ) -> list[Any]:
+        if not isinstance(node, dict) or not node.get("visible", True):
+            return []
+
+        node_id = node.get("id")
+        node_type = str(node.get("type") or "").upper()
+        if node_type == "TEXT" and node_id in text_ids:
+            if leaf_parent_bounds:
+                return [self._contextual_text_descriptor(node, parent_bounds=leaf_parent_bounds)]
+            return [node_id]
+        if node_id in asset_ids:
+            if leaf_parent_bounds:
+                return [self._contextual_asset_descriptor(node, parent_bounds=leaf_parent_bounds)]
+            return [node_id]
+
+        children: list[Any] = []
+        node_bounds = node.get("absoluteBoundingBox") or node.get("absoluteRenderBounds") or {}
+        for child in node.get("children", []):
+            children.extend(
+                self._collect_child_descriptors(
+                    child,
+                    text_ids=text_ids,
+                    asset_ids=asset_ids,
+                    container_parent_bounds=container_parent_bounds,
+                    leaf_parent_bounds=leaf_parent_bounds,
+                    container_space=container_space,
+                )
+            )
+        if not children:
+            return []
+        if not self._should_preserve_container(node, children):
+            return children
+        localized_children: list[Any] = []
+        for child in node.get("children", []):
+            localized_children.extend(
+                self._collect_child_descriptors(
+                    child,
+                    text_ids=text_ids,
+                    asset_ids=asset_ids,
+                    container_parent_bounds=node_bounds,
+                    leaf_parent_bounds=node_bounds,
+                    container_space="parent",
+                )
+            )
+        return [
+            self._container_descriptor(
+                node,
+                localized_children,
+                parent_bounds=container_parent_bounds,
+                coordinate_space=container_space,
+            )
+        ]
+
+    def _should_preserve_container(self, node: dict[str, Any], children: list[Any]) -> bool:
+        node_type = str(node.get("type") or "").upper()
+        if node_type not in SECTION_LIKE_TYPES:
+            return False
+
+        role = self._infer_container_role(node.get("name"), fallback="")
+        if role in SEMANTIC_CONTAINER_ROLES:
+            return True
+
+        if len(children) < 2:
+            return False
+
+        return self._has_meaningful_container_name(node.get("name"))
+
+    def _container_descriptor(
+        self,
+        node: dict[str, Any],
+        children: list[Any],
+        *,
+        parent_bounds: dict[str, Any] | None = None,
+        coordinate_space: str = "section",
+    ) -> dict[str, Any]:
+        role = self._infer_container_role(node.get("name"), fallback="container")
+        bounds = node.get("absoluteBoundingBox") or node.get("absoluteRenderBounds") or {}
+        if parent_bounds:
+            bounds = self._relative_bounds(bounds, parent_bounds)
+        return {
+            "id": node.get("id"),
+            "name": node.get("name") or node.get("id") or "container",
+            "kind": "container",
+            "role": role,
+            "bounds": bounds,
+            "layout": self._layout_metadata(node, fallback_strategy=self._container_layout_fallback(role)),
+            "coordinate_space": coordinate_space,
+            "children_coordinate_space": "parent",
+            "children": children,
+        }
+
+    def _contextual_text_descriptor(
+        self,
+        node: dict[str, Any],
+        *,
+        parent_bounds: dict[str, Any],
+    ) -> dict[str, Any]:
+        bounds = node.get("absoluteBoundingBox") or node.get("absoluteRenderBounds") or {}
+        render_bounds = node.get("absoluteRenderBounds") or node.get("absoluteBoundingBox") or {}
+        return {
+            "id": node.get("id"),
+            "kind": "text",
+            "text": node.get("id"),
+            "bounds": self._relative_bounds(bounds, parent_bounds),
+            "render_bounds": self._relative_bounds(render_bounds, parent_bounds),
+            "layout": self._layout_metadata(node, fallback_strategy="text"),
+            "coordinate_space": "parent",
+        }
+
+    def _contextual_asset_descriptor(
+        self,
+        node: dict[str, Any],
+        *,
+        parent_bounds: dict[str, Any],
+    ) -> dict[str, Any]:
+        bounds = node.get("absoluteBoundingBox") or node.get("absoluteRenderBounds") or {}
+        return {
+            "id": node.get("id"),
+            "kind": "asset",
+            "asset": node.get("id"),
+            "bounds": self._relative_bounds(bounds, parent_bounds),
+            "layout": self._layout_metadata(node, fallback_strategy="leaf"),
+            "coordinate_space": "parent",
+        }
+
+    def _relative_bounds(
+        self,
+        bounds: dict[str, Any],
+        parent_bounds: dict[str, Any],
+    ) -> dict[str, float]:
+        return {
+            "x": float(bounds.get("x", 0.0) or 0.0) - float(parent_bounds.get("x", 0.0) or 0.0),
+            "y": float(bounds.get("y", 0.0) or 0.0) - float(parent_bounds.get("y", 0.0) or 0.0),
+            "width": float(bounds.get("width", 0.0) or 0.0),
+            "height": float(bounds.get("height", 0.0) or 0.0),
+        }
+
+    def _infer_container_role(self, name: Any, *, fallback: str = "container") -> str:
+        normalized_name = self._normalize_layer_name(name)
+        if self._name_matches(normalized_name, prefixes=("href-card", "link-card"), tokens=()):
+            return "link-card"
+        if self._name_matches(normalized_name, prefixes=("href-grid", "link-grid"), tokens=()):
+            return "link-grid"
+        if self._name_matches(normalized_name, prefixes=("accordion-item",), tokens=()):
+            return "accordion-item"
+        if self._name_matches(normalized_name, prefixes=("accordion-trigger",), tokens=()):
+            return "accordion-trigger"
+        if self._name_matches(normalized_name, prefixes=("accordion-panel",), tokens=()):
+            return "accordion-panel"
+        if self._name_matches(normalized_name, prefixes=("accordion",), tokens=()):
+            return "accordion"
+        if self._name_matches(normalized_name, prefixes=("carousel-stage", "carousel-main"), tokens=()):
+            return "carousel-stage"
+        if self._name_matches(normalized_name, prefixes=("carousel-thumbs", "carousel-nav", "carousel-track"), tokens=()):
+            return "carousel-nav"
+        if self._name_matches(normalized_name, prefixes=("carousel-slide",), tokens=()):
+            return "carousel-slide"
+        if self._name_matches(normalized_name, prefixes=("carousel-thumb",), tokens=()):
+            return "carousel-thumb"
+        if self._name_matches(normalized_name, prefixes=("carousel",), tokens=()):
+            return "carousel"
+        if self._name_matches(normalized_name, prefixes=("formulaire", "form"), tokens=()):
+            return "form"
+        if self._name_matches(normalized_name, prefixes=("button", "btn"), tokens=()):
+            return "button"
+        if self._name_matches(normalized_name, prefixes=("input", "champ", "zone", "field"), tokens=()):
+            return "field"
+        if self._name_matches(normalized_name, prefixes=("card-v", "card-h", "card", "article"), tokens=()):
+            return "card"
+        if self._name_matches(normalized_name, prefixes=("nav",), tokens=()):
+            return "nav"
+        if self._name_matches(normalized_name, prefixes=("footer",), tokens=()):
+            return "footer"
+        if self._name_matches(normalized_name, prefixes=("header",), tokens=()):
+            return "header"
+        if self._name_matches(normalized_name, prefixes=("hero", "section"), tokens=()):
+            return "section"
+        return str(fallback or "container").strip().lower() or "container"
+
+    def _has_meaningful_container_name(self, name: Any) -> bool:
+        tokens = [token for token in self._normalize_layer_name(name).split("-") if token]
+        if not tokens:
+            return False
+        meaningful_tokens = [
+            token
+            for token in tokens
+            if not token.isdigit() and token not in GENERIC_CONTAINER_NAME_TOKENS
+        ]
+        return bool(meaningful_tokens)
+
+    def _normalize_layer_name(self, value: Any) -> str:
+        text = str(value or "").strip().lower()
+        normalized = "".join(character if character.isalnum() else "-" for character in text)
+        while "--" in normalized:
+            normalized = normalized.replace("--", "-")
+        return normalized.strip("-")
+
+    def _name_matches(
+        self,
+        normalized_name: str,
+        *,
+        prefixes: tuple[str, ...],
+        tokens: tuple[str, ...],
+    ) -> bool:
+        if not normalized_name:
+            return False
+        if any(normalized_name == prefix or normalized_name.startswith(f"{prefix}-") for prefix in prefixes):
+            return True
+        if not tokens:
+            return False
+        node_tokens = {token for token in normalized_name.split("-") if token}
+        return any(token in node_tokens for token in tokens)
 
     def _node_sort_key(self, node: dict[str, Any]) -> tuple[float, float]:
         box = node.get("absoluteRenderBounds") or node.get("absoluteBoundingBox") or {}
@@ -351,3 +621,91 @@ class FigmaExtractionService:
             float(box.get("y", 0.0) or 0.0),
             float(box.get("x", 0.0) or 0.0),
         )
+
+    def _layout_metadata(
+        self,
+        node: dict[str, Any],
+        *,
+        fallback_strategy: str,
+    ) -> dict[str, Any]:
+        strategy = self._infer_layout_strategy(node, fallback_strategy=fallback_strategy)
+        metadata = {
+            "layout_mode": self._string_or_none(node.get("layoutMode")),
+            "layout_wrap": self._string_or_none(node.get("layoutWrap")),
+            "layout_positioning": self._string_or_none(node.get("layoutPositioning")),
+            "layout_sizing_horizontal": self._string_or_none(node.get("layoutSizingHorizontal")),
+            "layout_sizing_vertical": self._string_or_none(node.get("layoutSizingVertical")),
+            "primary_axis_sizing_mode": self._string_or_none(node.get("primaryAxisSizingMode")),
+            "counter_axis_sizing_mode": self._string_or_none(node.get("counterAxisSizingMode")),
+            "primary_axis_align_items": self._string_or_none(node.get("primaryAxisAlignItems")),
+            "counter_axis_align_items": self._string_or_none(node.get("counterAxisAlignItems")),
+            "counter_axis_align_content": self._string_or_none(node.get("counterAxisAlignContent")),
+            "item_spacing": self._number_or_none(node.get("itemSpacing")),
+            "counter_axis_spacing": self._number_or_none(node.get("counterAxisSpacing")),
+            "padding_top": self._number_or_none(node.get("paddingTop")),
+            "padding_right": self._number_or_none(node.get("paddingRight")),
+            "padding_bottom": self._number_or_none(node.get("paddingBottom")),
+            "padding_left": self._number_or_none(node.get("paddingLeft")),
+            "min_width": self._number_or_none(node.get("minWidth")),
+            "max_width": self._number_or_none(node.get("maxWidth")),
+            "min_height": self._number_or_none(node.get("minHeight")),
+            "max_height": self._number_or_none(node.get("maxHeight")),
+            "text_auto_resize": self._string_or_none(node.get("textAutoResize")),
+            "clips_content": self._bool_or_none(node, "clipsContent"),
+            "constraints": self._constraints_payload(node),
+            "inferred_strategy": strategy,
+            "inferred_flow": strategy == "flow",
+        }
+        return {
+            key: value
+            for key, value in metadata.items()
+            if value not in (None, "")
+            and not (key == "constraints" and not value)
+        }
+
+    def _infer_layout_strategy(self, node: dict[str, Any], *, fallback_strategy: str) -> str:
+        layout_mode = self._string_or_none(node.get("layoutMode"))
+        layout_wrap = self._string_or_none(node.get("layoutWrap"))
+        if layout_mode in {"HORIZONTAL", "VERTICAL"}:
+            return "flow"
+        if layout_wrap and layout_wrap != "NO_WRAP":
+            return "flow"
+        if str(node.get("type") or "").upper() == "TEXT":
+            return "text"
+        if node.get("children"):
+            return "absolute"
+        return fallback_strategy
+
+    def _container_layout_fallback(self, role: str) -> str:
+        if role in {"accordion", "accordion-item", "accordion-panel", "accordion-trigger", "link-grid", "card", "link-card"}:
+            return "absolute"
+        if role in {"carousel", "carousel-stage", "carousel-nav", "carousel-slide", "carousel-thumb"}:
+            return "absolute"
+        return "absolute"
+
+    def _constraints_payload(self, node: dict[str, Any]) -> dict[str, Any]:
+        constraints = node.get("constraints")
+        if isinstance(constraints, dict):
+            return {
+                key: value
+                for key, value in constraints.items()
+                if value not in (None, "")
+            }
+        return {}
+
+    def _string_or_none(self, value: Any) -> str | None:
+        text = str(value or "").strip()
+        return text or None
+
+    def _number_or_none(self, value: Any) -> float | None:
+        if value in (None, ""):
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _bool_or_none(self, node: dict[str, Any], key: str) -> bool | None:
+        if key not in node:
+            return None
+        return bool(node.get(key))

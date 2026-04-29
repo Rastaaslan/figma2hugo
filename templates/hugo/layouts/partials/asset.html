@@ -1,11 +1,60 @@
 {{- $asset := . -}}
 {{- if ne $asset.render false -}}
-<figure class="content-asset {{ $asset.class_name }}{{ if $asset.aria_hidden }} is-decorative{{ end }}">
+{{- $classes := printf "content-asset %s" $asset.class_name -}}
+{{- $wrapperTag := "figure" -}}
+{{- if eq $asset.purpose "background" -}}
+  {{- $classes = printf "%s bg" $classes -}}
+  {{- $wrapperTag = "div" -}}
+{{- end -}}
+{{- if $asset.aria_hidden -}}
+  {{- $classes = printf "%s is-decorative" $classes -}}
+  {{- $wrapperTag = "div" -}}
+{{- end -}}
+{{- $backgroundStyle := "" -}}
+{{- if and (eq $asset.purpose "background") (ne $asset.render_mode "shape") (ne $asset.format "shape") -}}
+  {{- $backgroundStyle = printf "background-image:url('%s');" ($asset.public_path | relURL) -}}
+{{- end -}}
+{{- $wrapperAttrs := slice
+  (printf "class=%q" $classes)
+  (printf "data-purpose=%q" $asset.purpose)
+-}}
+{{- with $asset.dom_id -}}
+  {{- $wrapperAttrs = $wrapperAttrs | append (printf "id=%q" .) -}}
+{{- end -}}
+{{- if and $asset.id $asset.dom_id (ne $asset.id $asset.dom_id) -}}
+  {{- $wrapperAttrs = $wrapperAttrs | append (printf "data-node-id=%q" $asset.id) -}}
+{{- end -}}
+{{- with $asset.render_mode -}}
+  {{- $wrapperAttrs = $wrapperAttrs | append (printf "data-render-mode=%q" .) -}}
+{{- end -}}
+{{- if $asset.aria_hidden -}}
+  {{- $wrapperAttrs = $wrapperAttrs | append "aria-hidden=\"true\"" -}}
+  {{- $wrapperAttrs = $wrapperAttrs | append "role=\"presentation\"" -}}
+{{- end -}}
+{{- with $backgroundStyle -}}
+  {{- $wrapperAttrs = $wrapperAttrs | append (printf "style=%q" .) -}}
+{{- end -}}
+{{ printf "<%s %s>" $wrapperTag (delimit $wrapperAttrs " ") | safeHTML }}
+{{- if ne $asset.purpose "background" -}}
   {{- if and (ne $asset.render_mode "shape") (ne $asset.format "shape") -}}
-  <img src="{{ $asset.public_path }}" alt="{{ $asset.alt }}"{{ if $asset.aria_hidden }} aria-hidden="true"{{ end }}{{ with $asset.width }} width="{{ . }}"{{ end }}{{ with $asset.height }} height="{{ . }}"{{ end }}
-    {{- range $name, $value := $asset.attributes -}}
-      {{- printf "%s=%q" $name $value | safeHTMLAttr -}}
-    {{- end -}}>
+  {{- $imgAttrs := slice
+    (printf "src=%q" ($asset.public_path | relURL))
+    (printf "alt=%q" $asset.alt)
+  -}}
+  {{- if $asset.aria_hidden -}}
+    {{- $imgAttrs = $imgAttrs | append "aria-hidden=\"true\"" -}}
   {{- end -}}
-</figure>
+  {{- with $asset.width -}}
+    {{- $imgAttrs = $imgAttrs | append (printf "width=%q" (printf "%v" .)) -}}
+  {{- end -}}
+  {{- with $asset.height -}}
+    {{- $imgAttrs = $imgAttrs | append (printf "height=%q" (printf "%v" .)) -}}
+  {{- end -}}
+  {{- range $name, $value := $asset.attributes -}}
+    {{- $imgAttrs = $imgAttrs | append (printf "%s=%q" $name $value) -}}
+  {{- end -}}
+  {{ printf "<img %s>" (delimit $imgAttrs " ") | safeHTML }}
+  {{- end -}}
+{{- end -}}
+{{ printf "</%s>" $wrapperTag | safeHTML }}
 {{- end -}}

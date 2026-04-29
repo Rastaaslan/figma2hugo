@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+{{- $page := partial "resolve_page_data.html" . -}}
+{{- $pageTitle := .Title | default site.Title -}}
+{{- $pageSlug := "" -}}
+{{- with $page.page -}}
+  {{- $pageTitle = $pageTitle | default .title -}}
+  {{- $pageSlug = .slug | default "" -}}
+{{- end -}}
+<html lang="{{ site.Language.LanguageCode | default site.LanguageCode | default "en" }}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ $pageTitle }}</title>
+    {{- $siteStylesheet := resources.Get "css/site.css" -}}
+    {{- with $siteStylesheet -}}
+    {{- $compiled := . | minify | fingerprint -}}
+    <link rel="stylesheet" href="{{ $compiled.RelPermalink }}">
+    {{- end -}}
+    {{- with resources.Get "css/components/link-grid.css" -}}
+      {{- $compiled := . | minify | fingerprint -}}
+    <link rel="stylesheet" href="{{ $compiled.RelPermalink }}">
+    {{- end -}}
+    {{- with resources.Get "css/components/accordion.css" -}}
+      {{- $compiled := . | minify | fingerprint -}}
+    <link rel="stylesheet" href="{{ $compiled.RelPermalink }}">
+    {{- end -}}
+    {{- with resources.Get "css/components/carousel.css" -}}
+      {{- $compiled := . | minify | fingerprint -}}
+    <link rel="stylesheet" href="{{ $compiled.RelPermalink }}">
+    {{- end -}}
+    {{- with .Params.stylesheet -}}
+      {{- with resources.Get . -}}
+      {{- $compiled := . | minify | fingerprint -}}
+    <link rel="stylesheet" href="{{ $compiled.RelPermalink }}">
+      {{- end -}}
+    {{- end -}}
+  </head>
+  <body class="page{{ with $pageSlug }} page--{{ . }}{{ else }} page--site-home{{ end }}">
+    {{- block "site-header" . }}{{- end }}
+    <main class="page-main">
+      {{- block "main" . }}{{- end }}
+    </main>
+    {{- block "site-footer" . }}{{- end }}
+    {{- with resources.Get "js/accordion.js" -}}
+      {{- $compiled := . | minify | fingerprint -}}
+    <script src="{{ $compiled.RelPermalink }}" defer></script>
+    {{- end -}}
+  </body>
+</html>

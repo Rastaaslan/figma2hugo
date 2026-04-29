@@ -48,6 +48,15 @@ def _parse_or_bad_parameter(figma_url: str) -> FigmaUrl:
         raise typer.BadParameter(str(exc)) from exc
 
 
+def _parse_many_or_bad_parameter(figma_urls: list[str]) -> list[FigmaUrl]:
+    if not figma_urls:
+        raise typer.BadParameter("Provide at least one Figma URL with --page.")
+    parsed_urls: list[FigmaUrl] = []
+    for figma_url in figma_urls:
+        parsed_urls.append(_parse_or_bad_parameter(figma_url))
+    return parsed_urls
+
+
 def _make_extraction_service() -> FigmaExtractionService:
     return FigmaExtractionService()
 
@@ -150,6 +159,43 @@ def build(
     _emit_json(
         run_generation(
             GenerationOptions(figma_url=figma_url, out=out),
+            extraction_service=_make_extraction_service(),
+            validator=_make_site_validator(),
+            report_writer=_make_report_writer(),
+        )
+    )
+
+
+@app.command("build-site")
+def build_site(
+    out: Annotated[Path, typer.Argument(help="Directory for generated Hugo output.")],
+    page: Annotated[
+        list[str],
+        typer.Option("--page", help="Repeat this option for each Figma page URL."),
+    ],
+    fidelity_mode: Annotated[
+        FidelityMode, typer.Option("--fidelity-mode", help="Rendering fidelity strategy.")
+    ] = FidelityMode.BALANCED,
+    asset_mode: Annotated[
+        AssetMode, typer.Option("--asset-mode", help="Asset extraction strategy.")
+    ] = AssetMode.MIXED,
+    content_mode: Annotated[
+        ContentMode, typer.Option("--content-mode", help="Content placement strategy.")
+    ] = ContentMode.DATA_FILE,
+) -> None:
+    parsed_pages = _parse_many_or_bad_parameter(page)
+    figma_urls = tuple(parsed.source_url for parsed in parsed_pages)
+    _emit_json(
+        run_generation(
+            GenerationOptions(
+                figma_url=figma_urls[0],
+                figma_urls=figma_urls,
+                out=out,
+                mode=OutputMode.HUGO,
+                fidelity_mode=fidelity_mode,
+                asset_mode=asset_mode,
+                content_mode=content_mode,
+            ),
             extraction_service=_make_extraction_service(),
             validator=_make_site_validator(),
             report_writer=_make_report_writer(),

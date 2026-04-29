@@ -20,6 +20,30 @@ FOREGROUND_NAME_TOKENS = {"foreground", "fg"}
 BACKGROUND_NAME_TOKENS = {"background", "bg", "backdrop"}
 ICON_NAME_TOKENS = {"icon", "icone", "glyph", "logo", "pictogram", "symbol"}
 DECORATIVE_NAME_TOKENS = {"decor", "decoration", "overlay", "blur", "shadow", "motif", "pattern", "triangle"}
+SEMANTIC_WRAPPER_PREFIXES = (
+    "accordion",
+    "accordion-item",
+    "accordion-panel",
+    "accordion-trigger",
+    "carousel",
+    "carousel-stage",
+    "carousel-main",
+    "carousel-slide",
+    "carousel-thumbs",
+    "carousel-nav",
+    "carousel-track",
+    "carousel-thumb",
+    "href-card",
+    "link-card",
+    "href-grid",
+    "link-grid",
+    "formulaire",
+    "form",
+    "input",
+    "field",
+    "button",
+    "btn",
+)
 
 
 @dataclass(slots=True)
@@ -67,6 +91,7 @@ class ContentExtractor:
         assets: list[dict[str, Any]],
         image_fill_urls: dict[str, str],
         unsupported_types: set[str],
+        inherited_function: str | None = None,
     ) -> None:
         if not node.get("visible", True):
             return
@@ -82,17 +107,28 @@ class ContentExtractor:
             texts[text_payload["id"]] = text_payload
             return
 
-        composite_asset_payload = self._composite_asset_payload(section, node)
+        composite_asset_payload = self._composite_asset_payload(section, node, inherited_function=inherited_function)
         if composite_asset_payload is not None:
             assets.append(composite_asset_payload)
             return
 
-        asset_payload = self._asset_payload(section, node, image_fill_urls)
+        asset_payload = self._asset_payload(section, node, image_fill_urls, function_hint=inherited_function)
         if asset_payload is not None:
             assets.append(asset_payload)
 
+        child_function = inherited_function
+        if child_function is None and node.get("id") != section.id:
+            child_function = self._editable_wrapper_function(node)
         for child in node.get("children", []):
-            self._walk_section(section, child, texts, assets, image_fill_urls, unsupported_types)
+            self._walk_section(
+                section,
+                child,
+                texts,
+                assets,
+                image_fill_urls,
+                unsupported_types,
+                inherited_function=child_function,
+            )
 
         if self._should_warn_unsupported_node(node):
             unsupported_types.add(str(node.get("type") or "<unknown>"))
@@ -126,6 +162,7 @@ class ContentExtractor:
                 "textAlignVertical": style.get("textAlignVertical"),
                 "fills": node.get("fills") or [],
             },
+            "layout": self._layout_metadata(node, fallback_strategy="text"),
         }
 
     def _asset_payload(
@@ -133,6 +170,7 @@ class ContentExtractor:
         section: SectionCandidate,
         node: dict[str, Any],
         image_fill_urls: dict[str, str],
+        function_hint: str | None = None,
     ) -> dict[str, Any] | None:
         node_type = node.get("type")
         name = node.get("name") or node.get("id", "asset")
@@ -146,10 +184,11 @@ class ContentExtractor:
                 "format": self._guess_image_format(image_fill_urls.get(image_ref)),
                 "sourceUrl": image_fill_urls.get(image_ref),
                 "localPath": None,
-                "function": self._guess_asset_function(name, node, section),
+                "function": self._effective_asset_function(name, node, section, function_hint),
                 "bounds": self._relative_bounds(section, node),
                 "isVector": False,
                 "imageRef": image_ref,
+                "layout": self._layout_metadata(node, fallback_strategy="leaf"),
             }
 
         if node_type in VECTOR_TYPES:
@@ -160,10 +199,11 @@ class ContentExtractor:
                 "format": "svg",
                 "sourceUrl": None,
                 "localPath": None,
-                "function": self._guess_asset_function(name, node, section),
+                "function": self._effective_asset_function(name, node, section, function_hint),
                 "bounds": self._relative_bounds(section, node),
                 "isVector": True,
                 "imageRef": None,
+                "layout": self._layout_metadata(node, fallback_strategy="leaf"),
             }
 
         shape_style = self._shape_style(node)
@@ -175,12 +215,13 @@ class ContentExtractor:
                 "format": "shape",
                 "sourceUrl": None,
                 "localPath": None,
-                "function": self._guess_asset_function(name, node, section),
+                "function": self._effective_asset_function(name, node, section, function_hint),
                 "bounds": self._relative_bounds(section, node),
                 "isVector": False,
                 "imageRef": None,
                 "renderMode": "shape",
                 "style": shape_style,
+                "layout": self._layout_metadata(node, fallback_strategy="leaf"),
             }
         return None
 
@@ -188,10 +229,11 @@ class ContentExtractor:
         self,
         section: SectionCandidate,
         node: dict[str, Any],
+        inherited_function: str | None = None,
     ) -> dict[str, Any] | None:
         if node.get("id") == section.id:
             return None
-        return self._build_composite_asset_payload(section, node)
+        return self._build_composite_asset_payload(section, node, function_hint=inherited_function)
 
     def _section_root_composite_asset_payload(
         self,
@@ -199,6 +241,14 @@ class ContentExtractor:
         node: dict[str, Any],
     ) -> dict[str, Any] | None:
         if node.get("id") != section.id:
+            return None
+        if self._is_semantic_wrapper_container(node):
+            return None
+        if self._subtree_contains_semantic_wrapper(node, include_self=False):
+            return None
+        if self._subtree_contains_editable_wrapper(node, include_self=False):
+            return None
+        if self._has_extractable_composite_children(section, node):
             return None
         if not (
             self._has_direct_composite_children(node)
@@ -208,38 +258,63 @@ class ContentExtractor:
             return None
         return self._build_composite_asset_payload(section, node)
 
+    def _has_extractable_composite_children(
+        self,
+        section: SectionCandidate,
+        node: dict[str, Any],
+    ) -> bool:
+        for child in node.get("children", []):
+            if not isinstance(child, dict) or not child.get("visible", True):
+                continue
+            if self._build_composite_asset_payload(section, child) is not None:
+                return True
+        return False
+
     def _build_composite_asset_payload(
         self,
         section: SectionCandidate,
         node: dict[str, Any],
+        function_hint: str | None = None,
     ) -> dict[str, Any] | None:
         if node.get("type") not in COMPOSITE_HOST_TYPES:
             return None
         if not node.get("children"):
             return None
+        if self._is_semantic_wrapper_container(node):
+            return None
+        if self._subtree_contains_semantic_wrapper(node, include_self=False):
+            return None
         if self._subtree_contains_visible_text(node):
             return None
-        if not (
-            self._subtree_contains_mask(node)
-            or self._subtree_contains_override_image(node)
-            or self._is_image_wrapper_group(node)
-            or self._is_complex_graphic_subtree(node)
-        ):
+        contains_mask = self._subtree_contains_mask(node)
+        contains_override_image = self._subtree_contains_override_image(node)
+        is_image_wrapper = self._is_image_wrapper_group(node)
+        is_complex_graphic = self._is_complex_graphic_subtree(node)
+        editable_function = self._editable_wrapper_function(node)
+        render_as_svg = self._should_render_composite_as_svg(node)
+        editable_group_svg = bool(editable_function and render_as_svg)
+        if not (contains_mask or contains_override_image or is_image_wrapper or is_complex_graphic or editable_group_svg):
+            return None
+        if editable_function and not (contains_mask or contains_override_image or editable_group_svg):
+            return None
+        if self._subtree_contains_editable_wrapper(node, include_self=False):
             return None
 
         name = node.get("name") or node.get("id", "asset")
+        asset_function_hint = function_hint or editable_function
         return {
             "nodeId": node.get("id"),
             "sectionId": section.id,
             "name": name,
-            "format": "png",
+            "format": "svg" if render_as_svg else "png",
             "sourceUrl": None,
             "localPath": None,
-            "function": self._guess_asset_function(name, node, section),
+            "function": self._effective_asset_function(name, node, section, asset_function_hint),
             "bounds": self._relative_bounds(section, node),
-            "isVector": False,
+            "isVector": render_as_svg,
             "imageRef": None,
             "renderMode": "composite",
+            "layout": self._layout_metadata(node, fallback_strategy="absolute"),
         }
 
     def _extract_tokens(
@@ -291,10 +366,16 @@ class ContentExtractor:
         font_size = float(style.get("fontSize", 0) or 0)
         name = (node.get("name") or "").lower()
         characters = (node.get("characters") or "").replace("\r\n", "\n").replace("\r", "\n").strip()
-        if "label" in name:
+        if self._name_has_prefix(name, ("label", "libelle")):
             return "label"
-        if "button" in name or "cta" in name:
-            return "span"
+        if self._name_has_prefix(name, ("texte", "para")):
+            return "p"
+        if self._name_has_prefix(name, ("titre", "heading")):
+            if font_size >= 44:
+                return "h1"
+            if font_size >= 30:
+                return "h2"
+            return "h3"
         if self._looks_like_paragraph_text(name, characters, font_size):
             return "p"
         if font_size >= 44:
@@ -361,6 +442,8 @@ class ContentExtractor:
                     self._apply_paragraph_line_cluster(cluster, texts)
 
     def _is_paragraph_line_candidate(self, text: dict[str, Any]) -> bool:
+        if self._is_utility_link_text(text):
+            return False
         if text.get("tag") not in {"h2", "h3", "p"}:
             return False
         style = text.get("style") or {}
@@ -378,6 +461,10 @@ class ContentExtractor:
         starts_lowercase = bool(first_alpha) and first_alpha.islower()
         ends_like_continuation = value.endswith((",", ";", ":"))
         return punctuation_count > 0 or starts_lowercase or ends_like_continuation
+
+    def _is_utility_link_text(self, text: dict[str, Any]) -> bool:
+        name = str(text.get("name") or text.get("id") or "")
+        return self._name_has_prefix(name, ("href", "url"))
 
     def _belongs_to_paragraph_line_cluster(self, previous: dict[str, Any], current: dict[str, Any]) -> bool:
         previous_style = previous.get("style") or {}
@@ -617,24 +704,109 @@ class ContentExtractor:
         }
 
     def _guess_asset_function(self, name: str, node: dict[str, Any], section: SectionCandidate) -> str:
-        tokens = self._name_tokens(name)
-        is_composite_mask_host = bool(node.get("children")) and self._subtree_contains_mask(node)
-        if (node.get("isMask") is True or tokens & MASK_NAME_TOKENS) and not is_composite_mask_host:
-            return "mask"
-        if tokens & FOREGROUND_NAME_TOKENS:
-            return "foreground"
-        if tokens & BACKGROUND_NAME_TOKENS:
-            return "background"
-        if tokens & ICON_NAME_TOKENS:
-            return "icon"
-        bounds = self._relative_bounds(section, node)
-        if self._looks_like_background(node, bounds, section.bounds):
-            return "background"
-        if self._looks_like_icon(node, bounds, section.bounds):
-            return "icon"
-        if self._looks_decorative(name, node):
-            return "decorative"
+        named_function = self._named_asset_function(name, node)
+        if named_function:
+            return named_function
         return "content"
+
+    def _effective_asset_function(
+        self,
+        name: str,
+        node: dict[str, Any],
+        section: SectionCandidate,
+        function_hint: str | None = None,
+    ) -> str:
+        if function_hint:
+            return function_hint
+        return self._guess_asset_function(name, node, section)
+
+    def _editable_wrapper_function(self, node: dict[str, Any]) -> str | None:
+        if node.get("type") not in COMPOSITE_HOST_TYPES:
+            return None
+        if not node.get("children"):
+            return None
+        return self._named_wrapper_function(node)
+
+    def _named_asset_function(self, name: str, node: dict[str, Any]) -> str | None:
+        normalized_name = str(name or "").strip().lower()
+        is_composite_mask_host = bool(node.get("children")) and self._subtree_contains_mask(node)
+        if (node.get("isMask") is True or self._name_has_prefix(normalized_name, ("mask", "clip"))) and not is_composite_mask_host:
+            return "mask"
+        if self._name_has_prefix(normalized_name, ("fg", "foreground")):
+            return "foreground"
+        if self._name_has_prefix(normalized_name, ("bg", "fond", "background")):
+            return "background"
+        if self._name_has_prefix(normalized_name, ("icon", "icone", "logo")):
+            return "icon"
+        if self._name_has_prefix(normalized_name, ("decor", "motif", "forme", "triangle")):
+            return "decorative"
+        return None
+
+    def _named_wrapper_function(self, node: dict[str, Any]) -> str | None:
+        named_function = self._named_asset_function(node.get("name") or node.get("id", ""), node)
+        if named_function in {"foreground", "background", "icon", "decorative"}:
+            return named_function
+        return None
+
+    def _subtree_contains_editable_wrapper(self, node: dict[str, Any], *, include_self: bool = True) -> bool:
+        if not node.get("visible", True):
+            return False
+        if include_self and self._editable_wrapper_function(node):
+            return True
+        return any(self._subtree_contains_editable_wrapper(child) for child in node.get("children", []))
+
+    def _is_editable_graphic_cluster(self, node: dict[str, Any]) -> bool:
+        if node.get("type") not in COMPOSITE_HOST_TYPES:
+            return False
+        visible_children = [
+            child
+            for child in node.get("children", [])
+            if isinstance(child, dict) and child.get("visible", True)
+        ]
+        if len(visible_children) < 2 or len(visible_children) > 48:
+            return False
+        if self._subtree_contains_visible_text(node):
+            return False
+        if self._subtree_contains_mask(node):
+            return False
+        if self._subtree_contains_override_image(node):
+            return False
+        if self._is_image_wrapper_group(node):
+            return False
+        if not all(self._is_simple_graphic_leaf(child) for child in visible_children):
+            return False
+        coverage_ratio = self._graphic_leaf_coverage_ratio(node, visible_children)
+        if coverage_ratio >= 0.12:
+            return True
+        return len(visible_children) >= 8 and all(child.get("type") in VECTOR_TYPES for child in visible_children)
+
+    def _is_simple_graphic_leaf(self, node: dict[str, Any]) -> bool:
+        if node.get("children"):
+            return False
+        if node.get("type") in VECTOR_TYPES:
+            return True
+        if self._find_image_ref(node):
+            return True
+        if node.get("type") in IMAGE_HOST_TYPES and self._shape_style(node) is not None:
+            return True
+        return False
+
+    def _graphic_leaf_coverage_ratio(
+        self,
+        node: dict[str, Any],
+        visible_children: list[dict[str, Any]],
+    ) -> float:
+        node_bounds = node.get("absoluteBoundingBox") or node.get("absoluteRenderBounds") or {}
+        node_width = float(node_bounds.get("width", 0) or 0)
+        node_height = float(node_bounds.get("height", 0) or 0)
+        node_area = node_width * node_height
+        if node_area <= 0:
+            return 0.0
+        child_area = 0.0
+        for child in visible_children:
+            child_bounds = child.get("absoluteBoundingBox") or child.get("absoluteRenderBounds") or {}
+            child_area += float(child_bounds.get("width", 0) or 0) * float(child_bounds.get("height", 0) or 0)
+        return child_area / node_area
 
     def _looks_decorative(self, name: str, node: dict[str, Any]) -> bool:
         if self._name_tokens(name) & DECORATIVE_NAME_TOKENS:
@@ -744,6 +916,91 @@ class ContentExtractor:
         if self._box_has_area(render_box) and not self._box_has_area(absolute_box):
             return render_box
         return absolute_box or render_box
+
+    def _layout_metadata(
+        self,
+        node: dict[str, Any],
+        *,
+        fallback_strategy: str,
+    ) -> dict[str, Any]:
+        strategy = self._infer_layout_strategy(node, fallback_strategy=fallback_strategy)
+        metadata = {
+            "layout_mode": self._string_or_none(node.get("layoutMode")),
+            "layout_wrap": self._string_or_none(node.get("layoutWrap")),
+            "layout_positioning": self._string_or_none(node.get("layoutPositioning")),
+            "layout_sizing_horizontal": self._floatless_string_or_none(node.get("layoutSizingHorizontal")),
+            "layout_sizing_vertical": self._floatless_string_or_none(node.get("layoutSizingVertical")),
+            "primary_axis_sizing_mode": self._string_or_none(node.get("primaryAxisSizingMode")),
+            "counter_axis_sizing_mode": self._string_or_none(node.get("counterAxisSizingMode")),
+            "primary_axis_align_items": self._string_or_none(node.get("primaryAxisAlignItems")),
+            "counter_axis_align_items": self._string_or_none(node.get("counterAxisAlignItems")),
+            "counter_axis_align_content": self._string_or_none(node.get("counterAxisAlignContent")),
+            "item_spacing": self._number_or_none(node.get("itemSpacing")),
+            "counter_axis_spacing": self._number_or_none(node.get("counterAxisSpacing")),
+            "padding_top": self._number_or_none(node.get("paddingTop")),
+            "padding_right": self._number_or_none(node.get("paddingRight")),
+            "padding_bottom": self._number_or_none(node.get("paddingBottom")),
+            "padding_left": self._number_or_none(node.get("paddingLeft")),
+            "min_width": self._number_or_none(node.get("minWidth")),
+            "max_width": self._number_or_none(node.get("maxWidth")),
+            "min_height": self._number_or_none(node.get("minHeight")),
+            "max_height": self._number_or_none(node.get("maxHeight")),
+            "text_auto_resize": self._string_or_none(node.get("textAutoResize")),
+            "clips_content": self._bool_or_none(node, "clipsContent"),
+            "constraints": self._constraints_payload(node),
+            "inferred_strategy": strategy,
+            "inferred_flow": strategy == "flow",
+        }
+        return {
+            key: value
+            for key, value in metadata.items()
+            if value not in (None, "")
+            and not (key == "constraints" and not value)
+        }
+
+    def _infer_layout_strategy(self, node: dict[str, Any], *, fallback_strategy: str) -> str:
+        layout_mode = self._string_or_none(node.get("layoutMode"))
+        layout_wrap = self._string_or_none(node.get("layoutWrap"))
+        if layout_mode in {"HORIZONTAL", "VERTICAL"}:
+            return "flow"
+        if layout_wrap and layout_wrap != "NO_WRAP":
+            return "flow"
+        if node.get("type") in TEXT_TYPES:
+            return "text"
+        if node.get("children"):
+            return "absolute"
+        return fallback_strategy
+
+    def _constraints_payload(self, node: dict[str, Any]) -> dict[str, Any]:
+        constraints = node.get("constraints")
+        if isinstance(constraints, dict):
+            return {
+                key: value
+                for key, value in constraints.items()
+                if value not in (None, "")
+            }
+        return {}
+
+    def _string_or_none(self, value: Any) -> str | None:
+        text = str(value or "").strip()
+        return text or None
+
+    def _floatless_string_or_none(self, value: Any) -> str | None:
+        text = self._string_or_none(value)
+        return text
+
+    def _number_or_none(self, value: Any) -> float | None:
+        if value in (None, ""):
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _bool_or_none(self, node: dict[str, Any], key: str) -> bool | None:
+        if key not in node:
+            return None
+        return bool(node.get(key))
 
     def _box_has_area(self, box: dict[str, Any]) -> bool:
         try:
@@ -926,6 +1183,35 @@ class ContentExtractor:
         area = width * height
         return area >= 2500 or max(width, height) >= 96
 
+    def _should_render_composite_as_svg(self, node: dict[str, Any]) -> bool:
+        if self._subtree_contains_mask(node):
+            return False
+        if self._subtree_contains_override_image(node):
+            return False
+        if self._subtree_contains_image_fill(node):
+            return False
+        return self._subtree_contains_only_vector_drawables(node)
+
+    def _subtree_contains_image_fill(self, node: dict[str, Any]) -> bool:
+        if not node.get("visible", True):
+            return False
+        if self._find_image_ref(node):
+            return True
+        return any(self._subtree_contains_image_fill(child) for child in node.get("children", []))
+
+    def _subtree_contains_only_vector_drawables(self, node: dict[str, Any]) -> bool:
+        if not node.get("visible", True):
+            return True
+        children = [child for child in node.get("children", []) if child.get("visible", True)]
+        if children:
+            return all(self._subtree_contains_only_vector_drawables(child) for child in children)
+        node_type = node.get("type")
+        if node_type in VECTOR_TYPES:
+            return True
+        if node_type in IMAGE_HOST_TYPES and self._shape_style(node) is not None:
+            return True
+        return False
+
     def _is_image_wrapper_group(self, node: dict[str, Any]) -> bool:
         if node.get("type") not in COMPOSITE_HOST_TYPES:
             return False
@@ -969,15 +1255,36 @@ class ContentExtractor:
         return True
 
     def _guess_text_role(self, tag: str, node: dict[str, Any]) -> str:
-        if tag == "label":
+        name = (node.get("name") or "").lower()
+        if self._name_has_prefix(name, ("label", "libelle")):
             return "label"
+        if self._name_has_prefix(name, ("button", "btn")):
+            return "button"
         if tag == "h1":
             return "hero-title"
         if tag == "h2":
             return "heading"
         if tag == "h3":
             return "subheading"
-        name = (node.get("name") or "").lower()
-        if "button" in name or "cta" in name:
-            return "cta"
         return "body"
+
+    def _name_has_prefix(self, name: str, prefixes: tuple[str, ...]) -> bool:
+        normalized = "-".join(NAME_TOKEN_RE.findall(name.lower()))
+        return any(normalized == prefix or normalized.startswith(f"{prefix}-") for prefix in prefixes)
+
+    def _is_semantic_wrapper_container(self, node: dict[str, Any]) -> bool:
+        if node.get("type") not in COMPOSITE_HOST_TYPES:
+            return False
+        name = str(node.get("name") or node.get("id") or "")
+        return self._name_has_prefix(name, SEMANTIC_WRAPPER_PREFIXES)
+
+    def _subtree_contains_semantic_wrapper(self, node: dict[str, Any], *, include_self: bool = True) -> bool:
+        if not node.get("visible", True):
+            return False
+        if include_self and self._is_semantic_wrapper_container(node):
+            return True
+        return any(
+            self._subtree_contains_semantic_wrapper(child, include_self=True)
+            for child in node.get("children", [])
+            if isinstance(child, dict)
+        )

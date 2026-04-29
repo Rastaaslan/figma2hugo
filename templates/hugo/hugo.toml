@@ -1,7 +1,6 @@
 baseURL = "https://example.org/"
 languageCode = "en-us"
 title = "figma2hugo site"
-relativeURLs = true
 disableKinds = ["taxonomy", "term", "RSS", "sitemap"]
 
 [outputs]

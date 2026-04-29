@@ -1,0 +1,16 @@
+{{- $page := .page -}}
+{{- $include := .include | default (slice) -}}
+{{- $exclude := .exclude | default (slice) -}}
+{{- range $page.sections -}}
+  {{- $tag := .tag -}}
+  {{- $render := true -}}
+  {{- if gt (len $include) 0 -}}
+    {{- $render = in $include $tag -}}
+  {{- end -}}
+  {{- if and $render (gt (len $exclude) 0) (in $exclude $tag) -}}
+    {{- $render = false -}}
+  {{- end -}}
+  {{- if $render -}}
+    {{- partial "section.html" . | safeHTML -}}
+  {{- end -}}
+{{- end -}}

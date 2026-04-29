@@ -24,25 +24,36 @@ class SiteValidator:
         against_reference: Path | None = None,
     ) -> dict[str, Any]:
         mode = mode or self.detect_mode(target_dir)
-        page_model = self._load_page_model(target_dir, mode)
+        site_manifest = self._load_site_manifest(target_dir, mode)
+        page_models = self._load_page_models(target_dir, mode, site_manifest)
+        report_warnings = self._collect_page_warnings(page_models)
         report = {
             "buildOk": True,
             "visualScore": None,
             "missingAssets": [],
             "missingTexts": [],
-            "warnings": list(page_model.get("warnings", [])),
+            "warnings": report_warnings,
         }
 
         if mode == "hugo":
             report["buildOk"] = self._validate_hugo_build(target_dir, report["warnings"])
 
-        html_path = self._html_path(target_dir, mode)
-        html_content = html_path.read_text(encoding="utf-8")
-        report["missingAssets"] = self._missing_assets(target_dir, page_model, mode)
-        report["missingTexts"] = self._missing_texts(html_content, page_model)
-        report["warnings"].extend(self._validate_page_model(page_model))
+        if len(page_models) == 1:
+            html_path = self._html_path(target_dir, mode)
+            html_content = html_path.read_text(encoding="utf-8")
+            report["missingAssets"] = self._missing_assets(target_dir, page_models[0], mode)
+            report["missingTexts"] = self._missing_texts(html_content, page_models[0])
+            report["warnings"].extend(self._validate_page_model(page_models[0]))
+        else:
+            report["missingAssets"] = self._missing_site_assets(target_dir, page_models, mode)
+            report["missingTexts"] = self._missing_site_texts(target_dir, page_models, mode, site_manifest or {})
+            for page_model in page_models:
+                report["warnings"].extend(self._validate_page_model(page_model))
 
-        if against_reference and against_reference.exists():
+        if len(page_models) > 1 and against_reference and against_reference.exists():
+            report["warnings"].append("Visual validation is skipped for multi-page sites.")
+        elif against_reference and against_reference.exists():
+            html_path = self._html_path(target_dir, mode)
             visual_score = self._visual_compare(target_dir, html_path, against_reference, mode, report["warnings"])
             report["visualScore"] = visual_score
 
@@ -59,6 +70,33 @@ class SiteValidator:
         else:
             path = target_dir / "page.json"
         return json.loads(path.read_text(encoding="utf-8"))
+
+    def _load_site_manifest(self, target_dir: Path, mode: str) -> dict[str, Any] | None:
+        if mode != "hugo":
+            return None
+        path = target_dir / "data" / "site.json"
+        if not path.exists():
+            return None
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def _load_page_models(
+        self,
+        target_dir: Path,
+        mode: str,
+        site_manifest: dict[str, Any] | None,
+    ) -> list[dict[str, Any]]:
+        if mode != "hugo" or not site_manifest:
+            return [self._load_page_model(target_dir, mode)]
+        pages_dir = target_dir / "data" / "pages"
+        page_models: list[dict[str, Any]] = []
+        for page in site_manifest.get("pages", []):
+            page_key = str(page.get("page_key") or page.get("slug") or "").strip()
+            if not page_key:
+                continue
+            path = pages_dir / f"{page_key}.json"
+            if path.exists():
+                page_models.append(json.loads(path.read_text(encoding="utf-8")))
+        return page_models
 
     def _html_path(self, target_dir: Path, mode: str) -> Path:
         if mode == "static":
@@ -84,6 +122,13 @@ class SiteValidator:
                 missing.append(asset.get("nodeId") or asset.get("node_id") or asset.get("name") or resolved.as_posix())
         return missing
 
+    def _missing_site_assets(self, target_dir: Path, page_models: list[dict[str, Any]], mode: str) -> list[str]:
+        missing: list[str] = []
+        for page_model in page_models:
+            page_slug = str((page_model.get("page") or {}).get("slug") or (page_model.get("page") or {}).get("id") or "page")
+            missing.extend(f"{page_slug}:{item}" for item in self._missing_assets(target_dir, page_model, mode))
+        return missing
+
     def _missing_texts(self, html_content: str, page_model: dict[str, Any]) -> list[str]:
         missing: list[str] = []
         normalized_html = self._normalize_visible_text(html_content)
@@ -93,6 +138,33 @@ class SiteValidator:
                 continue
             if self._normalize_text(value) not in normalized_html:
                 missing.append(text.get("id") or value[:32])
+        return missing
+
+    def _missing_site_texts(
+        self,
+        target_dir: Path,
+        page_models: list[dict[str, Any]],
+        mode: str,
+        site_manifest: dict[str, Any],
+    ) -> list[str]:
+        del mode
+        missing: list[str] = []
+        page_entries = {
+            str(page.get("page_key") or page.get("slug") or ""): page
+            for page in site_manifest.get("pages", [])
+        }
+        public_dir = target_dir / "public"
+        for page_model in page_models:
+            page = page_model.get("page") or {}
+            page_key = str(page.get("slug") or page.get("id") or "")
+            page_entry = page_entries.get(page_key, {})
+            relative_path = str(page_entry.get("output_path") or f"{page_key}/index.html")
+            html_path = public_dir / relative_path
+            if not html_path.exists():
+                missing.append(f"{page_key}:html-missing")
+                continue
+            html_content = html_path.read_text(encoding="utf-8")
+            missing.extend(f"{page_key}:{item}" for item in self._missing_texts(html_content, page_model))
         return missing
 
     def _validate_hugo_build(self, target_dir: Path, warnings: list[str]) -> bool:
@@ -115,6 +187,12 @@ class SiteValidator:
             warnings.append("Generated page model is missing the `texts` map.")
         if not isinstance(page_model.get("assets"), list):
             warnings.append("Generated page model is missing the `assets` list.")
+        return warnings
+
+    def _collect_page_warnings(self, page_models: list[dict[str, Any]]) -> list[str]:
+        warnings: list[str] = []
+        for page_model in page_models:
+            warnings.extend(list(page_model.get("warnings", [])))
         return warnings
 
     def _visual_compare(

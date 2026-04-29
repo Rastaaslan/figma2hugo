@@ -15,6 +15,10 @@ import unicodedata
 DECORATIVE_PURPOSES = {"background", "decorative", "foreground", "mask"}
 HEADING_ROLES = {"display", "eyebrow", "headline", "heading", "hero-title", "title"}
 TEXT_VALUE_KEYS = ("value", "text", "characters", "content", "raw_value")
+GENERIC_CONTAINER_ROLES = {"", "container", "group", "frame", "node", "wrapper", "div"}
+SECTION_COORDINATE_SPACE = "section"
+PARENT_COORDINATE_SPACE = "parent"
+PUNCTUATION_ONLY_LINE_RE = re.compile(r"^[-\u2010-\u2015/:|+*·•]+$")
 
 
 @dataclass(slots=True)
@@ -91,6 +95,10 @@ def locate_templates_root() -> Path:
     return templates_root
 
 
+def read_template_text(*relative_parts: str) -> str:
+    return locate_templates_root().joinpath(*relative_parts).read_text(encoding="utf-8")
+
+
 def to_primitive(value: Any) -> Any:
     if value is None:
         return None
@@ -162,6 +170,10 @@ def css_escape_identifier(value: Any, default: str = "item") -> str:
     if identifier[0].isdigit():
         return f"id-{identifier}"
     return identifier
+
+
+def dom_identifier(value: Any, default: str = "item") -> str:
+    return css_escape_identifier(value, default=default)
 
 
 def normalize_bounds(value: Any) -> dict[str, float]:
@@ -340,6 +352,72 @@ def append_attribute(attrs: dict[str, str], key: str, value: Any) -> None:
         attrs[key] = text
 
 
+def normalize_layer_name(value: Any) -> str:
+    return slugify(value, default="")
+
+
+def layer_tokens(value: Any) -> tuple[str, ...]:
+    normalized = normalize_layer_name(value)
+    if not normalized:
+        return ()
+    return tuple(token for token in normalized.split("-") if token)
+
+
+def name_has_prefix(value: Any, prefixes: tuple[str, ...]) -> bool:
+    normalized = normalize_layer_name(value)
+    return any(normalized == prefix or normalized.startswith(f"{prefix}-") for prefix in prefixes)
+
+
+def name_has_token(value: Any, tokens: tuple[str, ...]) -> bool:
+    node_tokens = set(layer_tokens(value))
+    return any(token in node_tokens for token in tokens)
+
+
+def infer_container_role(name: Any, fallback: str = "container") -> str:
+    normalized_fallback = ensure_text(fallback).strip().lower()
+    if normalized_fallback and normalized_fallback not in GENERIC_CONTAINER_ROLES:
+        return normalized_fallback
+    if name_has_prefix(name, ("href-card", "link-card")):
+        return "link-card"
+    if name_has_prefix(name, ("href-grid", "link-grid")):
+        return "link-grid"
+    if name_has_prefix(name, ("accordion-item",)):
+        return "accordion-item"
+    if name_has_prefix(name, ("accordion-trigger",)):
+        return "accordion-trigger"
+    if name_has_prefix(name, ("accordion-panel",)):
+        return "accordion-panel"
+    if name_has_prefix(name, ("accordion",)):
+        return "accordion"
+    if name_has_prefix(name, ("carousel-stage", "carousel-main")):
+        return "carousel-stage"
+    if name_has_prefix(name, ("carousel-thumbs", "carousel-nav", "carousel-track")):
+        return "carousel-nav"
+    if name_has_prefix(name, ("carousel-slide",)):
+        return "carousel-slide"
+    if name_has_prefix(name, ("carousel-thumb",)):
+        return "carousel-thumb"
+    if name_has_prefix(name, ("carousel",)):
+        return "carousel"
+    if name_has_prefix(name, ("formulaire", "form")):
+        return "form"
+    if name_has_prefix(name, ("button", "btn")):
+        return "button"
+    if name_has_prefix(name, ("input", "champ", "zone", "field")):
+        return "field"
+    if name_has_prefix(name, ("card-v", "card-h", "card", "article")):
+        return "card"
+    if name_has_prefix(name, ("nav",)):
+        return "nav"
+    if name_has_prefix(name, ("footer",)):
+        return "footer"
+    if name_has_prefix(name, ("header",)):
+        return "header"
+    if name_has_prefix(name, ("hero", "section")):
+        return "section"
+    return normalized_fallback or "container"
+
+
 def semantic_section_tag(role: str, index: int) -> str:
     normalized_role = role.lower()
     if normalized_role in {"header", "hero", "masthead"}:
@@ -356,17 +434,25 @@ def semantic_section_tag(role: str, index: int) -> str:
 def semantic_container_tag(kind: str, role: str) -> str:
     normalized_role = role.lower()
     normalized_kind = kind.lower()
-    if normalized_role in {"form", "newsletter"}:
-        return "form"
-    if normalized_role in {"nav", "navigation"}:
-        return "nav"
-    if normalized_role in {"article", "card"}:
+    if normalized_role in {"button", "accordion-trigger", "carousel-thumb"}:
+        return "button"
+    if normalized_role == "link-card":
         return "article"
-    if normalized_role in {"list", "menu"}:
+    if normalized_role == "form":
+        return "form"
+    if normalized_role == "nav":
+        return "nav"
+    if normalized_role == "header":
+        return "header"
+    if normalized_role == "section":
+        return "section"
+    if normalized_role == "card":
+        return "article"
+    if normalized_role == "list":
         return "ul"
-    if normalized_role in {"list-item", "menu-item"}:
+    if normalized_role == "list-item":
         return "li"
-    if normalized_role in {"footer"}:
+    if normalized_role == "footer":
         return "footer"
     if normalized_kind == "group":
         return "div"
@@ -375,19 +461,62 @@ def semantic_container_tag(kind: str, role: str) -> str:
 
 def guess_text_tag(role: str, section_index: int, text_index: int) -> str:
     normalized_role = role.lower()
-    if normalized_role in {"label"}:
+    if normalized_role == "label":
         return "label"
-    if normalized_role in {"link"}:
+    if normalized_role == "link":
         return "a"
-    if normalized_role in {"button", "cta"}:
+    if normalized_role == "button":
         return "a"
-    if normalized_role in {"quote"}:
+    if normalized_role == "quote":
         return "blockquote"
-    if normalized_role in {"list-item"}:
+    if normalized_role == "list-item":
         return "li"
     if normalized_role in HEADING_ROLES:
         return "h1" if section_index == 0 and text_index == 0 else "h2"
     return "p"
+
+
+def accordion_mode(name: Any) -> str:
+    if name_has_token(name, ("single", "exclusive")):
+        return "single"
+    return "multi"
+
+
+def accordion_item_starts_open(name: Any) -> bool:
+    if name_has_token(name, ("closed", "collapse", "collapsed")):
+        return False
+    if name_has_token(name, ("open", "expanded", "active")):
+        return True
+    return True
+
+
+def carousel_item_key(name: Any, prefixes: tuple[str, ...]) -> str:
+    tokens = list(layer_tokens(name))
+    for prefix in prefixes:
+        prefix_tokens = list(layer_tokens(prefix))
+        if tokens[: len(prefix_tokens)] != prefix_tokens:
+            continue
+        suffix_tokens = [
+            token
+            for token in tokens[len(prefix_tokens) :]
+            if token not in {"active", "selected", "default", "current", "open", "closed"}
+        ]
+        return "-".join(suffix_tokens)
+    return normalize_layer_name(name)
+
+
+def carousel_item_starts_active(name: Any) -> bool:
+    return name_has_token(name, ("active", "selected", "default", "current"))
+
+
+def looks_like_href(value: Any) -> bool:
+    text = ensure_text(value).strip().strip("\"'")
+    if not text or any(character.isspace() for character in text):
+        return False
+    if text.startswith(("/", "#", "mailto:", "tel:")):
+        return True
+    parsed = urlparse(text)
+    return bool(parsed.scheme and (parsed.netloc or parsed.scheme in {"mailto", "tel"}))
 
 
 def style_map_to_css(value: Any) -> str:
@@ -478,6 +607,13 @@ def ensure_unit(value: Any) -> str:
 
 
 class CanonicalModelBuilder:
+    """Construit un modèle canonique indépendant de la sortie finale.
+
+    Cette étape centralise la normalisation des nœuds et l'interprétation des
+    conventions de naming (`accordion-*`, `href-card-*`, `carousel-*`, etc.)
+    pour éviter que chaque générateur réimplémente ses propres heuristiques.
+    """
+
     def __init__(self, mode: str) -> None:
         self.mode = mode
         self._warnings: list[str] = []
@@ -580,7 +716,12 @@ class CanonicalModelBuilder:
             default="section",
         )
         section_texts = [
-            self._normalize_text(item, section_id=section_id, section_index=index, text_index=text_index)
+            self._normalize_text(
+                item,
+                section_id=section_id,
+                section_index=index,
+                text_index=text_index,
+            )
             for text_index, item in enumerate(self._resolve_items(data.get("texts"), self._global_texts))
         ]
         section_assets = [
@@ -599,7 +740,14 @@ class CanonicalModelBuilder:
             )
         ]
         children = [
-            self._normalize_node(item, section_id=section_id, section_index=index, node_index=node_index)
+            self._normalize_node(
+                item,
+                section_id=section_id,
+                section_index=index,
+                node_index=node_index,
+                parent_absolute_offset=(0.0, 0.0),
+                source_space=SECTION_COORDINATE_SPACE,
+            )
             for node_index, item in enumerate(coerce_list(data.get("children")))
         ]
         children = [child for child in children if child]
@@ -608,6 +756,7 @@ class CanonicalModelBuilder:
                 [
                     {
                         "id": f"{text['id']}-node",
+                        "dom_id": dom_identifier(f"{text['id']}-node", default=f"{section_id}-text-node-{index + 1}"),
                         "kind": "text",
                         "tag": text["tag"],
                         "role": text["role"],
@@ -622,6 +771,10 @@ class CanonicalModelBuilder:
                 + [
                     {
                         "id": f"{asset['id']}-node",
+                        "dom_id": dom_identifier(
+                            f"{asset['id']}-node",
+                            default=f"{section_id}-asset-node-{index + 1}",
+                        ),
                         "kind": "asset",
                         "tag": "figure",
                         "role": asset["purpose"],
@@ -656,77 +809,104 @@ class CanonicalModelBuilder:
         section_id: str,
         section_index: int,
         node_index: int,
+        parent_absolute_offset: tuple[float, float] = (0.0, 0.0),
+        source_space: str = PARENT_COORDINATE_SPACE,
     ) -> dict[str, Any]:
         if isinstance(value, str):
             if value in self._global_texts:
-                return self._normalize_node(
-                    {"kind": "text", "text": self._global_texts[value], "id": value},
+                text = self._text_for_context(
+                    self._global_texts[value],
                     section_id=section_id,
                     section_index=section_index,
-                    node_index=node_index,
+                    text_index=node_index,
+                    parent_absolute_offset=parent_absolute_offset,
+                    source_space=source_space,
                 )
+                return self._wrap_text_node(text, node_id=value)
             if value in self._global_assets:
-                return self._normalize_node(
-                    {"kind": "asset", "asset": self._global_assets[value], "id": value},
+                asset = self._asset_for_context(
+                    self._global_assets[value],
                     section_id=section_id,
-                    section_index=section_index,
-                    node_index=node_index,
+                    asset_index=node_index,
+                    parent_absolute_offset=parent_absolute_offset,
+                    source_space=source_space,
                 )
+                return self._wrap_asset_node(asset, node_id=value)
             return {}
         data = as_mapping(value)
         node_id = ensure_text(
             coalesce(data, "id", "nodeId", "node_id", default=f"{section_id}-node-{node_index + 1}"),
             default=f"{section_id}-node-{node_index + 1}",
         )
+        node_name = ensure_text(coalesce(data, "name", default=node_id), default=node_id)
+        node_source_space = ensure_text(
+            coalesce(data, "coordinateSpace", "coordinate_space", default=source_space),
+            default=source_space,
+        ).lower()
         kind = ensure_text(
             coalesce(data, "kind", "type", "node_type", default=self._guess_node_kind(data)),
             default="container",
         ).lower()
-        role = ensure_text(coalesce(data, "role", default=kind), default=kind).lower()
+        role = infer_container_role(
+            node_name,
+            fallback=ensure_text(coalesce(data, "role", default=kind), default=kind).lower(),
+        )
         if kind == "text":
-            text = self._normalize_text(
-                coalesce(data, "text", default=data),
+            text_value = (
+                data
+                if isinstance(value, dict)
+                and any(key in data for key in ("bounds", "render_bounds", "renderBounds", "coordinate_space"))
+                else coalesce(data, "text", default=data)
+            )
+            text = self._text_for_context(
+                text_value,
                 section_id=section_id,
                 section_index=section_index,
                 text_index=node_index,
+                parent_absolute_offset=parent_absolute_offset,
+                source_space=node_source_space,
             )
-            return {
-                "id": node_id,
-                "kind": "text",
-                "tag": text["tag"],
-                "role": text["role"],
-                "class_name": self._unique_class_name("node", text["id"], node_id),
-                "bounds": text["bounds"],
-                "attributes": {},
-                "children": [],
-                "text": text,
-            }
+            return self._wrap_text_node(text, node_id=node_id)
         if kind == "asset":
-            asset = self._normalize_asset(
-                coalesce(data, "asset", default=data),
+            asset_value = (
+                data
+                if isinstance(value, dict)
+                and any(key in data for key in ("bounds", "coordinate_space"))
+                else coalesce(data, "asset", default=data)
+            )
+            asset = self._asset_for_context(
+                asset_value,
                 section_id=section_id,
                 asset_index=node_index,
+                parent_absolute_offset=parent_absolute_offset,
+                source_space=node_source_space,
             )
-            return {
-                "id": node_id,
-                "kind": "asset",
-                "tag": "figure",
-                "role": asset["purpose"],
-                "class_name": self._unique_class_name("node", asset["id"], node_id),
-                "bounds": asset["bounds"],
-                "attributes": {},
-                "children": [],
-                "asset": asset,
-            }
+            return self._wrap_asset_node(asset, node_id=node_id)
         attrs = sanitize_attributes(data.get("attributes"))
         append_attribute(attrs, "aria-label", coalesce(data, "ariaLabel", "aria_label"))
         append_attribute(attrs, "href", coalesce(data, "href", "url"))
+        bounds, absolute_offset = self._normalize_container_bounds(
+            data,
+            parent_absolute_offset=parent_absolute_offset,
+            source_space=node_source_space,
+        )
+        child_source_space = ensure_text(
+            coalesce(
+                data,
+                "childrenCoordinateSpace",
+                "children_coordinate_space",
+                default=PARENT_COORDINATE_SPACE,
+            ),
+            default=PARENT_COORDINATE_SPACE,
+        ).lower()
         children = [
             self._normalize_node(
                 child,
                 section_id=section_id,
                 section_index=section_index,
                 node_index=child_index,
+                parent_absolute_offset=absolute_offset,
+                source_space=child_source_space,
             )
             for child_index, child in enumerate(coerce_list(data.get("children")))
         ]
@@ -739,6 +919,8 @@ class CanonicalModelBuilder:
                         section_id=section_id,
                         section_index=section_index,
                         node_index=child_index,
+                        parent_absolute_offset=absolute_offset,
+                        source_space=child_source_space,
                     )
                     for child_index, item in enumerate(
                         self._resolve_items(data.get("texts"), self._global_texts)
@@ -750,26 +932,563 @@ class CanonicalModelBuilder:
                         section_id=section_id,
                         section_index=section_index,
                         node_index=child_index + 1000,
+                        parent_absolute_offset=absolute_offset,
+                        source_space=child_source_space,
                     )
                     for child_index, item in enumerate(
                         self._resolve_items(data.get("assets"), self._global_assets)
                     )
                 ]
             )
+        children = self._apply_container_naming_conventions(
+            role=role,
+            node_name=node_name,
+            bounds=bounds,
+            children=children,
+        )
+        tag = ensure_text(coalesce(data, "tag", default=semantic_container_tag(kind, role)), default="div")
+        if tag == "button" and "type" not in attrs:
+            attrs["type"] = "button"
+        tag, attrs, children = self._apply_component_container_conventions(
+            role=role,
+            node_name=node_name,
+            tag=tag,
+            attrs=attrs,
+            children=children,
+        )
         return {
             "id": node_id,
+            "name": node_name,
+            "dom_id": dom_identifier(node_id, default=f"{section_id}-node-{node_index + 1}"),
             "kind": "container",
-            "tag": ensure_text(coalesce(data, "tag", default=semantic_container_tag(kind, role)), default="div"),
+            "tag": tag,
             "role": role,
             "class_name": self._unique_class_name(
                 "node",
-                ensure_text(coalesce(data, "name", default=node_id), default=node_id),
+                node_name,
                 node_id,
             ),
-            "bounds": normalize_bounds(coalesce(data, "bounds", "absoluteBoundingBox", default={})),
+            "bounds": bounds,
             "attributes": attrs,
             "children": children,
         }
+
+    def _apply_container_naming_conventions(
+        self,
+        *,
+        role: str,
+        node_name: str,
+        bounds: dict[str, float],
+        children: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        normalized_role = ensure_text(role).strip().lower()
+        if normalized_role not in {"button", "field", "accordion-trigger", "carousel-thumb"}:
+            return children
+        effective_role = "button" if normalized_role in {"accordion-trigger", "carousel-thumb"} else normalized_role
+
+        normalized_children: list[dict[str, Any]] = []
+        for child in children:
+            if child.get("kind") != "asset":
+                normalized_children.append(child)
+                continue
+
+            asset = as_mapping(child.get("asset"))
+            if not asset:
+                normalized_children.append(child)
+                continue
+            if not self._should_promote_container_asset_to_background(
+                container_role=effective_role,
+                asset=asset,
+                container_bounds=bounds,
+            ):
+                normalized_children.append(child)
+                continue
+
+            normalized_children.append(
+                {
+                    **child,
+                    "role": "background",
+                    "asset": {
+                        **asset,
+                        "purpose": "background",
+                        "alt": "",
+                        "aria_hidden": True,
+                    },
+                }
+            )
+        return normalized_children
+
+    def _apply_component_container_conventions(
+        self,
+        *,
+        role: str,
+        node_name: str,
+        tag: str,
+        attrs: dict[str, str],
+        children: list[dict[str, Any]],
+    ) -> tuple[str, dict[str, str], list[dict[str, Any]]]:
+        """Applique les conventions métier dans un ordre stable.
+
+        L'ordre reste volontairement explicite pour garder des effets
+        prévisibles quand plusieurs conventions peuvent s'empiler.
+        """
+
+        conventions = (
+            self._apply_link_card_container_conventions,
+            self._apply_card_container_conventions,
+            self._apply_accordion_container_conventions,
+            self._apply_carousel_container_conventions,
+        )
+        for convention in conventions:
+            tag, attrs, children = convention(
+                role=role,
+                node_name=node_name,
+                tag=tag,
+                attrs=attrs,
+                children=children,
+            )
+        return tag, attrs, children
+
+    def _apply_link_card_container_conventions(
+        self,
+        *,
+        role: str,
+        node_name: str,
+        tag: str,
+        attrs: dict[str, str],
+        children: list[dict[str, Any]],
+    ) -> tuple[str, dict[str, str], list[dict[str, Any]]]:
+        """Transforme une card nommée en lien complet quand une URL existe."""
+
+        normalized_role = ensure_text(role).strip().lower()
+        if normalized_role == "link-grid":
+            attrs["data-link-grid"] = "true"
+            return tag, attrs, children
+        if normalized_role != "link-card":
+            return tag, attrs, children
+
+        link_attrs = dict(attrs)
+        link_attrs["data-link-card"] = "true"
+        link_children, extracted_href = self._extract_link_card_href(children)
+        href_value = ensure_text(link_attrs.get("href")).strip() or extracted_href
+
+        if not href_value:
+            link_attrs.pop("href", None)
+            return "article", link_attrs, link_children
+
+        anchor_attrs = {"href": href_value}
+        if name_has_token(node_name, ("blank", "newtab", "external")):
+            anchor_attrs["target"] = "_blank"
+            anchor_attrs["rel"] = "noopener noreferrer"
+
+        link_attrs.update(anchor_attrs)
+        return "a", link_attrs, link_children
+
+    def _apply_card_container_conventions(
+        self,
+        *,
+        role: str,
+        node_name: str,
+        tag: str,
+        attrs: dict[str, str],
+        children: list[dict[str, Any]],
+    ) -> tuple[str, dict[str, str], list[dict[str, Any]]]:
+        del node_name
+        normalized_role = ensure_text(role).strip().lower()
+        if normalized_role != "card":
+            return tag, attrs, children
+        attrs["data-card"] = "true"
+        return tag, attrs, children
+
+    def _apply_accordion_container_conventions(
+        self,
+        *,
+        role: str,
+        node_name: str,
+        tag: str,
+        attrs: dict[str, str],
+        children: list[dict[str, Any]],
+    ) -> tuple[str, dict[str, str], list[dict[str, Any]]]:
+        """Enrichit les blocs d'accordéon avec les attributs HTML/ARIA attendus."""
+
+        normalized_role = ensure_text(role).strip().lower()
+        if normalized_role == "accordion":
+            attrs["data-accordion"] = "true"
+            attrs["data-accordion-mode"] = accordion_mode(node_name)
+            return tag, attrs, children
+        if normalized_role == "accordion-trigger":
+            attrs["data-accordion-trigger"] = "true"
+            attrs.setdefault("aria-expanded", "true")
+            attrs.setdefault("type", "button")
+            return "button", attrs, children
+        if normalized_role == "accordion-panel":
+            attrs["data-accordion-panel"] = "true"
+            return tag, attrs, children
+        if normalized_role != "accordion-item":
+            return tag, attrs, children
+
+        attrs["data-accordion-item"] = "true"
+        starts_open = accordion_item_starts_open(node_name)
+        attrs["data-accordion-open"] = "true" if starts_open else "false"
+
+        trigger = self._first_container_child_by_role(children, "accordion-trigger")
+        panel = self._first_container_child_by_role(children, "accordion-panel")
+
+        if trigger:
+            trigger_attrs = dict(trigger.get("attributes", {}))
+            trigger_attrs["data-accordion-trigger"] = "true"
+            trigger_attrs["aria-expanded"] = "true" if starts_open else "false"
+            trigger_attrs.setdefault("type", "button")
+            if panel and trigger.get("dom_id") and panel.get("dom_id"):
+                trigger_attrs["aria-controls"] = ensure_text(panel.get("dom_id"))
+            trigger["attributes"] = trigger_attrs
+            trigger["tag"] = "button"
+
+        if panel:
+            panel_attrs = dict(panel.get("attributes", {}))
+            panel_attrs["data-accordion-panel"] = "true"
+            panel_attrs["role"] = "region"
+            panel_attrs["aria-hidden"] = "false" if starts_open else "true"
+            if trigger and trigger.get("dom_id"):
+                panel_attrs["aria-labelledby"] = ensure_text(trigger.get("dom_id"))
+            if starts_open:
+                panel_attrs.pop("hidden", None)
+            else:
+                panel_attrs["hidden"] = "hidden"
+            panel["attributes"] = panel_attrs
+
+        return tag, attrs, children
+
+    def _first_container_child_by_role(
+        self,
+        children: list[dict[str, Any]],
+        role: str,
+    ) -> dict[str, Any] | None:
+        normalized_role = ensure_text(role).strip().lower()
+        return next(
+            (
+                child
+                for child in children
+                if child.get("kind") == "container"
+                and ensure_text(child.get("role")).strip().lower() == normalized_role
+            ),
+            None,
+        )
+
+    def _apply_carousel_container_conventions(
+        self,
+        *,
+        role: str,
+        node_name: str,
+        tag: str,
+        attrs: dict[str, str],
+        children: list[dict[str, Any]],
+    ) -> tuple[str, dict[str, str], list[dict[str, Any]]]:
+        """Prépare le markup d'un carousel et relie thumbs <-> slides."""
+
+        normalized_role = ensure_text(role).strip().lower()
+        updated_attrs = dict(attrs)
+
+        if normalized_role == "carousel-stage":
+            updated_attrs["data-carousel-stage"] = "true"
+            return tag, updated_attrs, children
+        if normalized_role == "carousel-nav":
+            updated_attrs["data-carousel-nav"] = "true"
+            return tag, updated_attrs, children
+        if normalized_role == "carousel-slide":
+            updated_attrs["data-carousel-slide"] = carousel_item_key(node_name, ("carousel-slide",))
+            if carousel_item_starts_active(node_name):
+                updated_attrs["data-carousel-default"] = "true"
+            return tag, updated_attrs, children
+        if normalized_role == "carousel-thumb":
+            updated_attrs["data-carousel-thumb"] = carousel_item_key(node_name, ("carousel-thumb",))
+            updated_attrs.setdefault("aria-pressed", "false")
+            updated_attrs.setdefault("type", "button")
+            if carousel_item_starts_active(node_name):
+                updated_attrs["data-carousel-default"] = "true"
+            return "button", updated_attrs, children
+        if normalized_role != "carousel":
+            return tag, updated_attrs, children
+
+        updated_attrs["data-carousel"] = "true"
+        slide_nodes = [
+            node
+            for node in self._iter_container_nodes(children)
+            if ensure_text(node.get("role")).strip().lower() == "carousel-slide"
+        ]
+        thumb_nodes = [
+            node
+            for node in self._iter_container_nodes(children)
+            if ensure_text(node.get("role")).strip().lower() == "carousel-thumb"
+        ]
+
+        slide_by_key: dict[str, dict[str, Any]] = {}
+        for slide in slide_nodes:
+            slide_attrs = dict(slide.get("attributes", {}))
+            slide_key = ensure_text(slide_attrs.get("data-carousel-slide")).strip() or carousel_item_key(
+                slide.get("class_name") or slide.get("id"),
+                ("carousel-slide",),
+            )
+            slide_attrs["data-carousel-slide"] = slide_key
+            if not slide_key:
+                slide_attrs["data-carousel-slide"] = ensure_text(slide.get("dom_id") or slide.get("id"))
+            slide["attributes"] = slide_attrs
+            slide_by_key[ensure_text(slide_attrs.get("data-carousel-slide"))] = slide
+
+        for thumb in thumb_nodes:
+            thumb_attrs = dict(thumb.get("attributes", {}))
+            thumb_key = ensure_text(thumb_attrs.get("data-carousel-thumb")).strip() or carousel_item_key(
+                thumb.get("class_name") or thumb.get("id"),
+                ("carousel-thumb",),
+            )
+            thumb_attrs["data-carousel-thumb"] = thumb_key or ensure_text(thumb.get("dom_id") or thumb.get("id"))
+            thumb_attrs.setdefault("aria-pressed", "false")
+            thumb_attrs.setdefault("type", "button")
+            matching_slide = slide_by_key.get(ensure_text(thumb_attrs.get("data-carousel-thumb")))
+            if matching_slide and matching_slide.get("dom_id"):
+                thumb_attrs["aria-controls"] = ensure_text(matching_slide.get("dom_id"))
+            thumb["attributes"] = thumb_attrs
+
+        return tag, updated_attrs, children
+
+    def _iter_container_nodes(self, children: list[dict[str, Any]]):
+        for child in children:
+            if child.get("kind") != "container":
+                continue
+            yield child
+            yield from self._iter_container_nodes(child.get("children", []))
+
+    def _extract_link_card_href(self, children: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], str]:
+        href_value = ""
+
+        def walk(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            nonlocal href_value
+            retained_nodes: list[dict[str, Any]] = []
+            for node in nodes:
+                if node.get("kind") == "text":
+                    text_payload = as_mapping(node.get("text"))
+                    text_name = ensure_text(text_payload.get("name") or text_payload.get("id"))
+                    text_value = ensure_text(text_payload.get("value")).strip().strip("\"'")
+                    if not href_value and name_has_prefix(text_name, ("href", "url")) and looks_like_href(text_value):
+                        href_value = text_value
+                        continue
+                    retained_nodes.append(node)
+                    continue
+                if node.get("kind") == "container":
+                    node["children"] = walk(list(node.get("children", [])))
+                retained_nodes.append(node)
+            return retained_nodes
+
+        return walk(list(children)), href_value
+
+    def _find_link_card_text_target(self, children: list[dict[str, Any]]) -> dict[str, Any] | None:
+        text_nodes = list(self._iter_text_nodes(children))
+        if not text_nodes:
+            return None
+        preferred = next(
+            (
+                node
+                for node in text_nodes
+                if name_has_prefix(
+                    as_mapping(node.get("text")).get("name") or as_mapping(node.get("text")).get("id"),
+                    ("card-link", "link-label", "href-label", "link"),
+                )
+            ),
+            None,
+        )
+        return preferred or text_nodes[0]
+
+    def _iter_text_nodes(self, children: list[dict[str, Any]]):
+        for child in children:
+            if child.get("kind") == "text":
+                yield child
+                continue
+            if child.get("kind") == "container":
+                yield from self._iter_text_nodes(child.get("children", []))
+
+    def _should_promote_container_asset_to_background(
+        self,
+        *,
+        container_role: str,
+        asset: dict[str, Any],
+        container_bounds: dict[str, float],
+    ) -> bool:
+        purpose = ensure_text(asset.get("purpose")).strip().lower()
+        if purpose == "background":
+            return True
+        if purpose not in {"", "content"}:
+            return False
+
+        asset_name = ensure_text(asset.get("name") or asset.get("id"))
+        if container_role == "button" and name_has_prefix(asset_name, ("button", "btn", "bg", "fond")):
+            return True
+        if container_role == "field" and name_has_prefix(asset_name, ("zone", "input", "champ", "bg", "fond")):
+            return True
+
+        asset_bounds = normalize_bounds(asset.get("bounds"))
+        container_width = float(container_bounds.get("width", 0.0) or 0.0)
+        container_height = float(container_bounds.get("height", 0.0) or 0.0)
+        if container_width <= 0 or container_height <= 0:
+            return False
+
+        return (
+            abs(float(asset_bounds.get("x", 0.0) or 0.0)) <= 4.0
+            and abs(float(asset_bounds.get("y", 0.0) or 0.0)) <= 4.0
+            and abs(float(asset_bounds.get("width", 0.0) or 0.0) - container_width) <= 4.0
+            and abs(float(asset_bounds.get("height", 0.0) or 0.0) - container_height) <= 4.0
+        )
+
+    def _wrap_text_node(self, text: dict[str, Any], *, node_id: str) -> dict[str, Any]:
+        return {
+            "id": node_id,
+            "dom_id": dom_identifier(node_id, default=f"{text['id']}-node"),
+            "kind": "text",
+            "tag": text["tag"],
+            "role": text["role"],
+            "class_name": self._unique_class_name("node", text["id"], node_id),
+            "bounds": text["bounds"],
+            "attributes": {},
+            "children": [],
+            "text": text,
+        }
+
+    def _wrap_asset_node(self, asset: dict[str, Any], *, node_id: str) -> dict[str, Any]:
+        return {
+            "id": node_id,
+            "dom_id": dom_identifier(node_id, default=f"{asset['id']}-node"),
+            "kind": "asset",
+            "tag": "figure",
+            "role": asset["purpose"],
+            "class_name": self._unique_class_name("node", asset["id"], node_id),
+            "bounds": asset["bounds"],
+            "attributes": {},
+            "children": [],
+            "asset": asset,
+        }
+
+    def _normalize_container_bounds(
+        self,
+        data: dict[str, Any],
+        *,
+        parent_absolute_offset: tuple[float, float],
+        source_space: str,
+    ) -> tuple[dict[str, float], tuple[float, float]]:
+        raw_bounds = normalize_bounds(coalesce(data, "bounds", "absoluteBoundingBox", default={}))
+        if source_space == SECTION_COORDINATE_SPACE:
+            return (
+                self._rebase_bounds(raw_bounds, parent_absolute_offset),
+                (float(raw_bounds.get("x", 0.0) or 0.0), float(raw_bounds.get("y", 0.0) or 0.0)),
+            )
+        return (
+            raw_bounds,
+            (
+                parent_absolute_offset[0] + float(raw_bounds.get("x", 0.0) or 0.0),
+                parent_absolute_offset[1] + float(raw_bounds.get("y", 0.0) or 0.0),
+            ),
+        )
+
+    def _text_for_context(
+        self,
+        value: Any,
+        *,
+        section_id: str,
+        section_index: int,
+        text_index: int,
+        parent_absolute_offset: tuple[float, float],
+        source_space: str,
+    ) -> dict[str, Any]:
+        value = self._resolve_text_reference(value)
+        text = self._normalize_text(
+            value,
+            section_id=section_id,
+            section_index=section_index,
+            text_index=text_index,
+        )
+        if source_space != SECTION_COORDINATE_SPACE:
+            return text
+        if parent_absolute_offset == (0.0, 0.0):
+            return text
+        return {
+            **text,
+            "bounds": self._rebase_bounds(text["bounds"], parent_absolute_offset),
+            "render_bounds": self._rebase_optional_bounds(text.get("render_bounds"), parent_absolute_offset),
+        }
+
+    def _asset_for_context(
+        self,
+        value: Any,
+        *,
+        section_id: str,
+        asset_index: int,
+        parent_absolute_offset: tuple[float, float],
+        source_space: str,
+    ) -> dict[str, Any]:
+        value = self._resolve_asset_reference(value)
+        asset = self._normalize_asset(
+            value,
+            section_id=section_id,
+            asset_index=asset_index,
+        )
+        if source_space != SECTION_COORDINATE_SPACE:
+            return asset
+        if parent_absolute_offset == (0.0, 0.0):
+            return asset
+        return {
+            **asset,
+            "bounds": self._rebase_bounds(asset["bounds"], parent_absolute_offset),
+        }
+
+    def _resolve_text_reference(self, value: Any) -> Any:
+        if isinstance(value, str):
+            return value
+        data = as_mapping(value)
+        if not data:
+            return value
+        reference = data.get("text")
+        if not isinstance(reference, str) or reference not in self._global_texts:
+            return value
+        base = as_mapping(self._global_texts[reference])
+        if not base:
+            return value
+        overrides = {key: item for key, item in data.items() if key not in {"kind", "text"}}
+        return {**base, **overrides, "_contextual_ref": True}
+
+    def _resolve_asset_reference(self, value: Any) -> Any:
+        if isinstance(value, str):
+            return value
+        data = as_mapping(value)
+        if not data:
+            return value
+        reference = data.get("asset")
+        if not isinstance(reference, str) or reference not in self._global_assets:
+            return value
+        base = as_mapping(self._global_assets[reference])
+        if not base:
+            return value
+        overrides = {key: item for key, item in data.items() if key not in {"kind", "asset"}}
+        return {**base, **overrides, "_contextual_ref": True}
+
+    def _rebase_bounds(
+        self,
+        bounds: dict[str, float],
+        parent_absolute_offset: tuple[float, float],
+    ) -> dict[str, float]:
+        return {
+            "x": float(bounds.get("x", 0.0) or 0.0) - parent_absolute_offset[0],
+            "y": float(bounds.get("y", 0.0) or 0.0) - parent_absolute_offset[1],
+            "width": float(bounds.get("width", 0.0) or 0.0),
+            "height": float(bounds.get("height", 0.0) or 0.0),
+        }
+
+    def _rebase_optional_bounds(
+        self,
+        bounds: Any,
+        parent_absolute_offset: tuple[float, float],
+    ) -> dict[str, float]:
+        data = as_mapping(bounds)
+        if not data:
+            return {"x": 0.0, "y": 0.0, "width": 0.0, "height": 0.0}
+        return self._rebase_bounds(normalize_bounds(data), parent_absolute_offset)
 
     def _normalize_text(
         self,
@@ -782,11 +1501,12 @@ class CanonicalModelBuilder:
         data = as_mapping(value)
         if isinstance(value, str) and value in self._global_texts:
             data = as_mapping(self._global_texts[value])
+        has_contextual_bounds = bool(data and data.get("_contextual_ref"))
         text_id = ensure_text(
             coalesce(data, "id", "nodeId", "node_id", default=f"{section_id or 'page'}-text-{text_index + 1}"),
             default=f"{section_id or 'page'}-text-{text_index + 1}",
         )
-        if text_id in self._text_index:
+        if text_id in self._text_index and not has_contextual_bounds:
             return self._text_index[text_id]
         raw_value = ""
         for key in TEXT_VALUE_KEYS:
@@ -800,13 +1520,21 @@ class CanonicalModelBuilder:
             append_attribute(attrs, "href", coalesce(data, "href", "url"))
         if tag == "label":
             append_attribute(attrs, "for", coalesce(data, "for", "label_for"))
-        segments = self._normalize_segments(raw_value, coalesce(data, "styleRuns", "style_runs", default=[]))
+        style_runs = coalesce(data, "styleRuns", "style_runs", default=[])
+        display_value, normalized_break_lines = self._normalize_display_text(
+            raw_value,
+            role=role,
+            style_runs=style_runs,
+        )
+        segments = self._normalize_segments(display_value, style_runs)
         normalized = {
             "id": text_id,
+            "dom_id": dom_identifier(text_id, default=f"{section_id or 'page'}-text-{text_index + 1}"),
             "name": ensure_text(coalesce(data, "name", default=text_id), default=text_id),
-            "value": raw_value,
-            "plain_text": " ".join(raw_value.split()),
-            "html": html_with_line_breaks(raw_value),
+            "value": display_value,
+            "source_value": raw_value,
+            "plain_text": " ".join(display_value.split()),
+            "html": html_with_line_breaks(display_value),
             "tag": tag,
             "role": role,
             "section_id": section_id,
@@ -820,17 +1548,64 @@ class CanonicalModelBuilder:
             "attributes": attrs,
             "style": as_mapping(coalesce(data, "style", default={})),
             "style_css": style_map_to_css(coalesce(data, "style", default={})),
-            "hard_breaks": self._has_hard_breaks(raw_value),
+            "hard_breaks": self._has_hard_breaks(display_value),
             "nowrap": self._should_nowrap_text(
-                raw_value,
+                display_value,
                 normalize_bounds(coalesce(data, "bounds", "absoluteBoundingBox", default={})),
                 as_mapping(coalesce(data, "style", default={})),
             ),
-            "preserve_spaces": self._should_preserve_spaces(raw_value),
+            "preserve_spaces": self._should_preserve_spaces(display_value),
+            "normalized_break_lines": normalized_break_lines,
+            "source_line_count": self._line_count(raw_value),
+            "display_line_count": self._line_count(display_value),
             "segments": segments,
         }
-        self._text_index[text_id] = normalized
+        if not has_contextual_bounds:
+            self._text_index[text_id] = normalized
         return normalized
+
+    def _normalize_display_text(
+        self,
+        raw_value: str,
+        *,
+        role: str,
+        style_runs: Any,
+    ) -> tuple[str, bool]:
+        normalized_value = raw_value.replace("\r\n", "\n").replace("\r", "\n")
+        if not normalized_value:
+            return normalized_value, False
+        if role not in HEADING_ROLES:
+            return normalized_value, False
+        if coerce_list(style_runs):
+            return normalized_value, False
+        collapsed_value = self._collapse_isolated_punctuation_breaks(normalized_value)
+        return collapsed_value, collapsed_value != normalized_value
+
+    def _collapse_isolated_punctuation_breaks(self, value: str) -> str:
+        lines = value.split("\n")
+        if len(lines) < 3:
+            return value
+        collapsed_lines: list[str] = []
+        for index, line in enumerate(lines):
+            stripped = line.strip()
+            if (
+                0 < index < len(lines) - 1
+                and stripped
+                and PUNCTUATION_ONLY_LINE_RE.fullmatch(stripped)
+                and collapsed_lines
+                and collapsed_lines[-1].strip()
+                and lines[index + 1].strip()
+            ):
+                collapsed_lines[-1] = collapsed_lines[-1].rstrip() + f" {stripped}"
+                continue
+            collapsed_lines.append(line)
+        return "\n".join(collapsed_lines)
+
+    def _line_count(self, value: str) -> int:
+        if not value:
+            return 0
+        normalized = value.replace("\r\n", "\n").replace("\r", "\n")
+        return len(normalized.split("\n"))
 
     def _normalize_segments(self, text_value: str, value: Any) -> list[dict[str, Any]]:
         runs = coerce_list(value)
@@ -905,11 +1680,12 @@ class CanonicalModelBuilder:
         data = as_mapping(value)
         if isinstance(value, str) and value in self._global_assets:
             data = as_mapping(self._global_assets[value])
+        has_contextual_bounds = bool(data and data.get("_contextual_ref"))
         asset_id = ensure_text(
             coalesce(data, "id", "nodeId", "node_id", default=f"{section_id or 'page'}-asset-{asset_index + 1}"),
             default=f"{section_id or 'page'}-asset-{asset_index + 1}",
         )
-        if asset_id in self._asset_index:
+        if asset_id in self._asset_index and not has_contextual_bounds:
             return self._asset_index[asset_id]
         asset_name = ensure_text(coalesce(data, "name", default=asset_id), default=asset_id)
         render_mode = ensure_text(coalesce(data, "renderMode", "render_mode", default="image"), default="image")
@@ -931,6 +1707,7 @@ class CanonicalModelBuilder:
         style = as_mapping(coalesce(data, "style", default={}))
         normalized = {
             "id": asset_id,
+            "dom_id": dom_identifier(asset_id, default=f"{section_id or 'page'}-asset-{asset_index + 1}"),
             "node_id": ensure_text(coalesce(data, "nodeId", "node_id", default=asset_id), default=asset_id),
             "name": asset_name,
             "format": asset_format or "png",
@@ -939,6 +1716,7 @@ class CanonicalModelBuilder:
             "source_local_path": ensure_text(coalesce(data, "local_path", "localPath", "path", "file", "src")),
             "local_path": relative_path,
             "public_path": normalize_public_path(relative_path, self.mode) if relative_path else "",
+            "css_public_path": self._css_public_path(relative_path),
             "purpose": purpose,
             "alt": "" if purpose in DECORATIVE_PURPOSES else ensure_text(coalesce(data, "alt", default=asset_name), default=asset_name),
             "aria_hidden": purpose in DECORATIVE_PURPOSES,
@@ -969,8 +1747,17 @@ class CanonicalModelBuilder:
             "style": style,
             "style_css": style_map_to_css(style),
         }
-        self._asset_index[asset_id] = normalized
+        if not has_contextual_bounds:
+            self._asset_index[asset_id] = normalized
         return normalized
+
+    def _css_public_path(self, relative_path: str) -> str:
+        public_path = normalize_public_path(relative_path, self.mode)
+        if not public_path:
+            return ""
+        if self.mode == "hugo":
+            return f"/{public_path.lstrip('/')}"
+        return public_path
 
     def _unique_class_name(self, prefix: str, label: str, identifier: str) -> str:
         key = (prefix, identifier)

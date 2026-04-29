@@ -44,6 +44,68 @@ def test_has_figma_access_detects_missing_configuration(monkeypatch) -> None:
     assert "Generation impossible" in gui_module._missing_access_message()
 
 
+def test_clean_figma_urls_keeps_only_filled_entries() -> None:
+    values = [
+        " https://www.figma.com/design/FILE/About?node-id=1-1 ",
+        "",
+        "   ",
+        "https://www.figma.com/design/FILE/Contact?node-id=1-2",
+    ]
+
+    assert gui_module._clean_figma_urls(values) == [
+        "https://www.figma.com/design/FILE/About?node-id=1-1",
+        "https://www.figma.com/design/FILE/Contact?node-id=1-2",
+    ]
+
+
+def test_clean_figma_urls_accepts_stringvar_like_objects() -> None:
+    class DummyVar:
+        def __init__(self, value: str) -> None:
+            self._value = value
+
+        def get(self) -> str:
+            return self._value
+
+    values = [DummyVar(" https://www.figma.com/design/FILE/About?node-id=1-1 "), DummyVar("")]
+
+    assert gui_module._clean_figma_urls(values) == [
+        "https://www.figma.com/design/FILE/About?node-id=1-1"
+    ]
+
+
+def test_describe_generation_error_detects_invalid_figma_url() -> None:
+    described = gui_module._describe_generation_error(
+        "Generation failed during initialization: Figma URL must start with http:// or https://.\n"
+        "Debug files written to: C:/tmp/debug"
+    )
+
+    assert described["status"] == "URL invalide"
+    assert "URL Figma est invalide" in described["summary"]
+    assert "Figma URL must start with http:// or https://" in described["details"]
+
+
+def test_describe_generation_error_detects_missing_figma_access() -> None:
+    described = gui_module._describe_generation_error(
+        "Generation failed during extracting Figma data: "
+        "Unable to extract Figma data. Configure FIGMA_ACCESS_TOKEN or a FIGMA_MCP_* bridge."
+    )
+
+    assert described["status"] == "Acces Figma manquant"
+    assert "Impossible d'acceder a Figma" in described["summary"]
+    assert "Generation impossible" in described["details"]
+
+
+def test_describe_generation_error_uses_stage_specific_label_for_generic_failures() -> None:
+    described = gui_module._describe_generation_error(
+        "Generation failed during generating the output site: template rendering failed\n"
+        "Debug files written to: C:/tmp/debug"
+    )
+
+    assert described["status"] == "Echec generation"
+    assert "la generation du site" in described["summary"]
+    assert "debug" in described["summary"].lower()
+
+
 def test_local_config_reads_token_from_project_file(monkeypatch) -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)

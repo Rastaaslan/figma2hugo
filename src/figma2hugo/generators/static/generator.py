@@ -16,7 +16,9 @@ from .._shared import (
     GenerationArtifacts,
     copy_assets,
     ensure_directory,
+    ensure_text,
     locate_templates_root,
+    read_template_text,
     write_json_file,
     write_text_file,
 )
@@ -52,6 +54,7 @@ class StaticGenerator:
         written_files = [
             write_text_file(output_path / "index.html", html_output),
             write_text_file(output_path / "styles.css", css_output),
+            write_text_file(output_path / "accordion.js", self._accordion_script()),
             write_json_file(output_path / "page.json", page_data),
         ]
         written_files.extend(copy_assets(page_data, output_path, mode="static"))
@@ -81,6 +84,7 @@ class StaticGenerator:
             '    <meta name="viewport" content="width=device-width, initial-scale=1">',
             f"    <title>{html.escape(context['page']['title'])}</title>",
             '    <link rel="stylesheet" href="styles.css">',
+            '    <script src="accordion.js" defer></script>',
             "  </head>",
             f'  <body class="page page--{html.escape(context["page"]["slug"])}">',
         ]
@@ -112,13 +116,33 @@ class StaticGenerator:
         if kind == "asset":
             return self._render_asset(node["asset"], indent=indent)
         attrs = self._render_attributes(node.get("attributes", {}))
+        wrapper_attrs = self._render_attributes(
+            self._node_wrapper_attributes(node, class_name=f'content-node {node["class_name"]}')
+        )
         lines = [
-            f'{indent}<{node["tag"]} id="{html.escape(node["id"])}" class="content-node {html.escape(node["class_name"])}"{attrs}>'
+            f'{indent}<{node["tag"]}{wrapper_attrs}{attrs}>'
         ]
-        for child in node.get("children", []):
+        for child in self._ordered_markup_children(node):
             lines.extend(self._render_node(child, indent=f"{indent}  "))
         lines.append(f"{indent}</{node['tag']}>")
         return lines
+
+    def _ordered_markup_children(self, node: dict[str, Any]) -> list[dict[str, Any]]:
+        children = list(node.get("children", []))
+        if ensure_text(node.get("role")).strip().lower() != "accordion-item":
+            return children
+        trigger_children = [
+            child for child in children if ensure_text(child.get("role")).strip().lower() == "accordion-trigger"
+        ]
+        panel_children = [
+            child for child in children if ensure_text(child.get("role")).strip().lower() == "accordion-panel"
+        ]
+        other_children = [
+            child
+            for child in children
+            if ensure_text(child.get("role")).strip().lower() not in {"accordion-trigger", "accordion-panel"}
+        ]
+        return [*trigger_children, *panel_children, *other_children]
 
     def _render_text(self, text_item: dict[str, Any], *, indent: str) -> list[str]:
         attrs = self._render_attributes(text_item.get("attributes", {}))
@@ -136,18 +160,43 @@ class StaticGenerator:
             content = "".join(segments)
         else:
             content = text_item["html"]
+        wrapper_attrs = self._render_attributes(
+            self._node_wrapper_attributes(text_item, class_name=f'content-text {text_item["class_name"]}')
+        )
         return [
-            f'{indent}<{text_item["tag"]} id="{html.escape(text_item["id"])}" class="content-text {html.escape(text_item["class_name"])}"{attrs}>{content}</{text_item["tag"]}>'
+            f'{indent}<{text_item["tag"]}{wrapper_attrs}{attrs}>{content}</{text_item["tag"]}>'
         ]
 
     def _render_asset(self, asset: dict[str, Any], *, indent: str) -> list[str]:
         if asset.get("render") is False:
             return []
         figure_class = f'content-asset {asset["class_name"]}'
+        purpose = ensure_text(asset.get("purpose")).strip().lower()
+        if purpose == "background":
+            figure_class += " bg"
         if asset.get("aria_hidden"):
             figure_class += " is-decorative"
+        wrapper_tag = "figure"
+        if purpose == "background" or asset.get("aria_hidden"):
+            wrapper_tag = "div"
+        wrapper_attributes: dict[str, Any] = {}
+        if asset.get("aria_hidden"):
+            wrapper_attributes["aria-hidden"] = "true"
+            wrapper_attributes["role"] = "presentation"
+        if purpose == "background" and asset.get("render_mode") != "shape" and asset.get("format") != "shape":
+            wrapper_attributes["style"] = f"background-image: url('{asset['public_path']}');"
+        wrapper_attrs = self._render_attributes(
+            {
+                **self._node_wrapper_attributes(asset, class_name=figure_class),
+                "data-purpose": asset.get("purpose"),
+                "data-render-mode": asset.get("render_mode"),
+                **wrapper_attributes,
+            }
+        )
+        if purpose == "background":
+            return [f"{indent}<{wrapper_tag}{wrapper_attrs}></{wrapper_tag}>"]
         if asset.get("render_mode") == "shape" or asset.get("format") == "shape":
-            return [f'{indent}<figure class="{html.escape(figure_class)}"></figure>']
+            return [f"{indent}<{wrapper_tag}{wrapper_attrs}></{wrapper_tag}>"]
         img_attributes = {
             "src": asset["public_path"],
             "alt": asset["alt"],
@@ -160,9 +209,9 @@ class StaticGenerator:
         if asset.get("height"):
             img_attributes["height"] = str(asset["height"])
         return [
-            f'{indent}<figure class="{html.escape(figure_class)}">',
+            f"{indent}<{wrapper_tag}{wrapper_attrs}>",
             f'{indent}  <img{self._render_attributes(img_attributes)}>',
-            f"{indent}</figure>",
+            f"{indent}</{wrapper_tag}>",
         ]
 
     def _render_attributes(self, attributes: dict[str, Any]) -> str:
@@ -172,3 +221,14 @@ class StaticGenerator:
                 continue
             rendered.append(f' {html.escape(str(name))}="{html.escape(str(value), quote=True)}"')
         return "".join(rendered)
+
+    def _node_wrapper_attributes(self, item: dict[str, Any], *, class_name: str) -> dict[str, Any]:
+        attributes: dict[str, Any] = {"id": item.get("dom_id") or item.get("id"), "class": class_name}
+        source_id = item.get("id")
+        dom_id = item.get("dom_id")
+        if source_id and dom_id and source_id != dom_id:
+            attributes["data-node-id"] = source_id
+        return attributes
+
+    def _accordion_script(self) -> str:
+        return read_template_text("shared", "accordion.js")

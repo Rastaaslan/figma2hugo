@@ -1,0 +1,15 @@
+{{- $node := . -}}
+{{- partial "node_open.html" $node | safeHTML -}}
+  {{/* On force un ordre HTML stable trigger -> panel même si Figma les inverse. */}}
+  {{- range where $node.children "role" "accordion-trigger" -}}
+    {{- partial "node.html" . | safeHTML -}}
+  {{- end -}}
+  {{- range where $node.children "role" "accordion-panel" -}}
+    {{- partial "node.html" . | safeHTML -}}
+  {{- end -}}
+  {{- range $node.children -}}
+    {{- if and (ne .role "accordion-trigger") (ne .role "accordion-panel") -}}
+      {{- partial "node.html" . | safeHTML -}}
+    {{- end -}}
+  {{- end -}}
+{{- partial "node_close.html" $node | safeHTML -}}
