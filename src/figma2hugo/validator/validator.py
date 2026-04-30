@@ -16,6 +16,18 @@ from PIL import Image, ImageChops
 
 
 class SiteValidator:
+    RESPONSIVE_VIEWPORTS: tuple[dict[str, int | str], ...] = (
+        {"label": "desktop-xl", "width": 1440, "height": 2200},
+        {"label": "desktop", "width": 1280, "height": 2200},
+        {"label": "tablet-landscape", "width": 1024, "height": 1600},
+        {"label": "tablet", "width": 768, "height": 1600},
+        {"label": "mobile", "width": 390, "height": 1200},
+    )
+    INTERACTION_VIEWPORTS: tuple[dict[str, int | str], ...] = (
+        {"label": "desktop", "width": 1280, "height": 1800},
+        {"label": "mobile", "width": 390, "height": 1200},
+    )
+
     def validate(
         self,
         target_dir: Path,
@@ -33,6 +45,17 @@ class SiteValidator:
             "missingAssets": [],
             "missingTexts": [],
             "warnings": report_warnings,
+            "supportedScope": self._supported_scope_payload(),
+            "responsive": {
+                "checked": False,
+                "viewports": [],
+                "warnings": [],
+            },
+            "interactions": {
+                "checked": False,
+                "pages": [],
+                "warnings": [],
+            },
         }
 
         if mode == "hugo":
@@ -50,6 +73,12 @@ class SiteValidator:
             for page_model in page_models:
                 report["warnings"].extend(self._validate_page_model(page_model))
 
+        page_targets = self._page_html_targets(target_dir, mode, page_models, site_manifest)
+        report["responsive"] = self._responsive_report(page_targets)
+        report["interactions"] = self._interaction_report(page_targets)
+        report["warnings"].extend(report["responsive"].get("warnings", []))
+        report["warnings"].extend(report["interactions"].get("warnings", []))
+
         if len(page_models) > 1 and against_reference and against_reference.exists():
             report["warnings"].append("Visual validation is skipped for multi-page sites.")
         elif against_reference and against_reference.exists():
@@ -63,6 +92,34 @@ class SiteValidator:
         if (target_dir / "layouts" / "index.html").exists():
             return "hugo"
         return "static"
+
+    def _supported_scope_payload(self) -> dict[str, Any]:
+        return {
+            "strategy": "desktop-first-with-flow-components",
+            "stableDesktopShell": [
+                "desktop fixed-canvas pages remain the default rendering strategy",
+                "page shell stays faithful to Figma when no flow shell opt-in is present",
+            ],
+            "responsiveOptInComponents": [
+                "accordion",
+                "link-grid",
+                "link-card",
+                "carousel",
+                "form fields",
+                "section-block",
+            ],
+            "guarantees": [
+                "generated HTML, CSS and Hugo build are validated",
+                "missing texts and missing assets are reported",
+                "responsive probes run on multiple viewport widths when Playwright is available",
+                "interactive probes cover accordion, cards, carousel and forms when present",
+            ],
+            "notGuaranteedYet": [
+                "fully fluid page shells for every Figma page",
+                "automatic responsive inference for arbitrary absolute layouts",
+                "breakpoint merging from multiple Figma page variants",
+            ],
+        }
 
     def _load_page_model(self, target_dir: Path, mode: str) -> dict[str, Any]:
         if mode == "hugo":
@@ -105,6 +162,33 @@ class SiteValidator:
         if (public_dir / "index.html").exists():
             return public_dir / "index.html"
         return target_dir / "layouts" / "index.html"
+
+    def _page_html_targets(
+        self,
+        target_dir: Path,
+        mode: str,
+        page_models: list[dict[str, Any]],
+        site_manifest: dict[str, Any] | None,
+    ) -> list[tuple[str, Path]]:
+        if mode != "hugo":
+            page_model = page_models[0] if page_models else {}
+            page = page_model.get("page") or {}
+            page_key = str(page.get("slug") or page.get("id") or "page")
+            return [(page_key, target_dir / "index.html")]
+
+        public_dir = target_dir / "public"
+        if site_manifest and len(page_models) > 1:
+            targets: list[tuple[str, Path]] = []
+            for page in site_manifest.get("pages", []):
+                page_key = str(page.get("page_key") or page.get("slug") or "page").strip()
+                relative_path = str(page.get("output_path") or f"{page_key}/index.html")
+                targets.append((page_key or "page", public_dir / relative_path))
+            return targets
+
+        page_model = page_models[0] if page_models else {}
+        page = page_model.get("page") or {}
+        page_key = str(page.get("slug") or page.get("id") or "page")
+        return [(page_key, self._html_path(target_dir, mode))]
 
     def _missing_assets(self, target_dir: Path, page_model: dict[str, Any], mode: str) -> list[str]:
         missing: list[str] = []
@@ -194,6 +278,262 @@ class SiteValidator:
         for page_model in page_models:
             warnings.extend(list(page_model.get("warnings", [])))
         return warnings
+
+    def _responsive_report(self, page_targets: list[tuple[str, Path]]) -> dict[str, Any]:
+        report = {
+            "checked": False,
+            "viewports": [],
+            "warnings": [],
+        }
+        if not page_targets:
+            report["warnings"].append("Responsive validation skipped: no generated HTML target was found.")
+            return report
+        if not self._playwright_is_available():
+            report["warnings"].append(
+                "Responsive validation skipped: Playwright is not installed in the current environment."
+            )
+            return report
+
+        checked_any = False
+        for page_key, html_path in page_targets:
+            if not html_path.exists():
+                report["warnings"].append(f"Responsive validation skipped for {page_key}: missing HTML file.")
+                continue
+            for viewport in self.RESPONSIVE_VIEWPORTS:
+                try:
+                    probe = self._probe_responsive_page(html_path, viewport)
+                except Exception as exc:  # pragma: no cover - browser/runtime dependent
+                    report["warnings"].append(
+                        f"Responsive validation failed for {page_key} at {viewport['width']}px: {exc}"
+                    )
+                    continue
+                checked_any = True
+                issues: list[str] = []
+                if bool(probe.get("horizontalOverflow")):
+                    issues.append("horizontal-overflow")
+                if int(probe.get("brokenImages", 0) or 0) > 0:
+                    issues.append("broken-images")
+                report["viewports"].append(
+                    {
+                        "page": page_key,
+                        "label": viewport["label"],
+                        "width": int(viewport["width"]),
+                        "height": int(viewport["height"]),
+                        "pageShell": probe.get("pageShell") or "",
+                        "pageFlow": probe.get("pageFlow") or "false",
+                        "scrollWidth": int(probe.get("scrollWidth", 0) or 0),
+                        "clientWidth": int(probe.get("clientWidth", 0) or 0),
+                        "brokenImages": int(probe.get("brokenImages", 0) or 0),
+                        "issues": issues,
+                    }
+                )
+        report["checked"] = checked_any
+        return report
+
+    def _interaction_report(self, page_targets: list[tuple[str, Path]]) -> dict[str, Any]:
+        report = {
+            "checked": False,
+            "pages": [],
+            "warnings": [],
+        }
+        if not page_targets:
+            report["warnings"].append("Interaction validation skipped: no generated HTML target was found.")
+            return report
+        if not self._playwright_is_available():
+            report["warnings"].append(
+                "Interaction validation skipped: Playwright is not installed in the current environment."
+            )
+            return report
+
+        checked_any = False
+        for page_key, html_path in page_targets:
+            if not html_path.exists():
+                report["warnings"].append(f"Interaction validation skipped for {page_key}: missing HTML file.")
+                continue
+            page_result = {
+                "page": page_key,
+                "viewports": [],
+            }
+            for viewport in self.INTERACTION_VIEWPORTS:
+                try:
+                    probe = self._probe_interactions_page(html_path, viewport)
+                except Exception as exc:  # pragma: no cover - browser/runtime dependent
+                    report["warnings"].append(
+                        f"Interaction validation failed for {page_key} at {viewport['width']}px: {exc}"
+                    )
+                    continue
+                checked_any = True
+                page_result["viewports"].append(
+                    {
+                        "label": viewport["label"],
+                        "width": int(viewport["width"]),
+                        "height": int(viewport["height"]),
+                        "checks": probe.get("checks", []),
+                    }
+                )
+            report["pages"].append(page_result)
+        report["checked"] = checked_any
+        return report
+
+    def _playwright_is_available(self) -> bool:
+        try:
+            from playwright.sync_api import sync_playwright  # noqa: F401
+        except ImportError:
+            return False
+        return True
+
+    def _probe_responsive_page(self, html_path: Path, viewport: dict[str, int | str]) -> dict[str, Any]:
+        with self._served_page_url(html_path) as url:
+            return self._probe_responsive_url(url, viewport)
+
+    def _probe_responsive_url(self, url: str, viewport: dict[str, int | str]) -> dict[str, Any]:
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError as exc:  # pragma: no cover - optional dependency path
+            raise RuntimeError("Playwright is not installed in the current environment.") from exc
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            page = browser.new_page(
+                viewport={"width": int(viewport["width"]), "height": int(viewport["height"])},
+                device_scale_factor=1,
+            )
+            page.goto(url, wait_until="networkidle")
+            metrics = page.evaluate(
+                """
+                () => {
+                  const doc = document.documentElement;
+                  const body = document.body;
+                  const pageRoot = document.querySelector('.page');
+                  const scrollWidth = Math.max(
+                    doc ? doc.scrollWidth : 0,
+                    body ? body.scrollWidth : 0,
+                    pageRoot ? pageRoot.scrollWidth : 0,
+                  );
+                  const clientWidth = doc ? doc.clientWidth : window.innerWidth;
+                  const horizontalOverflow = scrollWidth > clientWidth + 1;
+                  const brokenImages = Array.from(document.images).filter((img) => !img.complete || img.naturalWidth === 0).length;
+                  return {
+                    scrollWidth,
+                    clientWidth,
+                    horizontalOverflow,
+                    brokenImages,
+                    pageShell: pageRoot?.dataset.pageShell || "",
+                    pageFlow: pageRoot?.dataset.pageFlow || "false",
+                  };
+                }
+                """
+            )
+            browser.close()
+        return metrics
+
+    def _probe_interactions_page(self, html_path: Path, viewport: dict[str, int | str]) -> dict[str, Any]:
+        with self._served_page_url(html_path) as url:
+            return self._probe_interactions_url(url, viewport)
+
+    def _probe_interactions_url(self, url: str, viewport: dict[str, int | str]) -> dict[str, Any]:
+        try:
+            from playwright.sync_api import Page, sync_playwright
+        except ImportError as exc:  # pragma: no cover - optional dependency path
+            raise RuntimeError("Playwright is not installed in the current environment.") from exc
+
+        def accordion_check(page: Page) -> dict[str, Any]:
+            triggers = page.locator('[data-accordion-trigger="true"]')
+            if triggers.count() == 0:
+                return {"component": "accordion", "status": "skipped", "issues": ["not-present"]}
+            trigger = triggers.nth(0)
+            panel_id = trigger.get_attribute("aria-controls") or ""
+            if not panel_id:
+                return {"component": "accordion", "status": "fail", "issues": ["missing-aria-controls"]}
+            panel = page.locator(f"#{panel_id}")
+            before_expanded = trigger.get_attribute("aria-expanded") or ""
+            before_hidden = panel.get_attribute("hidden") or ""
+            trigger.click()
+            page.wait_for_timeout(75)
+            after_expanded = trigger.get_attribute("aria-expanded") or ""
+            after_hidden = panel.get_attribute("hidden") or ""
+            success = before_expanded != after_expanded or before_hidden != after_hidden
+            return {
+                "component": "accordion",
+                "status": "pass" if success else "fail",
+                "issues": [] if success else ["state-did-not-change"],
+            }
+
+        def link_card_check(page: Page) -> dict[str, Any]:
+            cards = page.locator('a[data-link-card="true"]')
+            if cards.count() == 0:
+                return {"component": "link-card", "status": "skipped", "issues": ["not-present"]}
+            card = cards.nth(0)
+            href = (card.get_attribute("href") or "").strip()
+            visible = card.is_visible()
+            valid_href = bool(href and not href.lower().startswith("javascript:"))
+            success = visible and valid_href
+            issues: list[str] = []
+            if not visible:
+                issues.append("not-visible")
+            if not valid_href:
+                issues.append("invalid-href")
+            return {
+                "component": "link-card",
+                "status": "pass" if success else "fail",
+                "issues": issues,
+            }
+
+        def carousel_check(page: Page) -> dict[str, Any]:
+            roots = page.locator('[data-carousel="true"]')
+            if roots.count() == 0:
+                return {"component": "carousel", "status": "skipped", "issues": ["not-present"]}
+            root = roots.nth(0)
+            thumbs = root.locator("[data-carousel-thumb]")
+            if thumbs.count() < 2:
+                return {"component": "carousel", "status": "skipped", "issues": ["not-enough-thumbs"]}
+            before_active = root.get_attribute("data-carousel-active") or ""
+            thumb = thumbs.nth(1)
+            expected_active = thumb.get_attribute("data-carousel-thumb") or ""
+            thumb.click()
+            page.wait_for_timeout(75)
+            after_active = root.get_attribute("data-carousel-active") or ""
+            success = bool(expected_active) and after_active == expected_active and after_active != before_active
+            return {
+                "component": "carousel",
+                "status": "pass" if success else "fail",
+                "issues": [] if success else ["active-slide-did-not-change"],
+            }
+
+        def form_check(page: Page) -> dict[str, Any]:
+            controls = page.locator(".content-form-control")
+            if controls.count() == 0:
+                return {"component": "form", "status": "skipped", "issues": ["not-present"]}
+            control = controls.nth(0)
+            visible = control.is_visible()
+            disabled = control.get_attribute("disabled") is not None
+            success = visible and not disabled
+            issues: list[str] = []
+            if not visible:
+                issues.append("not-visible")
+            if disabled:
+                issues.append("disabled")
+            return {
+                "component": "form",
+                "status": "pass" if success else "fail",
+                "issues": issues,
+            }
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch()
+            page = browser.new_page(
+                viewport={"width": int(viewport["width"]), "height": int(viewport["height"])},
+                device_scale_factor=1,
+            )
+            page.goto(url, wait_until="networkidle")
+            checks = [
+                accordion_check(page),
+                link_card_check(page),
+                carousel_check(page),
+                form_check(page),
+            ]
+            browser.close()
+        return {"checks": checks}
 
     def _visual_compare(
         self,

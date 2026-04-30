@@ -11,3 +11,6 @@ class GenerationReport(FigmaBaseModel):
     missing_assets: list[str] = Field(default_factory=list)
     missing_texts: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    supported_scope: dict[str, object] = Field(default_factory=dict)
+    responsive: dict[str, object] = Field(default_factory=dict)
+    interactions: dict[str, object] = Field(default_factory=dict)

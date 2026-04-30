@@ -207,3 +207,170 @@ def test_validator_serves_relative_html_paths_over_http_for_visual_capture(monke
         assert captured["url"].startswith("http://127.0.0.1:")
         assert captured["url"].endswith("/index.html")
         assert "hello" in captured["html"]
+
+
+def test_validator_reports_supported_scope_and_responsive_viewports(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = {
+        "page": {"id": "page", "name": "Responsive Probe", "width": 960, "height": 480},
+        "sections": [
+            {
+                "id": "hero",
+                "name": "Hero",
+                "role": "section",
+                "bounds": {"x": 0, "y": 0, "width": 960, "height": 480},
+                "texts": [
+                    {
+                        "id": "hero-copy",
+                        "name": "Hero Copy",
+                        "role": "heading",
+                        "value": "Responsive probe",
+                    }
+                ],
+                "children": ["hero-copy"],
+            }
+        ],
+        "texts": {},
+        "assets": [],
+        "tokens": {},
+        "warnings": [],
+    }
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        target_dir = Path(temp_dir)
+        StaticGenerator().generate(model, target_dir)
+
+        monkeypatch.setattr(SiteValidator, "_playwright_is_available", lambda self: True)
+        monkeypatch.setattr(
+            SiteValidator,
+            "_probe_responsive_page",
+            lambda self, html_path, viewport: {
+                "scrollWidth": int(viewport["width"]),
+                "clientWidth": int(viewport["width"]),
+                "horizontalOverflow": False,
+                "brokenImages": 0,
+                "pageShell": "fixed",
+                "pageFlow": "false",
+            },
+        )
+        monkeypatch.setattr(
+            SiteValidator,
+            "_probe_interactions_page",
+            lambda self, html_path, viewport: {"checks": []},
+        )
+
+        report = SiteValidator().validate(target_dir, mode="static")
+
+        assert report["supportedScope"]["strategy"] == "desktop-first-with-flow-components"
+        assert report["responsive"]["checked"] is True
+        assert len(report["responsive"]["viewports"]) == len(SiteValidator.RESPONSIVE_VIEWPORTS)
+        assert report["responsive"]["warnings"] == []
+
+
+def test_validator_flags_horizontal_overflow_in_responsive_report(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model = {
+        "page": {"id": "page", "name": "Responsive Overflow", "width": 960, "height": 480},
+        "sections": [
+            {
+                "id": "hero",
+                "name": "Hero",
+                "role": "section",
+                "bounds": {"x": 0, "y": 0, "width": 960, "height": 480},
+                "texts": [{"id": "hero-copy", "name": "Hero Copy", "role": "heading", "value": "Overflow"}],
+                "children": ["hero-copy"],
+            }
+        ],
+        "texts": {},
+        "assets": [],
+        "tokens": {},
+        "warnings": [],
+    }
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        target_dir = Path(temp_dir)
+        StaticGenerator().generate(model, target_dir)
+
+        monkeypatch.setattr(SiteValidator, "_playwright_is_available", lambda self: True)
+
+        def fake_responsive_probe(self: SiteValidator, html_path: Path, viewport: dict[str, int | str]) -> dict[str, object]:
+            is_mobile = int(viewport["width"]) == 390
+            return {
+                "scrollWidth": 520 if is_mobile else int(viewport["width"]),
+                "clientWidth": int(viewport["width"]),
+                "horizontalOverflow": is_mobile,
+                "brokenImages": 0,
+                "pageShell": "fixed",
+                "pageFlow": "false",
+            }
+
+        monkeypatch.setattr(SiteValidator, "_probe_responsive_page", fake_responsive_probe)
+        monkeypatch.setattr(
+            SiteValidator,
+            "_probe_interactions_page",
+            lambda self, html_path, viewport: {"checks": []},
+        )
+
+        report = SiteValidator().validate(target_dir, mode="static")
+        mobile_rows = [row for row in report["responsive"]["viewports"] if row["width"] == 390]
+
+        assert mobile_rows
+        assert "horizontal-overflow" in mobile_rows[0]["issues"]
+
+
+def test_validator_collects_interaction_probe_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    model = {
+        "page": {"id": "page", "name": "Interaction Probe", "width": 960, "height": 480},
+        "sections": [
+            {
+                "id": "hero",
+                "name": "Hero",
+                "role": "section",
+                "bounds": {"x": 0, "y": 0, "width": 960, "height": 480},
+                "texts": [{"id": "hero-copy", "name": "Hero Copy", "role": "heading", "value": "Interactions"}],
+                "children": ["hero-copy"],
+            }
+        ],
+        "texts": {},
+        "assets": [],
+        "tokens": {},
+        "warnings": [],
+    }
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        target_dir = Path(temp_dir)
+        StaticGenerator().generate(model, target_dir)
+
+        monkeypatch.setattr(SiteValidator, "_playwright_is_available", lambda self: True)
+        monkeypatch.setattr(
+            SiteValidator,
+            "_probe_responsive_page",
+            lambda self, html_path, viewport: {
+                "scrollWidth": int(viewport["width"]),
+                "clientWidth": int(viewport["width"]),
+                "horizontalOverflow": False,
+                "brokenImages": 0,
+                "pageShell": "fixed",
+                "pageFlow": "false",
+            },
+        )
+        monkeypatch.setattr(
+            SiteValidator,
+            "_probe_interactions_page",
+            lambda self, html_path, viewport: {
+                "checks": [
+                    {"component": "accordion", "status": "pass", "issues": []},
+                    {"component": "link-card", "status": "pass", "issues": []},
+                    {"component": "carousel", "status": "skipped", "issues": ["not-present"]},
+                ]
+            },
+        )
+
+        report = SiteValidator().validate(target_dir, mode="static")
+
+        assert report["interactions"]["checked"] is True
+        assert len(report["interactions"]["pages"]) == 1
+        first_viewport = report["interactions"]["pages"][0]["viewports"][0]
+        assert any(check["component"] == "accordion" and check["status"] == "pass" for check in first_viewport["checks"])
