@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Guide Figma vers Hugo</title>
+    <style>
+      :root {
+        --bg: #f6f1e8;
+        --paper: rgba(255, 255, 255, 0.76);
+        --paper-strong: #fffaf3;
+        --ink: #132a63;
+        --ink-soft: #33508f;
+        --accent: #df7c6c;
+        --accent-soft: rgba(223, 124, 108, 0.12);
+        --line: rgba(19, 42, 99, 0.12);
+        --shadow: 0 18px 45px rgba(19, 42, 99, 0.12);
+        --radius-lg: 28px;
+        --radius-md: 18px;
+        --radius-sm: 12px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Aptos", "Segoe UI Variable Text", "Trebuchet MS", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(223, 124, 108, 0.18), transparent 26%),
+          radial-gradient(circle at top right, rgba(51, 80, 143, 0.14), transparent 28%),
+          linear-gradient(180deg, #fbf7f1 0%, var(--bg) 100%);
+      }
+
+      body::before,
+      body::after {
+        content: "";
+        position: fixed;
+        inset: auto;
+        width: 320px;
+        height: 320px;
+        border-radius: 36% 64% 54% 46% / 42% 34% 66% 58%;
+        opacity: 0.12;
+        pointer-events: none;
+        filter: blur(6px);
+      }
+
+      body::before {
+        top: -60px;
+        right: -60px;
+        background: linear-gradient(135deg, var(--accent), #f4b7a2);
+      }
+
+      body::after {
+        bottom: -80px;
+        left: -80px;
+        background: linear-gradient(135deg, #90c6db, var(--ink-soft));
+      }
+
+      .page {
+        width: min(1160px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 32px 0 72px;
+      }
+
+      .hero {
+        position: relative;
+        overflow: hidden;
+        padding: 38px 34px 34px;
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        border-radius: var(--radius-lg);
+        background:
+          linear-gradient(135deg, rgba(19, 42, 99, 0.98), rgba(37, 67, 139, 0.88)),
+          linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0));
+        box-shadow: var(--shadow);
+        color: #fffdf8;
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        right: -40px;
+        top: -70px;
+        width: 250px;
+        height: 250px;
+        background:
+          radial-gradient(circle, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 70%);
+        pointer-events: none;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+        color: #ffd9d1;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        font-family: "Bahnschrift", "Aptos Display", "Trebuchet MS", sans-serif;
+        line-height: 1.05;
+      }
+
+      h1 {
+        margin-top: 18px;
+        font-size: clamp(2.4rem, 4vw, 4.25rem);
+        letter-spacing: -0.04em;
+      }
+
+      .hero p {
+        width: min(760px, 100%);
+        margin: 18px 0 0;
+        font-size: 1.05rem;
+        line-height: 1.7;
+        color: rgba(255, 250, 243, 0.88);
+      }
+
+      .hero-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 24px;
+      }
+
+      .badge {
+        padding: 10px 14px;
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        font-size: 0.94rem;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.8fr) minmax(300px, 0.95fr);
+        gap: 26px;
+        margin-top: 26px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 22px;
+      }
+
+      .panel,
+      .side-card,
+      .summary-card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: var(--paper);
+        backdrop-filter: blur(12px);
+        box-shadow: var(--shadow);
+      }
+
+      .panel {
+        padding: 22px;
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 14px;
+      }
+
+      .panel-head h2 {
+        font-size: clamp(1.5rem, 2vw, 2rem);
+      }
+
+      .panel-head p {
+        margin: 0;
+        color: var(--ink-soft);
+        font-size: 0.95rem;
+      }
+
+      .summary-card {
+        padding: 22px 20px;
+      }
+
+      .summary-card h3,
+      .side-card h3 {
+        font-size: 1.2rem;
+        margin-bottom: 12px;
+      }
+
+      .summary-card ul,
+      .side-card ul {
+        margin: 0;
+        padding-left: 18px;
+        line-height: 1.7;
+        color: var(--ink-soft);
+      }
+
+      .summary-card li + li,
+      .side-card li + li {
+        margin-top: 6px;
+      }
+
+      .component-grid {
+        display: grid;
+        gap: 18px;
+      }
+
+      .component-card {
+        padding: 18px;
+        border: 1px solid rgba(19, 42, 99, 0.08);
+        border-radius: var(--radius-sm);
+        background: var(--paper-strong);
+      }
+
+      .component-card h3 {
+        margin-bottom: 8px;
+        font-size: 1.18rem;
+      }
+
+      .component-card p {
+        margin: 0 0 14px;
+        color: var(--ink-soft);
+        line-height: 1.65;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      .chip {
+        padding: 7px 10px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: #9d4a3c;
+        font-size: 0.85rem;
+        font-weight: 700;
+      }
+
+      pre {
+        overflow: auto;
+        margin: 0;
+        padding: 16px 18px;
+        border-radius: 14px;
+        background: #101d4a;
+        color: #f5f7ff;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+      }
+
+      code,
+      pre {
+        font-family: "Cascadia Code", "Consolas", "IBM Plex Mono", monospace;
+        font-size: 0.92rem;
+        line-height: 1.6;
+      }
+
+      .inline-code {
+        padding: 0.16rem 0.42rem;
+        border-radius: 8px;
+        background: rgba(19, 42, 99, 0.08);
+        font-family: "Cascadia Code", "Consolas", monospace;
+        font-size: 0.92em;
+      }
+
+      .side-card {
+        padding: 20px;
+      }
+
+      .toc {
+        position: sticky;
+        top: 18px;
+      }
+
+      .toc nav {
+        display: grid;
+        gap: 8px;
+      }
+
+      .toc a {
+        display: block;
+        padding: 10px 12px;
+        border-radius: 10px;
+        color: var(--ink);
+        text-decoration: none;
+        background: rgba(19, 42, 99, 0.04);
+        transition: transform 180ms ease, background 180ms ease, color 180ms ease;
+      }
+
+      .toc a:hover {
+        background: rgba(223, 124, 108, 0.14);
+        color: #8f3f31;
+        transform: translateX(4px);
+      }
+
+      .rule-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .rule {
+        padding: 14px 16px;
+        border-left: 4px solid var(--accent);
+        border-radius: 0 12px 12px 0;
+        background: rgba(223, 124, 108, 0.07);
+      }
+
+      .rule strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .footer-note {
+        margin-top: 28px;
+        padding: 18px 20px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, rgba(19, 42, 99, 0.07), rgba(144, 198, 219, 0.14));
+        color: var(--ink-soft);
+      }
+
+      @media (max-width: 960px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        .toc {
+          position: static;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .page {
+          width: min(100% - 20px, 1160px);
+          padding-top: 18px;
+        }
+
+        .hero,
+        .panel,
+        .summary-card,
+        .side-card {
+          padding-left: 18px;
+          padding-right: 18px;
+        }
+
+        pre {
+          font-size: 0.85rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <span class="eyebrow">Guide lisible • Figma vers Hugo</span>
+        <h1>Conventions de naming et structure pour donner envie de concevoir proprement</h1>
+        <p>
+          Cette page regroupe une nomenclature Figma exploitable tout de suite par le convertisseur, avec une
+          structure plus claire pour les formulaires, les cards, les accordions, les carousels et les sections qui
+          devront ensuite devenir plus fluides et plus responsive-friendly.
+        </p>
+        <div class="hero-badges">
+          <span class="badge">Formulaires HTML natifs</span>
+          <span class="badge">Cards et matrices</span>
+          <span class="badge">Accordion interactif</span>
+          <span class="badge">Carousel avec thumbs</span>
+          <span class="badge">Base pour le responsive</span>
+        </div>
+      </header>
+
+      <div class="layout">
+        <main class="stack">
+          <section class="panel" id="formulaire">
+            <div class="panel-head">
+              <h2>1. Formulaire complet</h2>
+              <p>Version directement testable dans Figma</p>
+            </div>
+            <div class="component-card">
+              <div class="chips">
+                <span class="chip">formulaire-*</span>
+                <span class="chip">input-*</span>
+                <span class="chip">button-*</span>
+                <span class="chip">action-*</span>
+              </div>
+              <pre><code>section-contact
+  formulaire-contact-post
+    bg-contact-formulaire
+    input-nom-prenom-required
+      libelle-nom-prenom
+      placeholder-nom-prenom
+      zone-nom-prenom
+    input-societe
+      libelle-societe
+      placeholder-societe
+      zone-societe
+    ligne-contact
+      input-mail-required
+        libelle-mail
+        placeholder-mail
+        zone-mail
+      input-telephone
+        libelle-telephone
+        placeholder-telephone
+        zone-telephone
+    input-select-sujet-required
+      libelle-sujet
+      option-sujet-assistance
+      option-sujet-audit-selected
+      zone-sujet
+    input-date-rendezvous
+      libelle-rendezvous
+      min-rendezvous
+      max-rendezvous
+      value-rendezvous
+      zone-rendezvous
+    input-file-cv-multiple
+      libelle-cv
+      accept-cv
+      zone-cv
+    input-range-budget
+      libelle-budget
+      min-budget
+      max-budget
+      step-budget
+      value-budget
+      zone-budget
+    input-number-collaborateurs
+      libelle-collaborateurs
+      min-collaborateurs
+      max-collaborateurs
+      step-collaborateurs
+      value-collaborateurs
+      zone-collaborateurs
+    input-message
+      libelle-message
+      placeholder-message
+      zone-message
+    input-checkbox-rgpd-required
+      libelle-rgpd
+    input-radio-canal-email-checked
+      libelle-canal-email
+    input-radio-canal-telephone
+      libelle-canal-telephone
+    action-contact
+    button-envoyer
+      bg-button-envoyer
+      texte-button-envoyer</code></pre>
+            </div>
+          </section>
+
+          <section class="panel" id="cards">
+            <div class="panel-head">
+              <h2>2. Matrice de cards lien</h2>
+              <p>Le bon niveau pour des partials Hugo utiles</p>
+            </div>
+            <div class="component-card">
+              <div class="chips">
+                <span class="chip">link-grid-*</span>
+                <span class="chip">link-row-*</span>
+                <span class="chip">href-card-*</span>
+              </div>
+              <pre><code>section-cas-clients
+  link-grid-cas-clients
+    link-row-1
+      href-card-projet-1-external
+        bg-card-projet-1
+        image-card-projet-1
+        href-projet-1
+        link-label-projet-1
+        texte-projet-1
+      href-card-projet-2-external
+        bg-card-projet-2
+        image-card-projet-2
+        href-projet-2
+        link-label-projet-2
+        texte-projet-2
+    link-row-2
+      href-card-projet-3
+        bg-card-projet-3
+        image-card-projet-3
+        href-projet-3
+        link-label-projet-3
+        texte-projet-3</code></pre>
+            </div>
+          </section>
+
+          <section class="panel" id="accordion">
+            <div class="panel-head">
+              <h2>3. Accordion</h2>
+              <p>Structure souple, meme si Figma garde l'ordre visuel inverse</p>
+            </div>
+            <div class="component-card">
+              <div class="chips">
+                <span class="chip">accordion-*</span>
+                <span class="chip">accordion-item-*</span>
+                <span class="chip">trigger + panel</span>
+              </div>
+              <pre><code>section-faq
+  accordion-single-faq
+    accordion-item-1-open
+      accordion-panel-1
+        texte-reponse-1
+      accordion-trigger-1
+        texte-question-1
+    accordion-item-2-closed
+      accordion-panel-2
+        texte-reponse-2
+      accordion-trigger-2
+        texte-question-2</code></pre>
+            </div>
+          </section>
+
+          <section class="panel" id="carousel">
+            <div class="panel-head">
+              <h2>4. Carousel</h2>
+              <p>Une scene, plusieurs slides, une nav de thumbs</p>
+            </div>
+            <div class="component-card">
+              <div class="chips">
+                <span class="chip">carousel-stage-*</span>
+                <span class="chip">carousel-slide-*</span>
+                <span class="chip">carousel-thumb-*</span>
+              </div>
+              <pre><code>section-carousel
+  carousel-gallery
+    carousel-stage-gallery
+      carousel-slide-1-active
+        image-slide-1
+      carousel-slide-2
+        image-slide-2
+      carousel-slide-3
+        image-slide-3
+    carousel-thumbs-gallery
+      carousel-thumb-1
+        image-thumb-1
+      carousel-thumb-2
+        image-thumb-2
+      carousel-thumb-3
+        image-thumb-3</code></pre>
+            </div>
+          </section>
+
+          <section class="panel" id="sections">
+            <div class="panel-head">
+              <h2>5. Sections editioriales et shell de page</h2>
+              <p>La base la plus saine pour aller vers un rendu plus fluide</p>
+            </div>
+            <div class="component-grid">
+              <article class="component-card">
+                <h3>Section a deux colonnes</h3>
+                <pre><code>section-prestation
+  section-block-prestation
+    row-prestation
+      col-prestation-content
+        titre-prestation
+        texte-prestation
+        button-prestation
+          bg-button-prestation
+          texte-button-prestation
+      col-prestation-media
+        bg-media-prestation
+        image-prestation
+        decor-prestation-1
+        decor-prestation-2</code></pre>
+              </article>
+
+              <article class="component-card">
+                <h3>Hero</h3>
+                <pre><code>section-hero
+  hero-content
+    titre-hero
+    texte-hero
+    button-hero
+      bg-button-hero
+      texte-button-hero
+  hero-media
+    image-hero
+    decor-hero-1
+    decor-hero-2
+  bg-hero</code></pre>
+              </article>
+
+              <article class="component-card">
+                <h3>Footer</h3>
+                <pre><code>footer-site
+  footer-content
+    footer-brand
+      logo-footer
+      texte-footer-brand
+    footer-nav
+      href-card-footer-1
+        href-footer-1
+        link-label-footer-1
+    footer-legal
+      texte-footer-legal</code></pre>
+              </article>
+            </div>
+          </section>
+
+          <section class="panel" id="titres">
+            <div class="panel-head">
+              <h2>6. Niveaux de titre</h2>
+              <p>Pour forcer un vrai niveau HTML sans ambiguite</p>
+            </div>
+            <div class="component-card">
+              <div class="chips">
+                <span class="chip">titre-h1-*</span>
+                <span class="chip">titre-h2-*</span>
+                <span class="chip">titre-h3-*</span>
+                <span class="chip">jusqu'a h6</span>
+              </div>
+              <pre><code>section-prestation
+  hero-content
+    titre-h1-prestation
+    texte-hero
+
+section-services
+  section-block-services
+    titre-h2-services
+    card-service-1
+      titre-h3-service-audit
+      texte-service-audit
+    card-service-2
+      titre-h4-service-rgpd
+      texte-service-rgpd</code></pre>
+            </div>
+            <div class="rule-list" style="margin-top: 16px;">
+              <div class="rule">
+                <strong>Convention recommandee</strong>
+                Utiliser <span class="inline-code">titre-h1-*</span> a
+                <span class="inline-code">titre-h6-*</span>. Le moteur comprend aussi
+                <span class="inline-code">heading-h2-*</span> si besoin.
+              </div>
+              <div class="rule">
+                <strong>Fallback existant</strong>
+                Si aucun niveau n'est precise, le moteur garde son heuristique actuelle selon le role et la taille du
+                texte.
+              </div>
+            </div>
+          </section>
+
+          <section class="panel" id="responsive">
+            <div class="panel-head">
+              <h2>7. Conventions qui aident vraiment le responsive</h2>
+              <p>Ce que le moteur lit mieux, et ce qui vous evitera des blocs figes</p>
+            </div>
+            <div class="rule-list">
+              <div class="rule">
+                <strong>Utiliser des Frame pour les conteneurs semantiques</strong>
+                Reserve les <span class="inline-code">Group</span> au decoratif. Un vrai bloc web doit vivre dans un
+                conteneur clair.
+              </div>
+              <div class="rule">
+                <strong>Ajouter de l'Auto Layout partout ou le contenu est en flux</strong>
+                Piles verticales, lignes de cards, colonnes de formulaire, lignes contact : tout cela gagne a etre
+                structure comme du flux plutot que comme une photo de maquette.
+              </div>
+              <div class="rule">
+                <strong>Separer contenu, media et decor</strong>
+                Typiquement <span class="inline-code">content-*</span>, <span class="inline-code">media-*</span>,
+                <span class="inline-code">decor-*</span>, <span class="inline-code">bg-*</span>. Plus ces intentions
+                sont separees, plus le passage a une mise en page fluide est possible.
+              </div>
+              <div class="rule">
+                <strong>Nommer explicitement les lignes et colonnes</strong>
+                Utiliser <span class="inline-code">row-*</span>, <span class="inline-code">col-*</span> ou
+                <span class="inline-code">ligne-*</span> aide a faire comprendre l'intention de layout.
+              </div>
+              <div class="rule">
+                <strong>Eviter les wrappers anonymes</strong>
+                Un wrapper sans nom metier est souvent le premier endroit ou le moteur perd l'intention de layout.
+              </div>
+            </div>
+            <div class="footer-note">
+              Le vrai objectif n'est pas seulement d'avoir un naming propre. C'est d'aider le pipeline a distinguer ce
+              qui doit rester decoratif et absolu, de ce qui peut devenir une section web en flux, puis plus tard une
+              section vraiment responsive.
+            </div>
+          </section>
+        </main>
+
+        <aside class="stack">
+          <div class="summary-card toc">
+            <h3>Sommaire</h3>
+            <nav>
+              <a href="#formulaire">Formulaire</a>
+              <a href="#cards">Cards</a>
+              <a href="#accordion">Accordion</a>
+              <a href="#carousel">Carousel</a>
+              <a href="#sections">Sections et shell</a>
+              <a href="#titres">Niveaux de titre</a>
+              <a href="#responsive">Responsive-friendly</a>
+            </nav>
+          </div>
+
+          <div class="side-card">
+            <h3>Raccourci conventions</h3>
+            <ul>
+              <li><span class="inline-code">section-*</span> : grande section de page</li>
+              <li><span class="inline-code">section-block-*</span> : sous-bloc coherent</li>
+              <li><span class="inline-code">titre-h1-*</span> a <span class="inline-code">titre-h6-*</span> : niveau de titre explicite</li>
+              <li><span class="inline-code">row-*</span>, <span class="inline-code">col-*</span>, <span class="inline-code">ligne-*</span> : layout</li>
+              <li><span class="inline-code">bg-*</span> : fond</li>
+              <li><span class="inline-code">decor-*</span> : decor</li>
+              <li><span class="inline-code">image-*</span> : media</li>
+              <li><span class="inline-code">titre-*</span>, <span class="inline-code">texte-*</span>, <span class="inline-code">libelle-*</span> : texte</li>
+              <li><span class="inline-code">formulaire-*</span>, <span class="inline-code">input-*</span>, <span class="inline-code">button-*</span> : formulaires</li>
+              <li><span class="inline-code">link-grid-*</span>, <span class="inline-code">href-card-*</span> : cards</li>
+              <li><span class="inline-code">accordion-*</span> : FAQ / disclosure</li>
+              <li><span class="inline-code">carousel-*</span> : carousel</li>
+            </ul>
+          </div>
+
+          <div class="side-card">
+            <h3>A eviter</h3>
+            <ul>
+              <li><span class="inline-code">contact-formulaire</span> au lieu de <span class="inline-code">formulaire-contact</span></li>
+              <li><span class="inline-code">input-ligne-contact</span> pour un simple wrapper de layout</li>
+              <li>recycler <span class="inline-code">titre-*</span> pour les labels de link cards</li>
+              <li>melanger fond, contenu et decor dans un seul frame</li>
+              <li>laisser des groupes intermediaires sans nom metier</li>
+            </ul>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </body>
+</html>

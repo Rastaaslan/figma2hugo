@@ -1,0 +1,76 @@
+/* Style de base pour les vrais contrôles HTML injectés dans les fields Figma. */
+
+[data-form="true"] {
+  position: relative;
+}
+
+[data-form="true"][data-layout-flow="true"] {
+  width: 100%;
+  max-width: 100%;
+}
+
+[data-form-field="true"] {
+  position: relative;
+}
+
+[data-form-field="true"][data-layout-flow="true"] {
+  width: 100%;
+  max-width: 100%;
+}
+
+.content-form-control {
+  position: absolute;
+  z-index: 200;
+  display: block;
+  margin: 0;
+  padding: 0 16px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  box-sizing: border-box;
+  outline: none;
+}
+
+select.content-form-control {
+  appearance: none;
+}
+
+input.content-form-control[type="checkbox"],
+input.content-form-control[type="radio"] {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  accent-color: currentColor;
+}
+
+input.content-form-control[type="range"] {
+  padding: 0;
+  background: transparent;
+}
+
+input.content-form-control[type="file"] {
+  padding-block: 12px;
+}
+
+textarea.content-form-control {
+  padding-block: 12px;
+  resize: vertical;
+}
+
+.content-form-control::placeholder {
+  color: currentColor;
+  opacity: 0.56;
+}
+
+.content-form-control:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  [data-form-field="true"][data-layout-flow="true"] .content-form-control {
+    max-width: 100%;
+  }
+}

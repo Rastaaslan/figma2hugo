@@ -33,11 +33,35 @@
 </{{ wrapper_tag }}>
 {%- endif -%}
 {%- endmacro %}
+{% macro render_form_control(control) -%}
+{%- set attrs = dict(control.attributes) -%}
+{%- set _ = attrs.update({"id": control.id, "class": "content-form-control " ~ control.class_name}) -%}
+{%- if control.style -%}
+  {%- set _ = attrs.update({"style": control.style}) -%}
+{%- endif -%}
+{%- if control.tag == "textarea" and control.rows -%}
+  {%- set _ = attrs.update({"rows": control.rows}) -%}
+{%- endif -%}
+{%- if control.tag == "textarea" -%}
+<textarea{{ render_attributes(attrs) }}>{{ control.value | e }}</textarea>
+{%- elif control.tag == "select" -%}
+<select{{ render_attributes(attrs) }}>{%- for option in control.options -%}<option value="{{ option.value | e }}"{% if option.selected %} selected="selected"{% endif %}>{{ option.label | e }}</option>{%- endfor -%}</select>
+{%- else -%}
+<input{{ render_attributes(attrs) }}>
+{%- endif -%}
+{%- endmacro %}
 {% macro render_node(node) -%}
   {%- if node.kind == "text" -%}
     {{ render_text(node.text) }}
   {%- elif node.kind == "asset" -%}
     {{ render_asset(node.asset) }}
+  {%- elif node.role == "field" and node.form_control -%}
+<{{ node.tag | e }}{% if node.dom_id %} id="{{ node.dom_id | e }}"{% endif %}{% if node.id and node.dom_id and node.id != node.dom_id %} data-node-id="{{ node.id | e }}"{% endif %} class="content-node {{ node.class_name | e }}"{{ render_attributes(node.attributes) }}>
+      {%- for child in node.children -%}
+        {{ render_node(child) }}
+      {%- endfor -%}
+      {{ render_form_control(node.form_control) }}
+</{{ node.tag | e }}>
   {%- else -%}
 <{{ node.tag | e }}{% if node.dom_id %} id="{{ node.dom_id | e }}"{% endif %}{% if node.id and node.dom_id and node.id != node.dom_id %} data-node-id="{{ node.id | e }}"{% endif %} class="content-node {{ node.class_name | e }}"{{ render_attributes(node.attributes) }}>
     {%- if node.role == "accordion-item" -%}
@@ -59,7 +83,7 @@
   {%- endif -%}
 {%- endmacro %}
 {% macro render_section(section) -%}
-<{{ section.tag | e }} id="{{ section.anchor | e }}" class="page-section {{ section.class_name | e }}">
+<{{ section.tag | e }} id="{{ section.anchor | e }}" class="page-section {{ section.class_name | e }}"{{ render_attributes(section.attributes | default({})) }}>
   <div class="page-section__inner">
     {%- for node in section.children -%}
       {{ render_node(node) }}
@@ -76,7 +100,12 @@
     <link rel="stylesheet" href="styles.css">
     <script src="accordion.js" defer></script>
   </head>
-  <body class="page page--{{ page.slug | e }}">
+  <body
+    class="page page--{{ page.slug | e }}"
+    data-page-shell="{{ page.shell_mode | default('fixed') | e }}"
+    data-page-layout-strategy="{{ page.layout.inferred_strategy | default('absolute') | e }}"
+    data-page-flow="{{ 'true' if page.layout.inferred_flow else 'false' }}"
+  >
     {% for section in header_sections %}
       {{ render_section(section) }}
     {% endfor %}

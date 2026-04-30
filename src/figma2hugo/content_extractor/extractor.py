@@ -366,11 +366,14 @@ class ContentExtractor:
         font_size = float(style.get("fontSize", 0) or 0)
         name = (node.get("name") or "").lower()
         characters = (node.get("characters") or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+        explicit_heading_tag = self._explicit_heading_tag_from_name(name)
         if self._name_has_prefix(name, ("label", "libelle")):
             return "label"
         if self._name_has_prefix(name, ("texte", "para")):
             return "p"
         if self._name_has_prefix(name, ("titre", "heading")):
+            if explicit_heading_tag:
+                return explicit_heading_tag
             if font_size >= 44:
                 return "h1"
             if font_size >= 30:
@@ -385,6 +388,15 @@ class ContentExtractor:
         if font_size >= 24:
             return "h3"
         return "p"
+
+    def _explicit_heading_tag_from_name(self, name: str) -> str:
+        normalized = "-".join(NAME_TOKEN_RE.findall(name.lower()))
+        tokens = {token for token in normalized.split("-") if token}
+        for level in range(1, 7):
+            token = f"h{level}"
+            if token in tokens:
+                return token
+        return ""
 
     def _looks_like_paragraph_text(self, name: str, value: str, font_size: float) -> bool:
         if not value:
@@ -1262,7 +1274,7 @@ class ContentExtractor:
             return "button"
         if tag == "h1":
             return "hero-title"
-        if tag == "h2":
+        if tag in {"h2", "h4", "h5", "h6"}:
             return "heading"
         if tag == "h3":
             return "subheading"

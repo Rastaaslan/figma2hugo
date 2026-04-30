@@ -17,6 +17,8 @@ COMPONENT_STYLESHEET_PARTS: tuple[tuple[str, ...], ...] = (
     ("hugo", "assets", "css", "components", "link-grid.css"),
     ("hugo", "assets", "css", "components", "accordion.css"),
     ("hugo", "assets", "css", "components", "carousel.css"),
+    ("hugo", "assets", "css", "components", "form.css"),
+    ("hugo", "assets", "css", "components", "section-block.css"),
 )
 
 
@@ -48,14 +50,23 @@ class CssGenerator:
         ]
         if self._include_component_presets:
             lines.extend(self._component_preset_lines())
+        flow_cursor_bottom = 0.0
         for section in sections:
-            lines.extend(self._section_rules(section, page_width, page_origin_x, page_origin_y))
+            section_lines, flow_cursor_bottom = self._section_rules(
+                section,
+                page_width,
+                page_origin_x,
+                page_origin_y,
+                flow_cursor_bottom=flow_cursor_bottom,
+            )
+            lines.extend(section_lines)
         return "\n".join(lines) + "\n"
 
     def _root_variable_lines(self, page_width: int, tokens: dict[str, Any]) -> list[str]:
         lines = [
             ":root {",
             f"  --page-max-width: {page_width}px;",
+            "  --page-shell-gutter: clamp(16px, 3vw, 32px);",
             "  --surface-page: #ffffff;",
             "  --text-color: #171717;",
         ]
@@ -83,12 +94,12 @@ class CssGenerator:
             "",
             "body {",
             "  margin: 0;",
-            f"  min-width: {page_width}px;",
+            "  min-width: 0;",
             "  min-height: 100vh;",
             '  font-family: var(--font-body-family, "Segoe UI", sans-serif);',
             "  color: var(--text-color);",
             "  background: var(--surface-page);",
-            "  overflow-x: hidden;",
+            "  overflow-x: auto;",
             "}",
             "",
             "img {",
@@ -103,25 +114,48 @@ class CssGenerator:
             ".page {",
             "  position: relative;",
             "  width: var(--page-max-width);",
+            "  max-width: none;",
             f"  min-height: {page_height}px;" if page_height else "  min-height: 100vh;",
             "  margin: 0 auto;",
             "}",
             "",
+            '.page[data-page-shell="flow"] {',
+            "  width: min(100%, var(--page-max-width));",
+            "  max-width: var(--page-max-width);",
+            "  min-height: 100vh;",
+            "}",
+            "",
             ".page-main {",
+            "  position: relative;",
             "  display: block;",
             "}",
             "",
             ".page-section {",
-            "  position: absolute;",
-            "  left: 0;",
-            "  top: 0;",
+            "  position: relative;",
+            "  left: auto;",
+            "  top: auto;",
+            "  width: 100%;",
             "  padding: 0;",
             "  overflow: visible;",
             "}",
             "",
             ".page-section__inner {",
             "  position: relative;",
+            "  width: 100%;",
             "  overflow: visible;",
+            "}",
+            "",
+            '.page[data-page-shell="flow"] .page-section {',
+            "  position: relative;",
+            "  left: auto;",
+            "  top: auto;",
+            "  width: 100%;",
+            "}",
+            "",
+            '.page[data-page-shell="flow"] .page-section__inner {',
+            "  width: 100%;",
+            "  height: auto;",
+            "  min-height: 0;",
             "}",
             "",
             ".content-node,",
@@ -275,36 +309,74 @@ class CssGenerator:
         page_width: int,
         page_origin_x: float,
         page_origin_y: float,
-    ) -> list[str]:
+        *,
+        flow_cursor_bottom: float,
+    ) -> tuple[list[str], float]:
         section_class = section.get("class_name", "")
         bounds = section.get("bounds", {})
         section_left = float(bounds.get("x", 0) or 0) - page_origin_x
         section_top = float(bounds.get("y", 0) or 0) - page_origin_y
         section_height = int(float(bounds.get("height", 0) or 0))
         section_width = int(float(bounds.get("width", 0) or 0))
+        is_flow_section = self._section_uses_flow_shell(section)
         asset_stack_overrides = self._infer_asset_stack_overrides(section)
-        lines = [
-            "",
-            f"/* Section: {section.get('name', section.get('id', 'section'))} */",
-            f".{section_class} {{",
-            f"  left: {section_left:.2f}px;",
-            f"  top: {section_top:.2f}px;",
-            f"  width: {section_width}px;" if section_width else f"  width: {page_width}px;",
-            f"  height: {section_height}px;" if section_height else "  height: auto;",
-            f"  min-height: {section_height}px;" if section_height else "  min-height: 0;",
-            "}",
-            "",
-            f".{section_class} .page-section__inner {{",
-            f"  height: {section_height}px;" if section_height else "  height: auto;",
-            f"  width: {section_width}px;" if section_width else f"  width: {page_width}px;",
-            "}",
-        ]
+        lines = ["", f"/* Section: {section.get('name', section.get('id', 'section'))} */"]
+        if is_flow_section:
+            section_margin_top = max(section_top - flow_cursor_bottom, 0.0)
+            lines.extend(
+                [
+                    f".{section_class} {{",
+                    "  position: relative;",
+                    "  left: auto;",
+                    "  top: auto;",
+                    f"  width: min(100%, {section_width}px);" if section_width else "  width: 100%;",
+                    f"  max-width: {section_width}px;" if section_width else f"  max-width: {page_width}px;",
+                    f"  margin-top: {section_margin_top:.2f}px;",
+                    "  margin-inline: auto;",
+                    f"  min-height: {section_height}px;" if section_height else "  min-height: 0;",
+                    "}",
+                    "",
+                    f".{section_class} .page-section__inner {{",
+                    "  width: 100%;",
+                    f"  min-height: {section_height}px;" if section_height else "  min-height: 0;",
+                    "  height: auto;",
+                    "}",
+                ]
+            )
+            next_flow_cursor_bottom = max(flow_cursor_bottom + section_margin_top + section_height, section_top + section_height)
+        else:
+            lines.extend(
+                [
+                    f".{section_class} {{",
+                    "  position: absolute;",
+                    f"  left: {section_left:.2f}px;",
+                    f"  top: {section_top:.2f}px;",
+                    f"  width: {section_width}px;" if section_width else f"  width: {page_width}px;",
+                    f"  height: {section_height}px;" if section_height else "  height: auto;",
+                    f"  min-height: {section_height}px;" if section_height else "  min-height: 0;",
+                    "}",
+                    "",
+                    f".{section_class} .page-section__inner {{",
+                    f"  height: {section_height}px;" if section_height else "  height: auto;",
+                    f"  width: {section_width}px;" if section_width else f"  width: {page_width}px;",
+                    "}",
+                ]
+            )
+            next_flow_cursor_bottom = flow_cursor_bottom
         section_inner_overflow = self._section_inner_overflow(section)
         if section_inner_overflow:
             lines.insert(-1, f"  overflow: {section_inner_overflow};")
         for index, node in enumerate(section.get("children", [])):
             lines.extend(self._node_rules(node, order=index, asset_stack_overrides=asset_stack_overrides))
-        return lines
+        return lines, next_flow_cursor_bottom
+
+    def _section_uses_flow_shell(self, section: dict[str, Any]) -> bool:
+        layout = section.get("layout", {}) or {}
+        if not bool(layout.get("use_flow_shell")):
+            return False
+        if not bool(layout.get("inferred_flow")):
+            return False
+        return ensure_text(layout.get("inferred_strategy")).strip().lower() == "flow"
 
     def _node_rules(self, node: dict[str, Any], *, order: int, asset_stack_overrides: dict[str, str]) -> list[str]:
         kind = node.get("kind")
@@ -337,6 +409,7 @@ class CssGenerator:
         class_name = ensure_text(text.get("class_name"))
         if not class_name:
             return []
+        tag_name = ensure_text(text.get("tag")).strip().lower()
         bounds = text.get("bounds", {})
         render_bounds = text.get("render_bounds", {}) or {}
         style_css = ensure_text(text.get("style_css"))
@@ -356,9 +429,10 @@ class CssGenerator:
             f"  z-index: {400 + order};",
         ]
         preferred_height = self._preferred_text_height(text, bounds, render_bounds)
-        if preferred_height > 0:
+        if preferred_height > 0 and self._should_preserve_text_height(text, tag_name):
             lines.append(f"  height: {preferred_height:.2f}px;")
-            lines.append("  overflow: hidden;")
+            if tag_name not in {"h1", "h2", "h3", "h4", "h5", "h6", "label"}:
+                lines.append("  overflow: hidden;")
         for declaration in self._effective_text_style_declarations(
             text,
             style_css,
@@ -367,6 +441,19 @@ class CssGenerator:
             lines.append(f"  {declaration}")
         lines.append("}")
         return lines
+
+    def _should_preserve_text_height(self, text: dict[str, Any], tag_name: str) -> bool:
+        if tag_name not in {"h1", "h2", "h3", "h4", "h5", "h6", "label"}:
+            return True
+        return self._text_is_multiline(text)
+
+    def _text_is_multiline(self, text: dict[str, Any]) -> bool:
+        display_line_count = int(text.get("display_line_count", 0) or 0)
+        if display_line_count > 1:
+            return True
+        value = ensure_text(text.get("value") or text.get("plain_text"))
+        normalized = value.replace("\r\n", "\n").replace("\r", "\n")
+        return "\n" in normalized
 
     def _preferred_text_height(self, text: dict[str, Any], bounds: dict[str, Any], render_bounds: dict[str, Any]) -> float:
         bounds_height = float(bounds.get("height", 0) or 0)

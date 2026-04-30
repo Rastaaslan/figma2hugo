@@ -1,0 +1,25 @@
+{{- $control := . -}}
+{{- $attrs := slice (printf "class=%q" (printf "content-form-control %s" $control.class_name)) -}}
+{{- with $control.id -}}
+  {{- $attrs = $attrs | append (printf "id=%q" .) -}}
+{{- end -}}
+{{- range $name, $value := $control.attributes -}}
+  {{- $attrs = $attrs | append (printf "%s=%q" $name $value) -}}
+{{- end -}}
+{{- with $control.style -}}
+  {{- $attrs = $attrs | append (printf "style=%q" .) -}}
+{{- end -}}
+{{- if eq $control.tag "textarea" -}}
+  {{- with $control.rows -}}
+    {{- $attrs = $attrs | append (printf "rows=%q" (printf "%v" .)) -}}
+  {{- end -}}
+{{ printf "<textarea %s>%s</textarea>" (delimit $attrs " ") ($control.value | htmlEscape) | safeHTML }}
+{{- else if eq $control.tag "select" -}}
+{{ printf "<select %s>" (delimit $attrs " ") | safeHTML }}
+  {{- range $control.options -}}
+    <option value="{{ .value }}"{{ if .selected }} selected="selected"{{ end }}>{{ .label }}</option>
+  {{- end -}}
+</select>
+{{- else -}}
+{{ printf "<input %s>" (delimit $attrs " ") | safeHTML }}
+{{- end -}}

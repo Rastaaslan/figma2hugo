@@ -1,5 +1,9 @@
 {{- $section := . -}}
-{{ printf "<%s" $section.tag | safeHTML }} id="{{ $section.anchor }}" class="page-section {{ $section.class_name }}">
+{{- $attrs := slice (printf "id=%q" $section.anchor) (printf "class=%q" (printf "page-section %s" $section.class_name)) -}}
+{{- range $name, $value := $section.attributes -}}
+  {{- $attrs = $attrs | append (printf "%s=%q" $name $value) -}}
+{{- end -}}
+{{ printf "<%s %s>" $section.tag (delimit $attrs " ") | safeHTML }}
   <div class="page-section__inner">
     {{- range $section.children -}}
       {{- partial "node.html" . | safeHTML -}}

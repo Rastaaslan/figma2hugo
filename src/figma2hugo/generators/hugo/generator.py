@@ -35,6 +35,7 @@ class HugoGenerator:
         "accordion": "accordion",
         "accordion-item": "accordion-item",
         "carousel": "carousel",
+        "field": "field",
         "link-grid": "link-grid",
         "link-card": "link-card",
         "card": "card",
@@ -350,7 +351,10 @@ class HugoGenerator:
             for child in node.get("children", [])
             if isinstance(child, dict)
         }
-        return bool(child_roles & {"card", "link-card"})
+        if child_roles & {"card", "link-card"}:
+            return True
+        layout = node.get("layout", {}) or {}
+        return bool(layout.get("inferred_flow")) and len(node.get("children", [])) >= 2
 
     def _component_slug(self, node: dict[str, Any]) -> str:
         return slugify(node.get("name") or node.get("dom_id") or node.get("id") or "component", "component")

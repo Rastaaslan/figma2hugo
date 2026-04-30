@@ -13,13 +13,17 @@ import unicodedata
 
 
 DECORATIVE_PURPOSES = {"background", "decorative", "foreground", "mask"}
-HEADING_ROLES = {"display", "eyebrow", "headline", "heading", "hero-title", "title"}
+HEADING_ROLES = {"display", "eyebrow", "headline", "heading", "hero-title", "subheading", "title"}
 TEXT_VALUE_KEYS = ("value", "text", "characters", "content", "raw_value")
 GENERIC_CONTAINER_ROLES = {"", "container", "group", "frame", "node", "wrapper", "div"}
 SECTION_COORDINATE_SPACE = "section"
 PARENT_COORDINATE_SPACE = "parent"
 PUNCTUATION_ONLY_LINE_RE = re.compile(r"^[-\u2010-\u2015/:|+*·•]+$")
 
+
+# Redefinition propre pour couvrir aussi les ponctuations isolées
+# comme "!" ou "?" que Figma peut placer sur une ligne dédiée.
+PUNCTUATION_ONLY_LINE_RE = re.compile(r"^[-!\?\u00a1\u00bf\u2010-\u2015/:|+*\u00b7\u2022]+$")
 
 @dataclass(slots=True)
 class GenerationArtifacts:
@@ -440,6 +444,8 @@ def semantic_container_tag(kind: str, role: str) -> str:
         return "article"
     if normalized_role == "form":
         return "form"
+    if normalized_role == "field":
+        return "div"
     if normalized_role == "nav":
         return "nav"
     if normalized_role == "header":
@@ -459,7 +465,16 @@ def semantic_container_tag(kind: str, role: str) -> str:
     return "div"
 
 
-def guess_text_tag(role: str, section_index: int, text_index: int) -> str:
+def explicit_heading_tag_from_name(name: Any) -> str:
+    tokens = set(layer_tokens(name))
+    for level in range(1, 7):
+        token = f"h{level}"
+        if token in tokens:
+            return token
+    return ""
+
+
+def guess_text_tag(role: str, section_index: int, text_index: int, *, name: Any = "") -> str:
     normalized_role = role.lower()
     if normalized_role == "label":
         return "label"
@@ -471,6 +486,8 @@ def guess_text_tag(role: str, section_index: int, text_index: int) -> str:
         return "blockquote"
     if normalized_role == "list-item":
         return "li"
+    if explicit_tag := explicit_heading_tag_from_name(name):
+        return explicit_tag
     if normalized_role in HEADING_ROLES:
         return "h1" if section_index == 0 and text_index == 0 else "h2"
     return "p"
@@ -606,6 +623,44 @@ def ensure_unit(value: Any) -> str:
     return text
 
 
+def to_float_or_none(value: Any) -> float | None:
+    try:
+        if value in (None, ""):
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def to_bool_or_none(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    text = ensure_text(value).strip().lower()
+    if text in {"true", "1", "yes", "on"}:
+        return True
+    if text in {"false", "0", "no", "off"}:
+        return False
+    return None
+
+
+def merge_inline_styles(*chunks: str) -> str:
+    declarations: list[str] = []
+    for chunk in chunks:
+        for declaration in ensure_text(chunk).split(";"):
+            normalized = declaration.strip()
+            if not normalized:
+                continue
+            declarations.append(normalized)
+    return "; ".join(declarations) + (";" if declarations else "")
+
+
+def humanize_slug(value: str) -> str:
+    text = ensure_text(value).replace("-", " ").replace("_", " ").strip()
+    if not text:
+        return ""
+    return text[0].upper() + text[1:]
+
+
 class CanonicalModelBuilder:
     """Construit un modèle canonique indépendant de la sortie finale.
 
@@ -680,6 +735,7 @@ class CanonicalModelBuilder:
         page_name = ensure_text(coalesce(data, "name", "title", default="Page"), default="Page")
         width = float(coalesce(data, "width", default=0) or 0)
         height = float(coalesce(data, "height", default=0) or 0)
+        layout = self._normalize_layout_metadata(data.get("layout"), fallback_strategy="absolute")
         return {
             "id": ensure_text(coalesce(data, "id", "nodeId", "node_id", default="page"), default="page"),
             "name": page_name,
@@ -687,6 +743,8 @@ class CanonicalModelBuilder:
             "slug": slugify(page_name, "page"),
             "width": width,
             "height": height,
+            "layout": layout,
+            "shell_mode": self._page_shell_mode(layout),
             "meta": as_mapping(coalesce(data, "meta", "source_meta", default={})),
         }
 
@@ -699,6 +757,180 @@ class CanonicalModelBuilder:
             "shadows": as_mapping(data.get("shadows")),
             "radii": as_mapping(data.get("radii", data.get("radius"))),
         }
+
+    def _normalize_layout_metadata(
+        self,
+        value: Any,
+        *,
+        fallback_strategy: str = "absolute",
+    ) -> dict[str, Any]:
+        raw_layout = as_mapping(value)
+        layout_mode = ensure_text(coalesce(raw_layout, "layout_mode", "layoutMode")).strip().upper()
+        layout_wrap = ensure_text(coalesce(raw_layout, "layout_wrap", "layoutWrap")).strip().upper()
+        inferred_strategy = (
+            ensure_text(coalesce(raw_layout, "inferred_strategy", "inferredStrategy"))
+            .strip()
+            .lower()
+            or fallback_strategy
+        )
+        inferred_flow = to_bool_or_none(coalesce(raw_layout, "inferred_flow", "inferredFlow"))
+        if inferred_flow is None:
+            inferred_flow = (
+                inferred_strategy == "flow"
+                or layout_mode in {"HORIZONTAL", "VERTICAL"}
+                or (layout_wrap not in {"", "NO_WRAP"})
+            )
+
+        direction = ""
+        if layout_mode == "HORIZONTAL":
+            direction = "row"
+        elif layout_mode == "VERTICAL":
+            direction = "column"
+
+        return {
+            "layout_mode": layout_mode,
+            "layout_wrap": layout_wrap,
+            "layout_positioning": ensure_text(
+                coalesce(raw_layout, "layout_positioning", "layoutPositioning")
+            ).strip(),
+            "layout_sizing_horizontal": ensure_text(
+                coalesce(raw_layout, "layout_sizing_horizontal", "layoutSizingHorizontal")
+            ).strip(),
+            "layout_sizing_vertical": ensure_text(
+                coalesce(raw_layout, "layout_sizing_vertical", "layoutSizingVertical")
+            ).strip(),
+            "primary_axis_sizing_mode": ensure_text(
+                coalesce(raw_layout, "primary_axis_sizing_mode", "primaryAxisSizingMode")
+            ).strip(),
+            "counter_axis_sizing_mode": ensure_text(
+                coalesce(raw_layout, "counter_axis_sizing_mode", "counterAxisSizingMode")
+            ).strip(),
+            "primary_axis_align_items": ensure_text(
+                coalesce(raw_layout, "primary_axis_align_items", "primaryAxisAlignItems")
+            ).strip(),
+            "counter_axis_align_items": ensure_text(
+                coalesce(raw_layout, "counter_axis_align_items", "counterAxisAlignItems")
+            ).strip(),
+            "counter_axis_align_content": ensure_text(
+                coalesce(raw_layout, "counter_axis_align_content", "counterAxisAlignContent")
+            ).strip(),
+            "item_spacing": to_float_or_none(coalesce(raw_layout, "item_spacing", "itemSpacing")),
+            "counter_axis_spacing": to_float_or_none(
+                coalesce(raw_layout, "counter_axis_spacing", "counterAxisSpacing")
+            ),
+            "padding_top": to_float_or_none(coalesce(raw_layout, "padding_top", "paddingTop")),
+            "padding_right": to_float_or_none(coalesce(raw_layout, "padding_right", "paddingRight")),
+            "padding_bottom": to_float_or_none(coalesce(raw_layout, "padding_bottom", "paddingBottom")),
+            "padding_left": to_float_or_none(coalesce(raw_layout, "padding_left", "paddingLeft")),
+            "min_width": to_float_or_none(coalesce(raw_layout, "min_width", "minWidth")),
+            "max_width": to_float_or_none(coalesce(raw_layout, "max_width", "maxWidth")),
+            "min_height": to_float_or_none(coalesce(raw_layout, "min_height", "minHeight")),
+            "max_height": to_float_or_none(coalesce(raw_layout, "max_height", "maxHeight")),
+            "text_auto_resize": ensure_text(
+                coalesce(raw_layout, "text_auto_resize", "textAutoResize")
+            ).strip(),
+            "clips_content": to_bool_or_none(coalesce(raw_layout, "clips_content", "clipsContent")),
+            "constraints": as_mapping(raw_layout.get("constraints")),
+            "inferred_strategy": inferred_strategy,
+            "inferred_flow": inferred_flow,
+            "use_flow_shell": to_bool_or_none(coalesce(raw_layout, "use_flow_shell", "useFlowShell")),
+            "direction": direction,
+        }
+
+    def _page_shell_mode(self, layout: dict[str, Any]) -> str:
+        if bool(layout.get("use_flow_shell")):
+            return "flow"
+        if bool(layout.get("inferred_flow")) and ensure_text(layout.get("inferred_strategy")).strip().lower() == "flow":
+            return "mixed"
+        return "fixed"
+
+    def _layout_attributes(
+        self,
+        layout: dict[str, Any],
+        *,
+        bounds: dict[str, Any] | None = None,
+    ) -> dict[str, str]:
+        attrs: dict[str, str] = {}
+        strategy = ensure_text(layout.get("inferred_strategy")).strip().lower()
+        if strategy:
+            attrs["data-layout-strategy"] = strategy
+        attrs["data-layout-flow"] = "true" if bool(layout.get("inferred_flow")) else "false"
+        if bool(layout.get("use_flow_shell")):
+            attrs["data-layout-shell"] = "flow"
+
+        layout_mode = ensure_text(layout.get("layout_mode")).strip().lower()
+        if layout_mode:
+            attrs["data-layout-mode"] = layout_mode
+
+        layout_direction = ensure_text(layout.get("direction")).strip().lower()
+        if layout_direction:
+            attrs["data-layout-direction"] = layout_direction
+
+        layout_wrap = ensure_text(layout.get("layout_wrap")).strip().lower()
+        if layout_wrap:
+            attrs["data-layout-wrap"] = layout_wrap
+
+        sizing_horizontal = ensure_text(layout.get("layout_sizing_horizontal")).strip().lower()
+        if sizing_horizontal:
+            attrs["data-layout-sizing-horizontal"] = sizing_horizontal
+
+        sizing_vertical = ensure_text(layout.get("layout_sizing_vertical")).strip().lower()
+        if sizing_vertical:
+            attrs["data-layout-sizing-vertical"] = sizing_vertical
+
+        inline_style = self._layout_inline_style(layout, bounds=bounds)
+        if inline_style:
+            attrs["style"] = inline_style
+        return attrs
+
+    def _layout_inline_style(
+        self,
+        layout: dict[str, Any],
+        *,
+        bounds: dict[str, Any] | None = None,
+    ) -> str:
+        declarations: list[str] = []
+
+        layout_direction = ensure_text(layout.get("direction")).strip().lower()
+        if layout_direction:
+            declarations.append(f"--layout-direction: {layout_direction}")
+
+        if ensure_text(layout.get("layout_wrap")).strip().upper() not in {"", "NO_WRAP"}:
+            declarations.append("--layout-wrap: wrap")
+
+        if (item_spacing := to_float_or_none(layout.get("item_spacing"))) is not None:
+            declarations.append(f"--layout-gap: {item_spacing:.2f}px")
+
+        if (counter_spacing := to_float_or_none(layout.get("counter_axis_spacing"))) is not None:
+            declarations.append(f"--layout-cross-gap: {counter_spacing:.2f}px")
+
+        for css_name, key in (
+            ("top", "padding_top"),
+            ("right", "padding_right"),
+            ("bottom", "padding_bottom"),
+            ("left", "padding_left"),
+        ):
+            if (padding_value := to_float_or_none(layout.get(key))) is not None:
+                declarations.append(f"--layout-padding-{css_name}: {padding_value:.2f}px")
+
+        if bounds:
+            width = to_float_or_none(as_mapping(bounds).get("width"))
+            height = to_float_or_none(as_mapping(bounds).get("height"))
+            if width and height:
+                declarations.append(f"--layout-aspect-ratio: {width:.2f} / {height:.2f}")
+
+        return merge_inline_styles(*declarations)
+
+    def _merge_attributes(self, target: dict[str, str], additions: dict[str, str]) -> dict[str, str]:
+        if not additions:
+            return target
+        merged = dict(target)
+        for name, value in additions.items():
+            if name == "style":
+                merged[name] = merge_inline_styles(merged.get(name, ""), value)
+                continue
+            merged[name] = value
+        return merged
 
     def _normalize_section(self, value: Any, index: int) -> dict[str, Any]:
         data = as_mapping(value)
@@ -715,6 +947,7 @@ class CanonicalModelBuilder:
             coalesce(data, "tag", default=semantic_section_tag(section_role, index)),
             default="section",
         )
+        section_layout = self._normalize_layout_metadata(data.get("layout"), fallback_strategy="absolute")
         section_texts = [
             self._normalize_text(
                 item,
@@ -747,6 +980,7 @@ class CanonicalModelBuilder:
                 node_index=node_index,
                 parent_absolute_offset=(0.0, 0.0),
                 source_space=SECTION_COORDINATE_SPACE,
+                inside_form=False,
             )
             for node_index, item in enumerate(coerce_list(data.get("children")))
         ]
@@ -787,6 +1021,8 @@ class CanonicalModelBuilder:
                     for asset in section_assets + decorative_assets
                 ]
             )
+        section_bounds = normalize_bounds(coalesce(data, "bounds", "absoluteBoundingBox", default={}))
+        section_attrs = self._layout_attributes(section_layout, bounds=section_bounds)
         return {
             "id": section_id,
             "name": section_name,
@@ -794,7 +1030,9 @@ class CanonicalModelBuilder:
             "tag": section_tag,
             "anchor": slugify(coalesce(data, "anchor", "slug", default=section_name), default=section_id),
             "class_name": self._unique_class_name("section", section_name, section_id),
-            "bounds": normalize_bounds(coalesce(data, "bounds", "absoluteBoundingBox", default={})),
+            "bounds": section_bounds,
+            "layout": section_layout,
+            "attributes": section_attrs,
             "metadata": as_mapping(data.get("metadata")),
             "texts": sort_by_bounds(section_texts),
             "assets": sort_by_bounds(section_assets),
@@ -811,6 +1049,7 @@ class CanonicalModelBuilder:
         node_index: int,
         parent_absolute_offset: tuple[float, float] = (0.0, 0.0),
         source_space: str = PARENT_COORDINATE_SPACE,
+        inside_form: bool = False,
     ) -> dict[str, Any]:
         if isinstance(value, str):
             if value in self._global_texts:
@@ -851,6 +1090,7 @@ class CanonicalModelBuilder:
             node_name,
             fallback=ensure_text(coalesce(data, "role", default=kind), default=kind).lower(),
         )
+        layout = self._normalize_layout_metadata(data.get("layout"), fallback_strategy="absolute")
         if kind == "text":
             text_value = (
                 data
@@ -902,14 +1142,15 @@ class CanonicalModelBuilder:
         children = [
             self._normalize_node(
                 child,
-                section_id=section_id,
-                section_index=section_index,
-                node_index=child_index,
-                parent_absolute_offset=absolute_offset,
-                source_space=child_source_space,
-            )
-            for child_index, child in enumerate(coerce_list(data.get("children")))
-        ]
+                    section_id=section_id,
+                    section_index=section_index,
+                    node_index=child_index,
+                    parent_absolute_offset=absolute_offset,
+                    source_space=child_source_space,
+                    inside_form=inside_form or role == "form",
+                )
+                for child_index, child in enumerate(coerce_list(data.get("children")))
+            ]
         children = [child for child in children if child]
         if not children:
             children = sort_by_bounds(
@@ -921,6 +1162,7 @@ class CanonicalModelBuilder:
                         node_index=child_index,
                         parent_absolute_offset=absolute_offset,
                         source_space=child_source_space,
+                        inside_form=inside_form or role == "form",
                     )
                     for child_index, item in enumerate(
                         self._resolve_items(data.get("texts"), self._global_texts)
@@ -934,6 +1176,7 @@ class CanonicalModelBuilder:
                         node_index=child_index + 1000,
                         parent_absolute_offset=absolute_offset,
                         source_space=child_source_space,
+                        inside_form=inside_form or role == "form",
                     )
                     for child_index, item in enumerate(
                         self._resolve_items(data.get("assets"), self._global_assets)
@@ -955,6 +1198,31 @@ class CanonicalModelBuilder:
             tag=tag,
             attrs=attrs,
             children=children,
+            node_id=node_id,
+            bounds=bounds,
+            inside_form=inside_form,
+        )
+        children, attrs, form_metadata = self._extract_form_metadata(
+            role=role,
+            node_name=node_name,
+            attrs=attrs,
+            children=children,
+            bounds=bounds,
+        )
+        if self._is_section_block_candidate(role=role, layout=layout, children=children):
+            if layout.get("use_flow_shell") is None:
+                layout["use_flow_shell"] = True
+        attrs = self._merge_attributes(attrs, self._layout_attributes(layout, bounds=bounds))
+        if self._is_section_block_candidate(role=role, layout=layout, children=children):
+            attrs["data-section-block"] = "true"
+        form_control = self._derive_form_control(
+            role=role,
+            node_id=node_id,
+            node_name=node_name,
+            bounds=bounds,
+            attrs=attrs,
+            children=children,
+            form_metadata=form_metadata,
         )
         return {
             "id": node_id,
@@ -969,9 +1237,29 @@ class CanonicalModelBuilder:
                 node_id,
             ),
             "bounds": bounds,
+            "layout": layout,
             "attributes": attrs,
             "children": children,
+            "form_control": form_control,
         }
+
+    def _is_section_block_candidate(
+        self,
+        *,
+        role: str,
+        layout: dict[str, Any],
+        children: list[dict[str, Any]],
+    ) -> bool:
+        if ensure_text(role).strip().lower() != "section":
+            return False
+        if not bool(layout.get("inferred_flow")):
+            return False
+        meaningful_children = [
+            child
+            for child in children
+            if child.get("kind") in {"container", "text", "asset"}
+        ]
+        return len(meaningful_children) >= 2
 
     def _apply_container_naming_conventions(
         self,
@@ -1026,6 +1314,9 @@ class CanonicalModelBuilder:
         tag: str,
         attrs: dict[str, str],
         children: list[dict[str, Any]],
+        node_id: str,
+        bounds: dict[str, float],
+        inside_form: bool,
     ) -> tuple[str, dict[str, str], list[dict[str, Any]]]:
         """Applique les conventions métier dans un ordre stable.
 
@@ -1034,6 +1325,7 @@ class CanonicalModelBuilder:
         """
 
         conventions = (
+            self._apply_form_container_conventions,
             self._apply_link_card_container_conventions,
             self._apply_card_container_conventions,
             self._apply_accordion_container_conventions,
@@ -1046,7 +1338,43 @@ class CanonicalModelBuilder:
                 tag=tag,
                 attrs=attrs,
                 children=children,
+                node_id=node_id,
+                bounds=bounds,
+                inside_form=inside_form,
             )
+        return tag, attrs, children
+
+    def _apply_form_container_conventions(
+        self,
+        *,
+        role: str,
+        node_name: str,
+        tag: str,
+        attrs: dict[str, str],
+        children: list[dict[str, Any]],
+        node_id: str,
+        bounds: dict[str, float],
+        inside_form: bool,
+    ) -> tuple[str, dict[str, str], list[dict[str, Any]]]:
+        """Injecte une sémantique de formulaire sans imposer de refonte visuelle."""
+
+        del node_id, bounds
+        normalized_role = ensure_text(role).strip().lower()
+        if normalized_role == "form":
+            attrs["data-form"] = "true"
+            return "form", attrs, children
+
+        if normalized_role == "field":
+            attrs["data-form-field"] = "true"
+            control_kind = self._guess_form_control_kind(node_name, bounds=None)
+            attrs["data-form-control-kind"] = control_kind
+            return tag, attrs, children
+
+        if normalized_role == "button" and inside_form and self._looks_like_submit_button(node_name):
+            attrs["data-form-submit"] = "true"
+            attrs["type"] = "submit"
+            return "button", attrs, children
+
         return tag, attrs, children
 
     def _apply_link_card_container_conventions(
@@ -1057,9 +1385,13 @@ class CanonicalModelBuilder:
         tag: str,
         attrs: dict[str, str],
         children: list[dict[str, Any]],
+        node_id: str,
+        bounds: dict[str, float],
+        inside_form: bool,
     ) -> tuple[str, dict[str, str], list[dict[str, Any]]]:
         """Transforme une card nommée en lien complet quand une URL existe."""
 
+        del node_id, bounds, inside_form
         normalized_role = ensure_text(role).strip().lower()
         if normalized_role == "link-grid":
             attrs["data-link-grid"] = "true"
@@ -1092,8 +1424,11 @@ class CanonicalModelBuilder:
         tag: str,
         attrs: dict[str, str],
         children: list[dict[str, Any]],
+        node_id: str,
+        bounds: dict[str, float],
+        inside_form: bool,
     ) -> tuple[str, dict[str, str], list[dict[str, Any]]]:
-        del node_name
+        del node_name, node_id, bounds, inside_form
         normalized_role = ensure_text(role).strip().lower()
         if normalized_role != "card":
             return tag, attrs, children
@@ -1108,9 +1443,13 @@ class CanonicalModelBuilder:
         tag: str,
         attrs: dict[str, str],
         children: list[dict[str, Any]],
+        node_id: str,
+        bounds: dict[str, float],
+        inside_form: bool,
     ) -> tuple[str, dict[str, str], list[dict[str, Any]]]:
         """Enrichit les blocs d'accordéon avec les attributs HTML/ARIA attendus."""
 
+        del node_id, bounds, inside_form
         normalized_role = ensure_text(role).strip().lower()
         if normalized_role == "accordion":
             attrs["data-accordion"] = "true"
@@ -1183,9 +1522,13 @@ class CanonicalModelBuilder:
         tag: str,
         attrs: dict[str, str],
         children: list[dict[str, Any]],
+        node_id: str,
+        bounds: dict[str, float],
+        inside_form: bool,
     ) -> tuple[str, dict[str, str], list[dict[str, Any]]]:
         """Prépare le markup d'un carousel et relie thumbs <-> slides."""
 
+        del node_id, bounds, inside_form
         normalized_role = ensure_text(role).strip().lower()
         updated_attrs = dict(attrs)
 
@@ -1258,6 +1601,178 @@ class CanonicalModelBuilder:
             yield child
             yield from self._iter_container_nodes(child.get("children", []))
 
+    def _extract_form_metadata(
+        self,
+        *,
+        role: str,
+        node_name: str,
+        attrs: dict[str, str],
+        children: list[dict[str, Any]],
+        bounds: dict[str, float],
+    ) -> tuple[list[dict[str, Any]], dict[str, str], dict[str, Any]]:
+        normalized_role = ensure_text(role).strip().lower()
+        updated_attrs = dict(attrs)
+        metadata: dict[str, Any] = {}
+        if normalized_role == "form":
+            cleaned_children, action_value = self._extract_form_action(children)
+            method_value = self._guess_form_method(node_name)
+            if action_value and "action" not in updated_attrs:
+                updated_attrs["action"] = action_value
+            if method_value and "method" not in updated_attrs:
+                updated_attrs["method"] = method_value
+            metadata["action"] = action_value
+            metadata["method"] = updated_attrs.get("method", "")
+            return cleaned_children, updated_attrs, metadata
+
+        if normalized_role != "field":
+            return children, updated_attrs, metadata
+
+        metadata["kind"] = self._guess_form_control_kind(node_name, bounds=bounds)
+        metadata["required"] = self._field_is_required(node_name)
+        metadata["checked"] = self._field_starts_checked(node_name)
+        metadata["multiple"] = self._field_accepts_multiple(node_name)
+        cleaned_children, placeholder_value = self._extract_named_text_value(
+            children,
+            prefixes=("placeholder", "hint", "indice"),
+        )
+        cleaned_children, options = self._extract_field_options(cleaned_children)
+        cleaned_children, value_value = self._extract_named_text_value(
+            cleaned_children,
+            prefixes=("value", "valeur"),
+        )
+        cleaned_children, min_value = self._extract_named_text_value(
+            cleaned_children,
+            prefixes=("min",),
+        )
+        cleaned_children, max_value = self._extract_named_text_value(
+            cleaned_children,
+            prefixes=("max",),
+        )
+        cleaned_children, step_value = self._extract_named_text_value(
+            cleaned_children,
+            prefixes=("step", "pas"),
+        )
+        cleaned_children, accept_value = self._extract_named_text_value(
+            cleaned_children,
+            prefixes=("accept",),
+        )
+        cleaned_children, multiple_value = self._extract_named_text_value(
+            cleaned_children,
+            prefixes=("multiple",),
+        )
+        metadata["placeholder"] = placeholder_value
+        metadata["options"] = options
+        metadata["value"] = value_value
+        metadata["min"] = min_value
+        metadata["max"] = max_value
+        metadata["step"] = step_value
+        metadata["accept"] = accept_value
+        if multiple_value:
+            metadata["multiple"] = self._as_truthy_flag(multiple_value)
+        return cleaned_children, updated_attrs, metadata
+
+    def _extract_form_action(self, children: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], str]:
+        action_value = ""
+
+        def walk(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            nonlocal action_value
+            retained: list[dict[str, Any]] = []
+            for node in nodes:
+                if node.get("kind") == "text":
+                    text_payload = as_mapping(node.get("text"))
+                    text_name = ensure_text(text_payload.get("name") or text_payload.get("id"))
+                    text_value = ensure_text(text_payload.get("value")).strip().strip("\"'")
+                    if (
+                        not action_value
+                        and name_has_prefix(text_name, ("action", "form-action", "url-action"))
+                        and looks_like_href(text_value)
+                    ):
+                        action_value = text_value
+                        continue
+                    retained.append(node)
+                    continue
+                if node.get("kind") == "container":
+                    node["children"] = walk(list(node.get("children", [])))
+                retained.append(node)
+            return retained
+
+        return walk(list(children)), action_value
+
+    def _extract_named_text_value(
+        self,
+        children: list[dict[str, Any]],
+        *,
+        prefixes: tuple[str, ...],
+    ) -> tuple[list[dict[str, Any]], str]:
+        extracted_value = ""
+
+        def walk(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            nonlocal extracted_value
+            retained: list[dict[str, Any]] = []
+            for node in nodes:
+                if node.get("kind") == "text":
+                    text_payload = as_mapping(node.get("text"))
+                    text_name = ensure_text(text_payload.get("name") or text_payload.get("id"))
+                    if not extracted_value and name_has_prefix(text_name, prefixes):
+                        extracted_value = ensure_text(text_payload.get("plain_text") or text_payload.get("value")).strip()
+                        continue
+                    retained.append(node)
+                    continue
+                if node.get("kind") == "container":
+                    node["children"] = walk(list(node.get("children", [])))
+                retained.append(node)
+            return retained
+
+        return walk(list(children)), extracted_value
+
+    def _extract_field_options(
+        self,
+        children: list[dict[str, Any]],
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        options: list[dict[str, Any]] = []
+
+        def walk(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            retained: list[dict[str, Any]] = []
+            for node in nodes:
+                if node.get("kind") == "text":
+                    text_payload = as_mapping(node.get("text"))
+                    text_name = ensure_text(text_payload.get("name") or text_payload.get("id"))
+                    if name_has_prefix(text_name, ("option", "select-option", "choix")):
+                        option_value = ensure_text(text_payload.get("plain_text") or text_payload.get("value")).strip()
+                        if option_value:
+                            options.append(self._normalize_select_option(option_value, option_name=text_name))
+                        continue
+                    retained.append(node)
+                    continue
+                if node.get("kind") == "container":
+                    node["children"] = walk(list(node.get("children", [])))
+                retained.append(node)
+            return retained
+
+        return walk(list(children)), options
+
+    def _normalize_select_option(self, raw_value: str, *, option_name: str = "") -> dict[str, Any]:
+        candidate = raw_value.strip()
+        selected = name_has_token(option_name, ("selected", "default", "active", "checked"))
+        if "|" in candidate:
+            parts = [part.strip() for part in candidate.split("|")]
+            if len(parts) >= 3:
+                option_value = parts[0]
+                option_label = parts[1]
+                selected = selected or self._as_truthy_flag(parts[2])
+                return {
+                    "value": option_value or slugify(option_label, "option"),
+                    "label": option_label or option_value,
+                    "selected": selected,
+                }
+            option_value, option_label = [part.strip() for part in candidate.split("|", 1)]
+            return {
+                "value": option_value or slugify(option_label, "option"),
+                "label": option_label or option_value,
+                "selected": selected,
+            }
+        return {"value": slugify(candidate, "option"), "label": candidate, "selected": selected}
+
     def _extract_link_card_href(self, children: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], str]:
         href_value = ""
 
@@ -1305,6 +1820,343 @@ class CanonicalModelBuilder:
                 continue
             if child.get("kind") == "container":
                 yield from self._iter_text_nodes(child.get("children", []))
+
+    def _derive_form_control(
+        self,
+        *,
+        role: str,
+        node_id: str,
+        node_name: str,
+        bounds: dict[str, float],
+        attrs: dict[str, str],
+        children: list[dict[str, Any]],
+        form_metadata: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        if ensure_text(role).strip().lower() != "field":
+            return None
+
+        control_label_node = self._first_field_label_node(children)
+        control_label_text = self._label_text_value(control_label_node)
+        control_bounds = self._field_control_bounds(children, container_bounds=bounds)
+        control_kind = ensure_text(form_metadata.get("kind")).strip().lower() or self._guess_form_control_kind(
+            node_name,
+            bounds=control_bounds,
+        )
+        choice_name, choice_value = self._choice_control_name_and_value(
+            node_name,
+            control_kind=control_kind,
+            explicit_value=ensure_text(form_metadata.get("value")).strip(),
+        )
+        control_name = (
+            choice_name
+            if control_kind in {"checkbox", "radio"}
+            else self._form_control_name(node_name, control_kind=control_kind)
+        )
+        control_id = dom_identifier(f"{node_id}-control", default=f"{node_id}-control")
+        control_tag = "textarea" if control_kind == "textarea" else "select" if control_kind == "select" else "input"
+        control_type = "" if control_tag == "textarea" else control_kind
+        autocomplete = self._guess_form_autocomplete(node_name)
+        inputmode = self._guess_form_inputmode(control_kind)
+
+        attrs["data-form-control-id"] = control_id
+        if control_label_node:
+            text_payload = as_mapping(control_label_node.get("text"))
+            label_attrs = dict(text_payload.get("attributes", {}))
+            label_attrs["for"] = control_id
+            text_payload["attributes"] = label_attrs
+            control_label_node["text"] = text_payload
+
+        control_attributes: dict[str, str] = {
+            "id": control_id,
+            "name": control_name,
+        }
+        if control_tag == "input":
+            control_attributes["type"] = control_type or "text"
+        if control_kind in {"checkbox", "radio"} and choice_value:
+            control_attributes["value"] = choice_value
+        if autocomplete:
+            control_attributes["autocomplete"] = autocomplete
+        if inputmode:
+            control_attributes["inputmode"] = inputmode
+        placeholder = ensure_text(form_metadata.get("placeholder")).strip()
+        if placeholder and control_tag in {"input", "textarea"}:
+            control_attributes["placeholder"] = placeholder
+        if bool(form_metadata.get("required")):
+            control_attributes["required"] = "required"
+            control_attributes["aria-required"] = "true"
+        if bool(form_metadata.get("checked")) and control_kind in {"checkbox", "radio"}:
+            control_attributes["checked"] = "checked"
+        if control_tag == "input" and control_kind not in {"checkbox", "radio", "file"}:
+            if value := ensure_text(form_metadata.get("value")).strip():
+                control_attributes["value"] = value
+        if min_value := ensure_text(form_metadata.get("min")).strip():
+            control_attributes["min"] = min_value
+        if max_value := ensure_text(form_metadata.get("max")).strip():
+            control_attributes["max"] = max_value
+        if step_value := ensure_text(form_metadata.get("step")).strip():
+            control_attributes["step"] = step_value
+        if control_kind == "file":
+            if accept_value := ensure_text(form_metadata.get("accept")).strip():
+                control_attributes["accept"] = accept_value
+            if bool(form_metadata.get("multiple")):
+                control_attributes["multiple"] = "multiple"
+        if control_label_text:
+            control_attributes["aria-label"] = control_label_text
+        else:
+            control_attributes["aria-label"] = humanize_slug(control_name)
+
+        control_height = float(control_bounds.get("height", 0) or 0)
+        rows = max(3, int(round(control_height / 24.0))) if control_tag == "textarea" and control_height > 0 else 0
+
+        normalized_options = self._apply_selected_option(
+            list(form_metadata.get("options", [])),
+            selected_value=ensure_text(form_metadata.get("value")).strip(),
+        )
+
+        return {
+            "tag": control_tag,
+            "type": control_type,
+            "id": control_id,
+            "name": control_name,
+            "class_name": self._unique_class_name("form-control", node_name, f"{node_id}-control"),
+            "attributes": control_attributes,
+            "bounds": control_bounds,
+            "style": self._form_control_style(control_bounds),
+            "rows": rows,
+            "options": normalized_options,
+            "value": ensure_text(form_metadata.get("value")).strip(),
+        }
+
+    def _first_field_label_node(self, children: list[dict[str, Any]]) -> dict[str, Any] | None:
+        return next(
+            (
+                node
+                for node in self._iter_text_nodes(children)
+                if ensure_text(as_mapping(node.get("text")).get("role")).strip().lower() == "label"
+                or name_has_prefix(as_mapping(node.get("text")).get("name"), ("label", "libelle"))
+            ),
+            None,
+        )
+
+    def _label_text_value(self, node: dict[str, Any] | None) -> str:
+        if not node:
+            return ""
+        return ensure_text(as_mapping(node.get("text")).get("plain_text") or as_mapping(node.get("text")).get("value")).strip()
+
+    def _field_control_bounds(
+        self,
+        children: list[dict[str, Any]],
+        *,
+        container_bounds: dict[str, float],
+    ) -> dict[str, float]:
+        for child in children:
+            if child.get("kind") != "asset":
+                continue
+            asset = as_mapping(child.get("asset"))
+            asset_name = ensure_text(asset.get("name") or asset.get("id"))
+            if ensure_text(asset.get("purpose")).strip().lower() == "background" or name_has_prefix(
+                asset_name,
+                ("zone", "input", "champ", "bg", "fond"),
+            ):
+                return normalize_bounds(asset.get("bounds"))
+        return normalize_bounds(container_bounds)
+
+    def _form_control_name(self, node_name: str, *, control_kind: str = "") -> str:
+        tokens = self._field_semantic_tokens(node_name)
+        if not tokens:
+            return "field"
+        if control_kind == "email" and any(token in {"mail", "email"} for token in tokens):
+            return "email"
+        if control_kind == "tel" and any(
+            token in {"telephone", "phone", "tel", "mobile"} for token in tokens
+        ):
+            return "telephone"
+        return "-".join(tokens)
+
+    def _field_semantic_tokens(self, node_name: str) -> list[str]:
+        tokens = [
+            token
+            for token in layer_tokens(node_name)
+            if token
+            not in {
+                "input",
+                "champ",
+                "zone",
+                "field",
+                "select",
+                "checkbox",
+                "radio",
+                "date",
+                "file",
+                "fichier",
+                "upload",
+                "range",
+                "slider",
+                "curseur",
+                "number",
+                "nombre",
+                "required",
+                "requis",
+                "obligatoire",
+                "mandatory",
+                "checked",
+                "selected",
+                "default",
+                "active",
+                "multiple",
+            }
+        ]
+        return [
+            {
+                "mail": "email",
+                "phone": "telephone",
+                "tel": "telephone",
+                "mobile": "telephone",
+                "comments": "message",
+                "comment": "message",
+            }.get(token, token)
+            for token in tokens
+        ]
+
+    def _choice_control_name_and_value(
+        self,
+        node_name: str,
+        *,
+        control_kind: str,
+        explicit_value: str = "",
+    ) -> tuple[str, str]:
+        tokens = self._field_semantic_tokens(node_name)
+        if not tokens:
+            return "choice", explicit_value.strip() or "on"
+        if len(tokens) >= 2:
+            base_name = "-".join(tokens[:-1])
+            derived_value = explicit_value.strip() or tokens[-1]
+            return base_name, derived_value
+        single_name = tokens[0]
+        if explicit_value.strip():
+            return single_name, explicit_value.strip()
+        if control_kind == "radio":
+            return single_name, single_name
+        return single_name, "1"
+
+    def _guess_form_control_kind(self, node_name: str, *, bounds: dict[str, Any] | None) -> str:
+        tokens = set(layer_tokens(node_name))
+        height = to_float_or_none(as_mapping(bounds).get("height")) if bounds else None
+        if tokens & {"select", "dropdown", "liste"}:
+            return "select"
+        if tokens & {"checkbox", "check"}:
+            return "checkbox"
+        if tokens & {"radio"}:
+            return "radio"
+        if tokens & {"date", "calendrier", "calendar", "naissance", "birthday"}:
+            return "date"
+        if tokens & {"file", "fichier", "upload", "document", "piecejointe", "cv"}:
+            return "file"
+        if tokens & {"range", "slider", "curseur"}:
+            return "range"
+        if tokens & {"message", "commentaire", "comments", "comment", "textarea"}:
+            return "textarea"
+        # Les champs "une ligne" issus de Figma sont souvent plus hauts qu'un
+        # vrai input web. On ne bascule en textarea implicite que pour des
+        # hauteurs franchement multi-lignes.
+        if height is not None and height >= 160:
+            return "textarea"
+        if tokens & {"mail", "email"}:
+            return "email"
+        if tokens & {"telephone", "phone", "tel", "mobile"}:
+            return "tel"
+        if tokens & {"nombre", "number", "quantite", "quantity"}:
+            return "number"
+        return "text"
+
+    def _guess_form_autocomplete(self, node_name: str) -> str:
+        tokens = set(layer_tokens(node_name))
+        if {"nom", "prenom"} <= tokens:
+            return "name"
+        if tokens & {"naissance", "birthday"}:
+            return "bday"
+        if "societe" in tokens or "company" in tokens:
+            return "organization"
+        if tokens & {"mail", "email"}:
+            return "email"
+        if tokens & {"telephone", "phone", "tel", "mobile"}:
+            return "tel"
+        return ""
+
+    def _guess_form_inputmode(self, control_kind: str) -> str:
+        if control_kind == "email":
+            return "email"
+        if control_kind == "tel":
+            return "tel"
+        if control_kind in {"number", "range"}:
+            return "numeric"
+        return ""
+
+    def _guess_form_method(self, node_name: str) -> str:
+        tokens = set(layer_tokens(node_name))
+        if "post" in tokens:
+            return "post"
+        if "get" in tokens:
+            return "get"
+        return ""
+
+    def _field_is_required(self, node_name: str) -> bool:
+        return name_has_token(node_name, ("required", "requis", "obligatoire", "mandatory"))
+
+    def _field_starts_checked(self, node_name: str) -> bool:
+        return name_has_token(node_name, ("checked", "selected", "default", "active"))
+
+    def _field_accepts_multiple(self, node_name: str) -> bool:
+        return name_has_token(node_name, ("multiple", "multi"))
+
+    def _as_truthy_flag(self, value: Any) -> bool:
+        normalized = ensure_text(value).strip().lower()
+        return normalized in {"1", "true", "yes", "oui", "on", "selected", "checked", "default", "active"}
+
+    def _apply_selected_option(
+        self,
+        options: list[dict[str, Any]],
+        *,
+        selected_value: str,
+    ) -> list[dict[str, Any]]:
+        if not options:
+            return options
+        expected = ensure_text(selected_value).strip()
+        if not expected:
+            return options
+        normalized_expected = slugify(expected, "option")
+        updated: list[dict[str, Any]] = []
+        for option in options:
+            option_data = dict(option)
+            option_value = ensure_text(option_data.get("value")).strip()
+            option_label = ensure_text(option_data.get("label")).strip()
+            is_selected = (
+                option_value == expected
+                or option_label == expected
+                or slugify(option_value, "option") == normalized_expected
+                or slugify(option_label, "option") == normalized_expected
+            )
+            if is_selected:
+                option_data["selected"] = True
+            else:
+                option_data["selected"] = False
+            updated.append(option_data)
+        return updated
+
+    def _form_control_style(self, bounds: dict[str, Any]) -> str:
+        normalized_bounds = normalize_bounds(bounds)
+        return merge_inline_styles(
+            f"left: {float(normalized_bounds.get('x', 0.0) or 0.0):.2f}px",
+            f"top: {float(normalized_bounds.get('y', 0.0) or 0.0):.2f}px",
+            f"width: {float(normalized_bounds.get('width', 0.0) or 0.0):.2f}px",
+            f"height: {float(normalized_bounds.get('height', 0.0) or 0.0):.2f}px",
+        )
+
+    def _looks_like_submit_button(self, node_name: str) -> bool:
+        return name_has_prefix(node_name, ("submit",)) or name_has_token(
+            node_name,
+            ("submit", "envoyer", "send", "valider"),
+        )
 
     def _should_promote_container_asset_to_background(
         self,
@@ -1514,13 +2366,20 @@ class CanonicalModelBuilder:
                 raw_value = ensure_text(data[key])
                 break
         role = ensure_text(coalesce(data, "role", "type", default="body"), default="body").lower()
-        tag = ensure_text(coalesce(data, "tag", default=guess_text_tag(role, section_index, text_index)), default="p")
+        text_name = ensure_text(coalesce(data, "name", default=text_id), default=text_id)
+        tag = ensure_text(
+            coalesce(data, "tag", default=guess_text_tag(role, section_index, text_index, name=text_name)),
+            default="p",
+        )
         attrs = sanitize_attributes(data.get("attributes"))
         if tag == "a":
             append_attribute(attrs, "href", coalesce(data, "href", "url"))
         if tag == "label":
             append_attribute(attrs, "for", coalesce(data, "for", "label_for"))
+        if re.fullmatch(r"h[1-6]", tag) and "data-heading-level" not in attrs:
+            attrs["data-heading-level"] = tag[1:]
         style_runs = coalesce(data, "styleRuns", "style_runs", default=[])
+        layout = self._normalize_layout_metadata(data.get("layout"), fallback_strategy="text")
         display_value, normalized_break_lines = self._normalize_display_text(
             raw_value,
             role=role,
@@ -1531,6 +2390,7 @@ class CanonicalModelBuilder:
             "id": text_id,
             "dom_id": dom_identifier(text_id, default=f"{section_id or 'page'}-text-{text_index + 1}"),
             "name": ensure_text(coalesce(data, "name", default=text_id), default=text_id),
+            "heading_level": int(tag[1]) if re.fullmatch(r"h[1-6]", tag) else None,
             "value": display_value,
             "source_value": raw_value,
             "plain_text": " ".join(display_value.split()),
@@ -1548,6 +2408,7 @@ class CanonicalModelBuilder:
             "attributes": attrs,
             "style": as_mapping(coalesce(data, "style", default={})),
             "style_css": style_map_to_css(coalesce(data, "style", default={})),
+            "layout": layout,
             "hard_breaks": self._has_hard_breaks(display_value),
             "nowrap": self._should_nowrap_text(
                 display_value,
@@ -1705,6 +2566,7 @@ class CanonicalModelBuilder:
         attrs = sanitize_attributes(data.get("attributes"))
         append_attribute(attrs, "loading", coalesce(data, "loading", default="lazy"))
         style = as_mapping(coalesce(data, "style", default={}))
+        layout = self._normalize_layout_metadata(data.get("layout"), fallback_strategy="leaf")
         normalized = {
             "id": asset_id,
             "dom_id": dom_identifier(asset_id, default=f"{section_id or 'page'}-asset-{asset_index + 1}"),
@@ -1746,6 +2608,7 @@ class CanonicalModelBuilder:
             "attributes": attrs,
             "style": style,
             "style_css": style_map_to_css(style),
+            "layout": layout,
         }
         if not has_contextual_bounds:
             self._asset_index[asset_id] = normalized

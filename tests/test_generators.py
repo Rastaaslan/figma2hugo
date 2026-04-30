@@ -272,6 +272,115 @@ class CssGeneratorTests(unittest.TestCase):
         self.assertIn("width: 400px;", css)
         self.assertIn(".section-cta .page-section__inner {", css)
 
+    def test_css_generator_uses_progressive_flow_shell_for_flow_sections(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Page", "width": 1440, "height": 1200},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "section",
+                    "bounds": {"x": 120, "y": 80, "width": 1200, "height": 300},
+                    "layout": {
+                        "layoutMode": "VERTICAL",
+                        "itemSpacing": 32,
+                        "inferredStrategy": "flow",
+                        "inferredFlow": True,
+                        "useFlowShell": True,
+                    },
+                    "children": [],
+                },
+                {
+                    "id": "features",
+                    "name": "Features",
+                    "role": "section",
+                    "bounds": {"x": 120, "y": 500, "width": 1200, "height": 220},
+                    "layout": {
+                        "layoutMode": "VERTICAL",
+                        "itemSpacing": 24,
+                        "inferredStrategy": "flow",
+                        "inferredFlow": True,
+                        "useFlowShell": True,
+                    },
+                    "children": [],
+                },
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        canonical = CanonicalModelBuilder(mode="static").build(model)
+        css = CssGenerator().generate(canonical)
+
+        self.assertIn("body {", css)
+        self.assertIn("min-width: 0;", css)
+        self.assertIn("overflow-x: auto;", css)
+        self.assertIn(".page {", css)
+        self.assertIn("width: var(--page-max-width);", css)
+        self.assertIn("max-width: none;", css)
+        self.assertIn('.page[data-page-shell="flow"] {', css)
+        self.assertIn('width: min(100%, var(--page-max-width));', css)
+        self.assertNotIn("padding-inline: var(--page-shell-gutter);", css)
+        self.assertIn(".section-hero {", css)
+        self.assertIn("position: relative;", css)
+        self.assertIn("margin-top: 0.00px;", css)
+        self.assertIn("width: min(100%, 1200px);", css)
+        self.assertIn("max-width: 1200px;", css)
+        self.assertIn(".section-features {", css)
+        self.assertIn("margin-top: 120.00px;", css)
+
+    def test_css_generator_does_not_clip_headings_or_labels_with_fixed_height(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Typography Page", "width": 1200, "height": 800},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1200, "height": 800},
+                    "texts": [
+                        {
+                            "id": "hero-title",
+                            "name": "titre-h1-hero",
+                            "role": "heading",
+                            "tag": "h1",
+                            "value": "Embedded In Mind",
+                            "bounds": {"x": 120, "y": 120, "width": 900, "height": 81},
+                            "style": {"fontFamily": "Inter", "fontSize": 160, "lineHeight": 81},
+                        },
+                        {
+                            "id": "contact-label",
+                            "name": "label-contact",
+                            "role": "label",
+                            "tag": "label",
+                            "value": "Contact",
+                            "bounds": {"x": 120, "y": 260, "width": 420, "height": 157},
+                            "style": {"fontFamily": "Inter", "fontSize": 121.88, "lineHeight": 147.5},
+                        },
+                    ],
+                    "children": ["hero-title", "contact-label"],
+                },
+            ],
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        canonical = CanonicalModelBuilder(mode="static").build(model)
+        css = CssGenerator().generate(canonical)
+
+        hero_match = re.search(r"\.text-titre-h1-hero\s*\{[^}]*\}", css, re.S)
+        label_match = re.search(r"\.text-label-contact\s*\{[^}]*\}", css, re.S)
+
+        self.assertIsNotNone(hero_match)
+        self.assertIsNotNone(label_match)
+        self.assertNotIn("overflow: hidden;", hero_match.group(0))
+        self.assertNotIn("\n  height:", hero_match.group(0))
+        self.assertNotIn("overflow: hidden;", label_match.group(0))
+        self.assertNotIn("\n  height:", label_match.group(0))
+
     def test_builder_sorts_sections_by_vertical_position(self) -> None:
         model = {
             "page": {"id": "page", "name": "Page", "width": 1440, "height": 1200},
@@ -541,6 +650,49 @@ class CssGeneratorTests(unittest.TestCase):
         self.assertTrue(heading["normalized_break_lines"])
         self.assertIn("height: 208.00px;", css)
         self.assertNotIn("height: 312.00px;", css)
+
+    def test_css_generator_collapses_isolated_exclamation_breaks_in_headings(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Page", "width": 1440, "height": 500},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1440, "height": 500},
+                    "texts": [
+                        {
+                            "id": "hero-title",
+                            "name": "titre-hero",
+                            "role": "hero-title",
+                            "value": "Quelques mots sur\n!\nEmbedded In Mind",
+                            "bounds": {"x": 120, "y": 90, "width": 792, "height": 312},
+                            "style": {
+                                "fontFamily": "Inter",
+                                "fontSize": 80,
+                                "lineHeight": 104,
+                                "fontWeight": 700,
+                                "fontStyle": "Bold Italic",
+                                "textAlignHorizontal": "CENTER",
+                                "textAlignVertical": "TOP",
+                            },
+                        }
+                    ],
+                    "children": ["hero-title"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        canonical = CanonicalModelBuilder(mode="static").build(model)
+        heading = canonical["sections"][0]["children"][0]["text"]
+
+        self.assertEqual(heading["value"], "Quelques mots sur !\nEmbedded In Mind")
+        self.assertEqual(heading["html"], "Quelques mots sur !<br>\nEmbedded In Mind")
+        self.assertTrue(heading["normalized_break_lines"])
 
     def test_css_generator_uses_render_height_for_text_with_spacer_breaks(self) -> None:
         model = {
@@ -1759,6 +1911,8 @@ class StaticGeneratorTests(unittest.TestCase):
             self.assertIn("<footer", html_content)
             self.assertIn("Build faster<br>", html_content)
             self.assertIn('src="images/hero.png"', html_content)
+            self.assertIn('data-page-shell="fixed"', html_content)
+            self.assertIn('data-page-layout-strategy="absolute"', html_content)
 
     def test_static_generator_avoids_orphan_punctuation_lines_in_heading_html(self) -> None:
         model = {
@@ -1801,10 +1955,58 @@ class StaticGeneratorTests(unittest.TestCase):
             StaticGenerator().generate(model, temp_dir)
             html_content = (Path(temp_dir) / "index.html").read_text(encoding="utf-8")
             css_content = (Path(temp_dir) / "styles.css").read_text(encoding="utf-8")
+            css_content = (Path(temp_dir) / "styles.css").read_text(encoding="utf-8")
 
             self.assertIn("Nom de la prestation -<br>", html_content)
             self.assertNotIn("<br>\n-<br>", html_content)
             self.assertIn("height: 208.00px;", css_content)
+
+    def test_static_generator_respects_explicit_heading_levels_from_naming(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Page", "width": 1440, "height": 640},
+            "sections": [
+                {
+                    "id": "content",
+                    "name": "Content",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1440, "height": 640},
+                    "texts": [
+                        {
+                            "id": "service-title",
+                            "name": "titre-h4-service-cloud",
+                            "role": "heading",
+                            "value": "Architecture cloud",
+                            "bounds": {"x": 120, "y": 120, "width": 420, "height": 40},
+                            "style": {"fontFamily": "Inter", "fontSize": 24, "fontWeight": 700},
+                        },
+                        {
+                            "id": "faq-title",
+                            "name": "titre-h5-faq-rgpd",
+                            "role": "heading",
+                            "value": "Protection des donnees",
+                            "bounds": {"x": 120, "y": 190, "width": 360, "height": 32},
+                            "style": {"fontFamily": "Inter", "fontSize": 20, "fontWeight": 700},
+                        },
+                    ],
+                    "children": ["service-title", "faq-title"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            StaticGenerator().generate(model, temp_dir)
+            html_content = (Path(temp_dir) / "index.html").read_text(encoding="utf-8")
+
+            self.assertIn('<h4 id="service-title"', html_content)
+            self.assertIn('data-heading-level="4"', html_content)
+            self.assertIn(">Architecture cloud</h4>", html_content)
+            self.assertIn('<h5 id="faq-title"', html_content)
+            self.assertIn('data-heading-level="5"', html_content)
+            self.assertIn(">Protection des donnees</h5>", html_content)
 
     def test_static_generator_uses_sanitized_dom_ids_for_figma_node_ids(self) -> None:
         model = {
@@ -2160,12 +2362,15 @@ class StaticGeneratorTests(unittest.TestCase):
                 html_content,
                 re.compile(
                     r'<form id="formulaire-contact"[^>]*>[\s\S]*<div id="input-email"[^>]*>[\s\S]*'
-                    r'<label id="contact-email-label"[\s\S]*<button id="button-envoyer"[^>]*type="button"[\s\S]*'
+                    r'<label id="contact-email-label"[^>]*for="input-email-control"[\s\S]*'
+                    r'<input[^>]*id="input-email-control"[^>]*name="email"[^>]*type="email"[\s\S]*'
+                    r'<button id="button-envoyer"[^>]*type="submit"[\s\S]*'
                     r'asset-contact-submit-bg[\s\S]*id="contact-submit-label"',
                     re.S,
                 ),
             )
             self.assertIn("button.content-node {", css_content)
+            self.assertIn(".content-form-control {", css_content)
             self.assertRegex(
                 css_content,
                 re.compile(
@@ -2191,6 +2396,497 @@ class StaticGeneratorTests(unittest.TestCase):
                 css_content,
                 re.compile(
                     r"\.text-contact-submit-label\s*\{[^}]*left:\s*40\.00px;[^}]*top:\s*16\.00px;",
+                    re.S,
+                ),
+            )
+
+    def test_static_generator_renders_basic_html_form_controls_from_current_naming(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Form Page", "width": 1200, "height": 1200},
+            "sections": [
+                {
+                    "id": "contact",
+                    "name": "Contact",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1200, "height": 1200},
+                    "children": [
+                        {
+                            "id": "formulaire-contact-post",
+                            "name": "formulaire-contact-post",
+                            "bounds": {"x": 240, "y": 200, "width": 500, "height": 760},
+                            "coordinate_space": "section",
+                            "children_coordinate_space": "section",
+                            "children": [
+                                "action-contact",
+                                {
+                                    "id": "input-mail-required",
+                                    "name": "input-mail-required",
+                                    "bounds": {"x": 260, "y": 240, "width": 420, "height": 56},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["libelle-mail", "placeholder-mail"],
+                                },
+                                {
+                                    "id": "input-select-sujet-required",
+                                    "name": "input-select-sujet-required",
+                                    "bounds": {"x": 260, "y": 330, "width": 420, "height": 56},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["libelle-sujet", "option-sujet-1", "option-sujet-2"],
+                                },
+                                {
+                                    "id": "input-checkbox-rgpd-required-checked",
+                                    "name": "input-checkbox-rgpd-required-checked",
+                                    "bounds": {"x": 260, "y": 420, "width": 420, "height": 32},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["libelle-rgpd"],
+                                },
+                                {
+                                    "id": "input-message",
+                                    "name": "input-message",
+                                    "bounds": {"x": 260, "y": 480, "width": 420, "height": 140},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["libelle-message", "placeholder-message"],
+                                },
+                                {
+                                    "id": "button-envoyer",
+                                    "name": "button-envoyer",
+                                    "bounds": {"x": 500, "y": 660, "width": 180, "height": 52},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["contact-submit-label"],
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "texts": {
+                "action-contact": {
+                    "id": "action-contact",
+                    "name": "action-contact",
+                    "role": "body",
+                    "value": "https://example.com/contact",
+                    "bounds": {"x": 260, "y": 208, "width": 240, "height": 20},
+                },
+                "libelle-mail": {
+                    "id": "libelle-mail",
+                    "name": "libelle-mail",
+                    "role": "label",
+                    "value": "Votre email",
+                    "bounds": {"x": 276, "y": 252, "width": 160, "height": 18},
+                },
+                "placeholder-mail": {
+                    "id": "placeholder-mail",
+                    "name": "placeholder-mail",
+                    "role": "body",
+                    "value": "prenom@exemple.fr",
+                    "bounds": {"x": 276, "y": 272, "width": 220, "height": 18},
+                },
+                "libelle-sujet": {
+                    "id": "libelle-sujet",
+                    "name": "libelle-sujet",
+                    "role": "label",
+                    "value": "Sujet",
+                    "bounds": {"x": 276, "y": 342, "width": 120, "height": 18},
+                },
+                "option-sujet-1": {
+                    "id": "option-sujet-1",
+                    "name": "option-sujet-1",
+                    "role": "body",
+                    "value": "assistance|Assistance",
+                    "bounds": {"x": 276, "y": 362, "width": 120, "height": 18},
+                },
+                "option-sujet-2": {
+                    "id": "option-sujet-2",
+                    "name": "option-sujet-2",
+                    "role": "body",
+                    "value": "audit|Audit",
+                    "bounds": {"x": 406, "y": 362, "width": 120, "height": 18},
+                },
+                "libelle-rgpd": {
+                    "id": "libelle-rgpd",
+                    "name": "libelle-rgpd",
+                    "role": "label",
+                    "value": "J'accepte la politique",
+                    "bounds": {"x": 292, "y": 420, "width": 220, "height": 18},
+                },
+                "libelle-message": {
+                    "id": "libelle-message",
+                    "name": "libelle-message",
+                    "role": "label",
+                    "value": "Message",
+                    "bounds": {"x": 276, "y": 492, "width": 120, "height": 18},
+                },
+                "placeholder-message": {
+                    "id": "placeholder-message",
+                    "name": "placeholder-message",
+                    "role": "body",
+                    "value": "Décrivez votre besoin",
+                    "bounds": {"x": 276, "y": 512, "width": 220, "height": 18},
+                },
+                "contact-submit-label": {
+                    "id": "contact-submit-label",
+                    "name": "contact-submit-label",
+                    "role": "body",
+                    "value": "Envoyer",
+                    "bounds": {"x": 540, "y": 676, "width": 100, "height": 20},
+                },
+            },
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            StaticGenerator().generate(model, temp_dir)
+            html_content = (Path(temp_dir) / "index.html").read_text(encoding="utf-8")
+            css_content = (Path(temp_dir) / "styles.css").read_text(encoding="utf-8")
+
+            self.assertRegex(
+                html_content,
+                re.compile(r'<form id="formulaire-contact-post"[^>]*action="https://example\.com/contact"[^>]*method="post"', re.S),
+            )
+            self.assertRegex(
+                html_content,
+                re.compile(
+                    r'<input(?=[^>]*id="input-mail-required-control")'
+                    r'(?=[^>]*type="email")'
+                    r'(?=[^>]*required="required")'
+                    r'(?=[^>]*placeholder="prenom@exemple\.fr")[^>]*>',
+                    re.S,
+                ),
+            )
+            self.assertRegex(
+                html_content,
+                re.compile(r'<select[^>]*id="input-select-sujet-required-control"[^>]*required="required"[\s\S]*<option value="assistance">Assistance</option>[\s\S]*<option value="audit">Audit</option>', re.S),
+            )
+            self.assertRegex(
+                html_content,
+                re.compile(
+                    r'<input(?=[^>]*id="input-checkbox-rgpd-required-checked-control")'
+                    r'(?=[^>]*type="checkbox")'
+                    r'(?=[^>]*required="required")'
+                    r'(?=[^>]*checked="checked")[^>]*>',
+                    re.S,
+                ),
+            )
+            self.assertRegex(
+                html_content,
+                re.compile(r'<textarea[^>]*id="input-message-control"[^>]*placeholder="Décrivez votre besoin"[^>]*rows="6"', re.S),
+            )
+            self.assertRegex(
+                html_content,
+                re.compile(r'<button id="button-envoyer"[^>]*type="submit"', re.S),
+            )
+            self.assertIn(".content-form-control {", css_content)
+            self.assertIn("z-index: 200;", css_content)
+
+    def test_static_generator_keeps_tall_single_line_fields_as_inputs(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Field Page", "width": 1200, "height": 800},
+            "sections": [
+                {
+                    "id": "contact",
+                    "name": "Contact",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1200, "height": 800},
+                    "children": [
+                        {
+                            "id": "formulaire-contact-post",
+                            "name": "formulaire-contact-post",
+                            "bounds": {"x": 240, "y": 120, "width": 500, "height": 420},
+                            "coordinate_space": "section",
+                            "children_coordinate_space": "section",
+                            "children": [
+                                {
+                                    "id": "input-nom-prenom-required",
+                                    "name": "input-nom-prenom-required",
+                                    "bounds": {"x": 260, "y": 160, "width": 420, "height": 98},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["placeholder-nom-prenom"],
+                                },
+                                {
+                                    "id": "input-telephone-required",
+                                    "name": "input-telephone-required",
+                                    "bounds": {"x": 260, "y": 280, "width": 420, "height": 98},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["placeholder-telephone"],
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "texts": {
+                "placeholder-nom-prenom": {
+                    "id": "placeholder-nom-prenom",
+                    "name": "placeholder-nom-prenom",
+                    "role": "body",
+                    "value": "Nom et Prénom",
+                    "bounds": {"x": 280, "y": 184, "width": 220, "height": 18},
+                },
+                "placeholder-telephone": {
+                    "id": "placeholder-telephone",
+                    "name": "placeholder-telephone",
+                    "role": "body",
+                    "value": "Votre téléphone",
+                    "bounds": {"x": 280, "y": 304, "width": 220, "height": 18},
+                },
+            },
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            StaticGenerator().generate(model, temp_dir)
+            html_content = (Path(temp_dir) / "index.html").read_text(encoding="utf-8")
+
+            self.assertRegex(
+                html_content,
+                re.compile(
+                    r'<input(?=[^>]*id="input-nom-prenom-required-control")'
+                    r'(?=[^>]*type="text")'
+                    r'(?=[^>]*placeholder="Nom et Prénom")[^>]*>',
+                    re.S,
+                ),
+            )
+            self.assertRegex(
+                html_content,
+                re.compile(
+                    r'<input(?=[^>]*id="input-telephone-required-control")'
+                    r'(?=[^>]*type="tel")'
+                    r'(?=[^>]*placeholder="Votre téléphone")[^>]*>',
+                    re.S,
+                ),
+            )
+
+    def test_static_generator_renders_enriched_choice_and_advanced_form_controls(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Advanced Form Page", "width": 1400, "height": 1800},
+            "sections": [
+                {
+                    "id": "contact",
+                    "name": "Contact",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1400, "height": 1800},
+                    "children": [
+                        {
+                            "id": "formulaire-contact",
+                            "name": "formulaire-contact",
+                            "bounds": {"x": 220, "y": 180, "width": 620, "height": 1400},
+                            "coordinate_space": "section",
+                            "children_coordinate_space": "section",
+                            "children": [
+                                {
+                                    "id": "input-select-sujet",
+                                    "name": "input-select-sujet",
+                                    "bounds": {"x": 240, "y": 220, "width": 420, "height": 56},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": [
+                                        "libelle-sujet",
+                                        "option-sujet-assistance",
+                                        "option-sujet-audit",
+                                        "value-sujet",
+                                    ],
+                                },
+                                {
+                                    "id": "input-radio-canal-email-checked",
+                                    "name": "input-radio-canal-email-checked",
+                                    "bounds": {"x": 240, "y": 310, "width": 420, "height": 28},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["libelle-canal-email"],
+                                },
+                                {
+                                    "id": "input-radio-canal-telephone",
+                                    "name": "input-radio-canal-telephone",
+                                    "bounds": {"x": 240, "y": 350, "width": 420, "height": 28},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["libelle-canal-telephone"],
+                                },
+                                {
+                                    "id": "input-checkbox-services-audit",
+                                    "name": "input-checkbox-services-audit",
+                                    "bounds": {"x": 240, "y": 410, "width": 420, "height": 28},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["libelle-services-audit"],
+                                },
+                                {
+                                    "id": "input-checkbox-services-formation-checked",
+                                    "name": "input-checkbox-services-formation-checked",
+                                    "bounds": {"x": 240, "y": 450, "width": 420, "height": 28},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["libelle-services-formation"],
+                                },
+                                {
+                                    "id": "input-date-rendezvous",
+                                    "name": "input-date-rendezvous",
+                                    "bounds": {"x": 240, "y": 520, "width": 420, "height": 56},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["libelle-rendezvous", "min-rendezvous", "max-rendezvous", "value-rendezvous"],
+                                },
+                                {
+                                    "id": "input-file-cv-multiple",
+                                    "name": "input-file-cv-multiple",
+                                    "bounds": {"x": 240, "y": 610, "width": 420, "height": 56},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["libelle-cv", "accept-cv"],
+                                },
+                                {
+                                    "id": "input-range-budget",
+                                    "name": "input-range-budget",
+                                    "bounds": {"x": 240, "y": 700, "width": 420, "height": 56},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["libelle-budget", "min-budget", "max-budget", "step-budget", "value-budget"],
+                                },
+                                {
+                                    "id": "input-number-collaborateurs",
+                                    "name": "input-number-collaborateurs",
+                                    "bounds": {"x": 240, "y": 790, "width": 420, "height": 56},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": [
+                                        "libelle-collaborateurs",
+                                        "min-collaborateurs",
+                                        "max-collaborateurs",
+                                        "step-collaborateurs",
+                                        "value-collaborateurs",
+                                    ],
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "texts": {
+                "libelle-sujet": {"id": "libelle-sujet", "name": "libelle-sujet", "role": "label", "value": "Sujet", "bounds": {"x": 256, "y": 232, "width": 120, "height": 18}},
+                "option-sujet-assistance": {"id": "option-sujet-assistance", "name": "option-sujet-assistance", "role": "body", "value": "assistance|Assistance", "bounds": {"x": 256, "y": 252, "width": 140, "height": 18}},
+                "option-sujet-audit": {"id": "option-sujet-audit", "name": "option-sujet-audit", "role": "body", "value": "audit|Audit", "bounds": {"x": 406, "y": 252, "width": 120, "height": 18}},
+                "value-sujet": {"id": "value-sujet", "name": "value-sujet", "role": "body", "value": "audit", "bounds": {"x": 540, "y": 252, "width": 60, "height": 18}},
+                "libelle-canal-email": {"id": "libelle-canal-email", "name": "libelle-canal-email", "role": "label", "value": "Par email", "bounds": {"x": 272, "y": 310, "width": 120, "height": 18}},
+                "libelle-canal-telephone": {"id": "libelle-canal-telephone", "name": "libelle-canal-telephone", "role": "label", "value": "Par telephone", "bounds": {"x": 272, "y": 350, "width": 140, "height": 18}},
+                "libelle-services-audit": {"id": "libelle-services-audit", "name": "libelle-services-audit", "role": "label", "value": "Audit", "bounds": {"x": 272, "y": 410, "width": 120, "height": 18}},
+                "libelle-services-formation": {"id": "libelle-services-formation", "name": "libelle-services-formation", "role": "label", "value": "Formation", "bounds": {"x": 272, "y": 450, "width": 120, "height": 18}},
+                "libelle-rendezvous": {"id": "libelle-rendezvous", "name": "libelle-rendezvous", "role": "label", "value": "Date de rendez-vous", "bounds": {"x": 256, "y": 532, "width": 180, "height": 18}},
+                "min-rendezvous": {"id": "min-rendezvous", "name": "min-rendezvous", "role": "body", "value": "2026-05-01", "bounds": {"x": 256, "y": 552, "width": 110, "height": 18}},
+                "max-rendezvous": {"id": "max-rendezvous", "name": "max-rendezvous", "role": "body", "value": "2026-12-31", "bounds": {"x": 376, "y": 552, "width": 110, "height": 18}},
+                "value-rendezvous": {"id": "value-rendezvous", "name": "value-rendezvous", "role": "body", "value": "2026-06-15", "bounds": {"x": 496, "y": 552, "width": 110, "height": 18}},
+                "libelle-cv": {"id": "libelle-cv", "name": "libelle-cv", "role": "label", "value": "CV", "bounds": {"x": 256, "y": 622, "width": 80, "height": 18}},
+                "accept-cv": {"id": "accept-cv", "name": "accept-cv", "role": "body", "value": ".pdf,.docx", "bounds": {"x": 256, "y": 642, "width": 120, "height": 18}},
+                "libelle-budget": {"id": "libelle-budget", "name": "libelle-budget", "role": "label", "value": "Budget", "bounds": {"x": 256, "y": 712, "width": 80, "height": 18}},
+                "min-budget": {"id": "min-budget", "name": "min-budget", "role": "body", "value": "0", "bounds": {"x": 256, "y": 732, "width": 40, "height": 18}},
+                "max-budget": {"id": "max-budget", "name": "max-budget", "role": "body", "value": "100", "bounds": {"x": 306, "y": 732, "width": 40, "height": 18}},
+                "step-budget": {"id": "step-budget", "name": "step-budget", "role": "body", "value": "5", "bounds": {"x": 356, "y": 732, "width": 40, "height": 18}},
+                "value-budget": {"id": "value-budget", "name": "value-budget", "role": "body", "value": "35", "bounds": {"x": 406, "y": 732, "width": 40, "height": 18}},
+                "libelle-collaborateurs": {"id": "libelle-collaborateurs", "name": "libelle-collaborateurs", "role": "label", "value": "Nombre de collaborateurs", "bounds": {"x": 256, "y": 802, "width": 220, "height": 18}},
+                "min-collaborateurs": {"id": "min-collaborateurs", "name": "min-collaborateurs", "role": "body", "value": "1", "bounds": {"x": 256, "y": 822, "width": 40, "height": 18}},
+                "max-collaborateurs": {"id": "max-collaborateurs", "name": "max-collaborateurs", "role": "body", "value": "500", "bounds": {"x": 306, "y": 822, "width": 40, "height": 18}},
+                "step-collaborateurs": {"id": "step-collaborateurs", "name": "step-collaborateurs", "role": "body", "value": "1", "bounds": {"x": 356, "y": 822, "width": 40, "height": 18}},
+                "value-collaborateurs": {"id": "value-collaborateurs", "name": "value-collaborateurs", "role": "body", "value": "12", "bounds": {"x": 406, "y": 822, "width": 40, "height": 18}},
+            },
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            StaticGenerator().generate(model, temp_dir)
+            html_content = (Path(temp_dir) / "index.html").read_text(encoding="utf-8")
+
+            self.assertRegex(
+                html_content,
+                re.compile(
+                    r'<select(?=[^>]*id="input-select-sujet-control")[^>]*>[\s\S]*'
+                    r'<option value="audit" selected="selected">Audit</option>',
+                    re.S,
+                ),
+            )
+            self.assertRegex(
+                html_content,
+                re.compile(
+                    r'<input(?=[^>]*id="input-radio-canal-email-checked-control")'
+                    r'(?=[^>]*type="radio")(?=[^>]*name="canal")'
+                    r'(?=[^>]*value="email")(?=[^>]*checked="checked")[^>]*>',
+                    re.S,
+                ),
+            )
+            self.assertRegex(
+                html_content,
+                re.compile(
+                    r'<input(?=[^>]*id="input-radio-canal-telephone-control")'
+                    r'(?=[^>]*type="radio")(?=[^>]*name="canal")'
+                    r'(?=[^>]*value="telephone")[^>]*>',
+                    re.S,
+                ),
+            )
+            self.assertRegex(
+                html_content,
+                re.compile(
+                    r'<input(?=[^>]*id="input-checkbox-services-audit-control")'
+                    r'(?=[^>]*type="checkbox")(?=[^>]*name="services")'
+                    r'(?=[^>]*value="audit")[^>]*>',
+                    re.S,
+                ),
+            )
+            self.assertRegex(
+                html_content,
+                re.compile(
+                    r'<input(?=[^>]*id="input-checkbox-services-formation-checked-control")'
+                    r'(?=[^>]*type="checkbox")(?=[^>]*name="services")'
+                    r'(?=[^>]*value="formation")(?=[^>]*checked="checked")[^>]*>',
+                    re.S,
+                ),
+            )
+            self.assertRegex(
+                html_content,
+                re.compile(
+                    r'<input(?=[^>]*id="input-date-rendezvous-control")'
+                    r'(?=[^>]*type="date")(?=[^>]*name="rendezvous")'
+                    r'(?=[^>]*min="2026-05-01")(?=[^>]*max="2026-12-31")'
+                    r'(?=[^>]*value="2026-06-15")[^>]*>',
+                    re.S,
+                ),
+            )
+            self.assertRegex(
+                html_content,
+                re.compile(
+                    r'<input(?=[^>]*id="input-file-cv-multiple-control")'
+                    r'(?=[^>]*type="file")(?=[^>]*name="cv")'
+                    r'(?=[^>]*accept="\.pdf,\.docx")(?=[^>]*multiple="multiple")[^>]*>',
+                    re.S,
+                ),
+            )
+            self.assertRegex(
+                html_content,
+                re.compile(
+                    r'<input(?=[^>]*id="input-range-budget-control")'
+                    r'(?=[^>]*type="range")(?=[^>]*name="budget")'
+                    r'(?=[^>]*min="0")(?=[^>]*max="100")'
+                    r'(?=[^>]*step="5")(?=[^>]*value="35")[^>]*>',
+                    re.S,
+                ),
+            )
+            self.assertRegex(
+                html_content,
+                re.compile(
+                    r'<input(?=[^>]*id="input-number-collaborateurs-control")'
+                    r'(?=[^>]*type="number")(?=[^>]*name="collaborateurs")'
+                    r'(?=[^>]*min="1")(?=[^>]*max="500")'
+                    r'(?=[^>]*step="1")(?=[^>]*value="12")'
+                    r'(?=[^>]*inputmode="numeric")[^>]*>',
                     re.S,
                 ),
             )
@@ -2360,7 +3056,10 @@ class StaticGeneratorTests(unittest.TestCase):
             self.assertIn('data-accordion-trigger="true"', js_content)
             self.assertIn('item.dataset.accordionOpen = open ? "true" : "false";', js_content)
             self.assertIn('function isFlowLayoutContainer(element)', js_content)
+            self.assertIn('function isPageFlowShell(page)', js_content)
+            self.assertIn('function scheduleRelayoutPageFromSection(page, startSection)', js_content)
             self.assertIn('element.dataset.linkGrid === "true"', js_content)
+            self.assertIn('window.addEventListener("resize", schedule, { passive: true });', js_content)
             self.assertIn('page.style.minHeight = pageHeight + "px";', js_content)
             self.assertNotIn('Math.max(pageHeight, getOriginalHeight(page))', js_content)
 
@@ -2665,6 +3364,8 @@ class HugoGeneratorTests(unittest.TestCase):
             link_grid_css_path = Path(temp_dir) / "assets" / "css" / "components" / "link-grid.css"
             accordion_css_path = Path(temp_dir) / "assets" / "css" / "components" / "accordion.css"
             carousel_css_path = Path(temp_dir) / "assets" / "css" / "components" / "carousel.css"
+            form_css_path = Path(temp_dir) / "assets" / "css" / "components" / "form.css"
+            section_block_css_path = Path(temp_dir) / "assets" / "css" / "components" / "section-block.css"
             js_path = Path(temp_dir) / "assets" / "js" / "accordion.js"
             page_data = Path(temp_dir) / "data" / "page.json"
 
@@ -2677,6 +3378,8 @@ class HugoGeneratorTests(unittest.TestCase):
             self.assertTrue(link_grid_css_path.exists())
             self.assertTrue(accordion_css_path.exists())
             self.assertTrue(carousel_css_path.exists())
+            self.assertTrue(form_css_path.exists())
+            self.assertTrue(section_block_css_path.exists())
             self.assertTrue(js_path.exists())
             self.assertTrue(page_data.exists())
             self.assertTrue((Path(temp_dir) / "static" / "images").exists())
@@ -2693,10 +3396,17 @@ class HugoGeneratorTests(unittest.TestCase):
             self.assertIn('partial "resolve_page_data.html"', template_content)
 
             base_template_content = base_template.read_text(encoding="utf-8")
+            self.assertIn('data-page-shell="{{ $pageShell }}"', base_template_content)
+            self.assertIn('data-page-layout-strategy="{{ $pageLayoutStrategy }}"', base_template_content)
+            self.assertIn('data-page-flow="{{ $pageFlow }}"', base_template_content)
+
+            base_template_content = base_template.read_text(encoding="utf-8")
             self.assertIn('resources.Get "css/site.css"', base_template_content)
             self.assertIn('resources.Get "css/components/link-grid.css"', base_template_content)
             self.assertIn('resources.Get "css/components/accordion.css"', base_template_content)
             self.assertIn('resources.Get "css/components/carousel.css"', base_template_content)
+            self.assertIn('resources.Get "css/components/form.css"', base_template_content)
+            self.assertIn('resources.Get "css/components/section-block.css"', base_template_content)
             self.assertIn('resources.Get "js/accordion.js"', base_template_content)
 
     @unittest.skipIf(not HUGO_BIN, "Hugo CLI is not available")
@@ -3036,6 +3746,12 @@ class HugoGeneratorTests(unittest.TestCase):
                             "bounds": {"x": 120, "y": 120, "width": 800, "height": 260},
                             "coordinate_space": "section",
                             "children_coordinate_space": "section",
+                            "layout": {
+                                "layoutMode": "VERTICAL",
+                                "itemSpacing": 24,
+                                "inferredStrategy": "flow",
+                                "inferredFlow": True,
+                            },
                             "children": [
                                 {
                                     "id": "accordion-item-1-open",
@@ -3043,6 +3759,12 @@ class HugoGeneratorTests(unittest.TestCase):
                                     "bounds": {"x": 120, "y": 120, "width": 800, "height": 120},
                                     "coordinate_space": "section",
                                     "children_coordinate_space": "section",
+                                    "layout": {
+                                        "layoutMode": "VERTICAL",
+                                        "itemSpacing": 16,
+                                        "inferredStrategy": "flow",
+                                        "inferredFlow": True,
+                                    },
                                     "children": [
                                         {
                                             "id": "accordion-panel-1",
@@ -3050,6 +3772,11 @@ class HugoGeneratorTests(unittest.TestCase):
                                             "bounds": {"x": 120, "y": 120, "width": 800, "height": 40},
                                             "coordinate_space": "section",
                                             "children_coordinate_space": "section",
+                                            "layout": {
+                                                "layoutMode": "VERTICAL",
+                                                "inferredStrategy": "flow",
+                                                "inferredFlow": True,
+                                            },
                                             "children": ["answer-1"],
                                         },
                                         {
@@ -3058,6 +3785,11 @@ class HugoGeneratorTests(unittest.TestCase):
                                             "bounds": {"x": 120, "y": 180, "width": 800, "height": 60},
                                             "coordinate_space": "section",
                                             "children_coordinate_space": "section",
+                                            "layout": {
+                                                "layoutMode": "VERTICAL",
+                                                "inferredStrategy": "flow",
+                                                "inferredFlow": True,
+                                            },
                                             "children": ["question-1"],
                                         },
                                     ],
@@ -3065,26 +3797,60 @@ class HugoGeneratorTests(unittest.TestCase):
                             ],
                         },
                         {
-                            "id": "href-card-demo",
-                            "name": "href-card-demo",
-                            "bounds": {"x": 120, "y": 520, "width": 460, "height": 420},
+                            "id": "link-grid-demo",
+                            "name": "link-grid-demo",
+                            "bounds": {"x": 120, "y": 520, "width": 940, "height": 420},
                             "coordinate_space": "section",
                             "children_coordinate_space": "section",
+                            "layout": {
+                                "layoutMode": "HORIZONTAL",
+                                "layoutWrap": "WRAP",
+                                "itemSpacing": 32,
+                                "inferredStrategy": "flow",
+                                "inferredFlow": True,
+                            },
                             "children": [
-                                "card-copy",
-                                "card-label",
-                                "card-href",
-                                "card-bg",
-                                "card-image",
+                                {
+                                    "id": "href-card-demo",
+                                    "name": "href-card-demo",
+                                    "bounds": {"x": 120, "y": 520, "width": 460, "height": 420},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": [
+                                        "card-copy",
+                                        "card-label",
+                                        "card-href",
+                                        "card-bg",
+                                        "card-image",
+                                    ],
+                                },
+                                {
+                                    "id": "card-service-demo",
+                                    "name": "card-service-demo",
+                                    "bounds": {"x": 640, "y": 520, "width": 420, "height": 320},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["service-title", "service-copy"],
+                                },
                             ],
                         },
                         {
-                            "id": "card-service-demo",
-                            "name": "card-service-demo",
-                            "bounds": {"x": 640, "y": 520, "width": 420, "height": 320},
+                            "id": "section-prestation-demo",
+                            "name": "section-prestation-demo",
+                            "bounds": {"x": 120, "y": 980, "width": 940, "height": 180},
                             "coordinate_space": "section",
                             "children_coordinate_space": "section",
-                            "children": ["service-title", "service-copy"],
+                            "layout": {
+                                "layoutMode": "HORIZONTAL",
+                                "itemSpacing": 48,
+                                "paddingTop": 24,
+                                "paddingRight": 24,
+                                "paddingBottom": 24,
+                                "paddingLeft": 24,
+                                "inferredStrategy": "flow",
+                                "inferredFlow": True,
+                            },
+                            "children": ["service-block-title", "service-block-copy"],
                         },
                     ],
                 }
@@ -3139,6 +3905,20 @@ class HugoGeneratorTests(unittest.TestCase):
                     "value": "A reusable content card.",
                     "bounds": {"x": 640, "y": 600, "width": 320, "height": 56},
                 },
+                "service-block-title": {
+                    "id": "service-block-title",
+                    "name": "titre-prestation-demo",
+                    "role": "heading",
+                    "value": "Section prestation",
+                    "bounds": {"x": 120, "y": 980, "width": 360, "height": 40},
+                },
+                "service-block-copy": {
+                    "id": "service-block-copy",
+                    "name": "texte-prestation-demo",
+                    "role": "body",
+                    "value": "Un bloc piloté par le layout Figma.",
+                    "bounds": {"x": 520, "y": 980, "width": 420, "height": 80},
+                },
             },
             "assets": [
                 {
@@ -3181,26 +3961,43 @@ class HugoGeneratorTests(unittest.TestCase):
             carousel_css_content = (
                 Path(temp_dir) / "assets" / "css" / "components" / "carousel.css"
             ).read_text(encoding="utf-8")
+            section_block_css_content = (
+                Path(temp_dir) / "assets" / "css" / "components" / "section-block.css"
+            ).read_text(encoding="utf-8")
 
             self.assertTrue((components_root / "accordion.html").exists())
             self.assertTrue((components_root / "accordion-item.html").exists())
+            self.assertTrue((components_root / "field.html").exists())
+            self.assertTrue((components_root / "link-grid.html").exists())
             self.assertTrue((components_root / "link-card.html").exists())
             self.assertTrue((components_root / "card.html").exists())
+            self.assertTrue((components_root / "section-block.html").exists())
             self.assertIn("$node.partial_template", node_template_content)
             self.assertIn("components/accordion.html", json.dumps(page_data))
             self.assertIn("components/accordion-item.html", json.dumps(page_data))
+            self.assertIn("components/link-grid.html", json.dumps(page_data))
             self.assertIn("components/link-card.html", json.dumps(page_data))
             self.assertIn("components/card.html", json.dumps(page_data))
+            self.assertIn("components/section-block.html", json.dumps(page_data))
             self.assertIn('"data-card": "true"', json.dumps(page_data))
+            self.assertIn('"data-layout-flow": "true"', json.dumps(page_data))
+            self.assertIn('"data-layout-shell": "flow"', json.dumps(page_data))
+            self.assertIn('"data-layout-direction": "row"', json.dumps(page_data))
+            self.assertIn("--layout-gap: 32.00px;", json.dumps(page_data))
+            self.assertIn('"data-section-block": "true"', json.dumps(page_data))
             self.assertIn('a.content-node[data-link-card="true"] {', link_grid_css_content)
             self.assertIn('[data-card="true"]', link_grid_css_content)
             self.assertIn('[data-link-grid="true"]', link_grid_css_content)
+            self.assertIn('[data-layout-direction="row"]', link_grid_css_content)
             self.assertIn("grid-template-columns:", link_grid_css_content)
             self.assertIn("grid-auto-rows: auto;", link_grid_css_content)
             self.assertIn("grid-row: 1;", link_grid_css_content)
             self.assertIn("> figure.content-asset img", link_grid_css_content)
             self.assertIn('[data-accordion-item="true"]', accordion_css_content)
+            self.assertIn('[data-layout-flow="true"]', accordion_css_content)
             self.assertIn('[data-carousel-nav="true"]', carousel_css_content)
+            self.assertIn('[data-layout-flow="true"]', carousel_css_content)
+            self.assertIn('[data-section-block="true"][data-layout-flow="true"][data-layout-shell="flow"]', section_block_css_content)
             self.assertNotIn('a.content-node[data-link-card="true"] {', page_css_content)
             self.assertNotIn("--component-card-padding", link_grid_css_content)
             self.assertNotIn("--component-card-shadow", link_grid_css_content)

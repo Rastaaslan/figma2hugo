@@ -28,6 +28,14 @@
       {{- $compiled := . | minify | fingerprint -}}
     <link rel="stylesheet" href="{{ $compiled.RelPermalink }}">
     {{- end -}}
+    {{- with resources.Get "css/components/form.css" -}}
+      {{- $compiled := . | minify | fingerprint -}}
+    <link rel="stylesheet" href="{{ $compiled.RelPermalink }}">
+    {{- end -}}
+    {{- with resources.Get "css/components/section-block.css" -}}
+      {{- $compiled := . | minify | fingerprint -}}
+    <link rel="stylesheet" href="{{ $compiled.RelPermalink }}">
+    {{- end -}}
     {{- with .Params.stylesheet -}}
       {{- with resources.Get . -}}
       {{- $compiled := . | minify | fingerprint -}}
@@ -35,7 +43,28 @@
       {{- end -}}
     {{- end -}}
   </head>
-  <body class="page{{ with $pageSlug }} page--{{ . }}{{ else }} page--site-home{{ end }}">
+  {{- $pageShell := "fixed" -}}
+  {{- $pageLayoutStrategy := "absolute" -}}
+  {{- $pageFlow := "false" -}}
+  {{- with $page.page -}}
+    {{- with .shell_mode -}}
+      {{- $pageShell = . -}}
+    {{- end -}}
+    {{- with .layout -}}
+      {{- with .inferred_strategy -}}
+        {{- $pageLayoutStrategy = . -}}
+      {{- end -}}
+      {{- if .inferred_flow -}}
+        {{- $pageFlow = "true" -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  <body
+    class="page{{ with $pageSlug }} page--{{ . }}{{ else }} page--site-home{{ end }}"
+    data-page-shell="{{ $pageShell }}"
+    data-page-layout-strategy="{{ $pageLayoutStrategy }}"
+    data-page-flow="{{ $pageFlow }}"
+  >
     {{- block "site-header" . }}{{- end }}
     <main class="page-main">
       {{- block "main" . }}{{- end }}

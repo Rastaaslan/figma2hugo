@@ -100,8 +100,9 @@ class StaticGenerator:
         return "\n".join(lines) + "\n"
 
     def _render_section(self, section: dict[str, Any], *, indent: str) -> list[str]:
+        section_attrs = self._render_attributes(section.get("attributes", {}))
         lines = [
-            f'{indent}<{section["tag"]} id="{html.escape(section["anchor"])}" class="page-section {html.escape(section["class_name"])}">',
+            f'{indent}<{section["tag"]} id="{html.escape(section["anchor"])}" class="page-section {html.escape(section["class_name"])}"{section_attrs}>',
             f'{indent}  <div class="page-section__inner">',
         ]
         for node in section["children"]:
@@ -115,6 +116,8 @@ class StaticGenerator:
             return self._render_text(node["text"], indent=indent)
         if kind == "asset":
             return self._render_asset(node["asset"], indent=indent)
+        if ensure_text(node.get("role")).strip().lower() == "field" and node.get("form_control"):
+            return self._render_field_node(node, indent=indent)
         attrs = self._render_attributes(node.get("attributes", {}))
         wrapper_attrs = self._render_attributes(
             self._node_wrapper_attributes(node, class_name=f'content-node {node["class_name"]}')
@@ -124,6 +127,20 @@ class StaticGenerator:
         ]
         for child in self._ordered_markup_children(node):
             lines.extend(self._render_node(child, indent=f"{indent}  "))
+        lines.append(f"{indent}</{node['tag']}>")
+        return lines
+
+    def _render_field_node(self, node: dict[str, Any], *, indent: str) -> list[str]:
+        attrs = self._render_attributes(node.get("attributes", {}))
+        wrapper_attrs = self._render_attributes(
+            self._node_wrapper_attributes(node, class_name=f'content-node {node["class_name"]}')
+        )
+        lines = [f'{indent}<{node["tag"]}{wrapper_attrs}{attrs}>']
+        for child in self._ordered_markup_children(node):
+            lines.extend(self._render_node(child, indent=f"{indent}  "))
+        control = node.get("form_control")
+        if control:
+            lines.append(f"{indent}  {self._render_form_control(control)}")
         lines.append(f"{indent}</{node['tag']}>")
         return lines
 
@@ -213,6 +230,32 @@ class StaticGenerator:
             f'{indent}  <img{self._render_attributes(img_attributes)}>',
             f"{indent}</{wrapper_tag}>",
         ]
+
+    def _render_form_control(self, control: dict[str, Any]) -> str:
+        attrs = {
+            "id": control.get("id"),
+            "class": f'content-form-control {ensure_text(control.get("class_name"))}'.strip(),
+            **control.get("attributes", {}),
+        }
+        if control.get("style"):
+            attrs["style"] = control["style"]
+        if control.get("tag") == "textarea":
+            if control.get("rows"):
+                attrs["rows"] = str(control["rows"])
+            return (
+                f'<textarea{self._render_attributes(attrs)}>'
+                f'{html.escape(ensure_text(control.get("value")))}'
+                f"</textarea>"
+            )
+        if control.get("tag") == "select":
+            options = "".join(
+                f'<option value="{html.escape(str(option.get("value", "")), quote=True)}"'
+                f'{" selected=\"selected\"" if option.get("selected") else ""}>'
+                f'{html.escape(str(option.get("label", "")))}</option>'
+                for option in control.get("options", [])
+            )
+            return f'<select{self._render_attributes(attrs)}>{options}</select>'
+        return f'<input{self._render_attributes(attrs)}>'
 
     def _render_attributes(self, attributes: dict[str, Any]) -> str:
         rendered = []

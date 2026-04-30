@@ -1188,6 +1188,50 @@ def test_extract_does_not_retag_single_sentence_headings_as_paragraphs() -> None
     assert result.texts["subtitle"]["tag"] == "h2"
 
 
+def test_extract_respects_explicit_heading_levels_from_naming() -> None:
+    section_node = {
+        "id": "content",
+        "name": "Content",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1440, "height": 720},
+        "children": [
+            {
+                "id": "service-title",
+                "name": "titre-h4-service-cloud",
+                "type": "TEXT",
+                "visible": True,
+                "characters": "Architecture cloud",
+                "style": {"fontFamily": "Inter", "fontSize": 22, "fontWeight": 700, "lineHeightPx": 28},
+                "absoluteBoundingBox": {"x": 120, "y": 140, "width": 420, "height": 32},
+            },
+            {
+                "id": "faq-title",
+                "name": "titre-h5-faq-rgpd",
+                "type": "TEXT",
+                "visible": True,
+                "characters": "Protection des donnees",
+                "style": {"fontFamily": "Inter", "fontSize": 18, "fontWeight": 700, "lineHeightPx": 24},
+                "absoluteBoundingBox": {"x": 120, "y": 196, "width": 360, "height": 28},
+            },
+        ],
+    }
+    section = SectionCandidate(
+        id="content",
+        name="Content",
+        role="section",
+        node=section_node,
+        bounds={"x": 0.0, "y": 0.0, "width": 1440.0, "height": 720.0},
+    )
+
+    result = ContentExtractor().extract([section], image_fill_urls={})
+
+    assert result.texts["service-title"]["tag"] == "h4"
+    assert result.texts["service-title"]["role"] == "heading"
+    assert result.texts["faq-title"]["tag"] == "h5"
+    assert result.texts["faq-title"]["role"] == "heading"
+
+
 def test_extract_retags_interleaved_paragraph_columns_independently() -> None:
     shared_style = {"fontFamily": "Inter", "fontSize": 36, "fontWeight": 400, "lineHeightPx": 43.56}
     section_node = {

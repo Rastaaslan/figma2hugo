@@ -1,12 +1,36 @@
 /* Style de base pour les carrousels. */
 
+[data-carousel="true"][data-layout-flow="true"] {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  gap: var(--layout-gap, 16px);
+}
+
 [data-carousel-stage="true"] {
   overflow: hidden;
   isolation: isolate;
 }
 
+[data-carousel-stage="true"][data-layout-flow="true"] {
+  position: relative;
+  left: auto;
+  top: auto;
+  width: 100%;
+  height: auto;
+  aspect-ratio: var(--layout-aspect-ratio, auto);
+}
+
 [data-carousel-stage="true"] > [data-carousel-slide] {
   z-index: 1;
+}
+
+[data-carousel-stage="true"][data-layout-flow="true"] > [data-carousel-slide] {
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
 }
 
 [data-carousel-nav="true"] {
@@ -19,10 +43,17 @@
   touch-action: pan-x;
 }
 
+[data-carousel-nav="true"][data-layout-flow="true"] {
+  display: flex;
+  gap: var(--layout-gap, 12px);
+  scroll-snap-type: x proximity;
+}
+
 button.content-node[data-carousel-thumb] {
   cursor: pointer;
   z-index: 1;
   transition: opacity 180ms ease;
+  scroll-snap-align: start;
 }
 
 button.content-node[data-carousel-thumb][data-carousel-active="false"] {
@@ -42,4 +73,10 @@ button.content-node[data-carousel-thumb] > .content-text,
 button.content-node[data-carousel-thumb] > .content-asset,
 button.content-node[data-carousel-thumb] > .content-node {
   pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  [data-carousel="true"][data-layout-flow="true"] {
+    gap: min(var(--layout-gap, 16px), 12px);
+  }
 }

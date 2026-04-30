@@ -8,6 +8,9 @@
   const SECTION_SELECTOR = ".page-section";
   const LAYOUT_NODE_SELECTOR = ".content-node, .content-text, .content-asset";
   const EPSILON = 0.5;
+  let relayoutFrame = 0;
+  let pendingRelayoutPage = null;
+  let pendingRelayoutSection = null;
 
   function toNumber(value, fallback) {
     const parsed = Number.parseFloat(String(value ?? ""));
@@ -72,10 +75,15 @@
     return toNumber(element.dataset.layoutCurrentTop, getOriginalTop(element));
   }
 
-  function setCurrentHeight(element, height) {
+  function setCurrentHeight(element, height, options) {
+    const persistStyle = options && options.persistStyle === false ? false : true;
     const normalizedHeight = Math.max(height, 0);
     element.dataset.layoutCurrentHeight = String(normalizedHeight);
-    element.style.height = normalizedHeight + "px";
+    if (persistStyle) {
+      element.style.height = normalizedHeight + "px";
+    } else {
+      element.style.removeProperty("height");
+    }
   }
 
   function setCurrentTop(element, top) {
@@ -157,6 +165,28 @@
     return Math.max(element.scrollHeight || 0, element.offsetHeight || 0, getOriginalHeight(element));
   }
 
+  function isFlowAccordionItem(item) {
+    return Boolean(item && item.dataset.accordionItem === "true" && item.dataset.layoutFlow === "true");
+  }
+
+  function isFlowAccordionRoot(root) {
+    return Boolean(root && root.dataset.accordion === "true" && root.dataset.layoutFlow === "true");
+  }
+
+  function isPageFlowShell(page) {
+    return Boolean(page && page.dataset.pageShell === "flow");
+  }
+
+  function isFlowSection(section) {
+    return Boolean(
+      section &&
+        section.matches &&
+        section.matches(SECTION_SELECTOR) &&
+        (section.dataset.layoutShell === "flow" ||
+          (section.dataset.layoutFlow === "true" && section.dataset.layoutStrategy === "flow")),
+    );
+  }
+
   function accordionHeaderHeight(item, trigger, panel) {
     const panelTop = panel ? getOriginalTop(panel) : 0;
     if (panelTop > EPSILON) {
@@ -174,23 +204,43 @@
     if (!trigger || !panel) {
       return;
     }
-    const headerHeight = toNumber(item.dataset.accordionHeaderHeight, getOriginalHeight(item));
-    const nextHeight = open ? getOriginalHeight(item) : headerHeight;
 
     item.dataset.accordionState = open ? "open" : "closed";
     item.dataset.accordionOpen = open ? "true" : "false";
-    item.style.overflow = "hidden";
-    setCurrentHeight(item, nextHeight);
-
     trigger.setAttribute("aria-expanded", open ? "true" : "false");
     panel.hidden = !open;
     panel.setAttribute("aria-hidden", open ? "false" : "true");
     panel.style.visibility = open ? "visible" : "hidden";
     panel.style.pointerEvents = open ? "" : "none";
     panel.style.opacity = open ? "1" : "0";
+
+    item.style.overflow = "hidden";
+    if (isFlowAccordionItem(item)) {
+      item.style.height = "";
+      const nextHeight = measureFlowHeight(item);
+      setCurrentHeight(item, nextHeight, { persistStyle: false });
+      return;
+    }
+
+    const headerHeight = toNumber(item.dataset.accordionHeaderHeight, getOriginalHeight(item));
+    const nextHeight = open ? getOriginalHeight(item) : headerHeight;
+    setCurrentHeight(item, nextHeight);
   }
 
   function relayoutContainer(container) {
+    if (isFlowAccordionRoot(container)) {
+      const flowHeight = measureFlowHeight(container);
+      setCurrentHeight(container, flowHeight, { persistStyle: false });
+      return flowHeight;
+    }
+
+    if (isFlowAccordionItem(container)) {
+      container.style.height = "";
+      const flowHeight = measureFlowHeight(container);
+      setCurrentHeight(container, flowHeight, { persistStyle: false });
+      return flowHeight;
+    }
+
     if (container.dataset.accordionItem === "true") {
       const explicitHeight = getCurrentHeight(container);
       container.style.height = explicitHeight + "px";
@@ -204,7 +254,7 @@
       container.style.top = "";
       container.style.height = "";
       const flowHeight = measureFlowHeight(container);
-      setCurrentHeight(container, flowHeight);
+      setCurrentHeight(container, flowHeight, { persistStyle: false });
       return flowHeight;
     }
 
@@ -246,6 +296,7 @@
     if (!sections.length) {
       return;
     }
+    const pageFlowShell = isPageFlowShell(page);
 
     const startIndex = startSection ? Math.max(sections.indexOf(startSection), 0) : 0;
 
@@ -275,9 +326,16 @@
       }
 
       const nextTop = originalTop + shift;
-      setCurrentTop(section, nextTop);
-      setCurrentHeight(section, sectionHeight);
-      section.style.minHeight = sectionHeight + "px";
+      if (pageFlowShell || isFlowSection(section)) {
+        section.dataset.layoutCurrentTop = String(nextTop);
+        section.style.removeProperty("top");
+        setCurrentHeight(section, sectionHeight, { persistStyle: false });
+        section.style.minHeight = sectionHeight + "px";
+      } else {
+        setCurrentTop(section, nextTop);
+        setCurrentHeight(section, sectionHeight);
+        section.style.minHeight = sectionHeight + "px";
+      }
 
       pageHeight = Math.max(pageHeight, nextTop + sectionHeight);
       previousSections.push({
@@ -290,6 +348,10 @@
     // peut remonter. On doit donc laisser la page se contracter, sinon on
     // conserve artificiellement la hauteur initiale de la maquette et un vide
     // blanc apparait sous le footer.
+    if (pageFlowShell) {
+      page.style.removeProperty("min-height");
+      return;
+    }
     page.style.minHeight = pageHeight + "px";
   }
 
@@ -316,6 +378,50 @@
     }
 
     relayoutSections(page, startSection);
+  }
+
+  function scheduleRelayoutPageFromSection(page, startSection) {
+    if (!page) {
+      return;
+    }
+    pendingRelayoutPage = page;
+    if (startSection) {
+      if (!pendingRelayoutSection) {
+        pendingRelayoutSection = startSection;
+      } else {
+        pendingRelayoutSection =
+          compareByOriginalPosition(startSection, pendingRelayoutSection) < 0 ? startSection : pendingRelayoutSection;
+      }
+    }
+    if (relayoutFrame) {
+      return;
+    }
+    relayoutFrame = window.requestAnimationFrame(() => {
+      const nextPage = pendingRelayoutPage;
+      const nextSection = pendingRelayoutSection;
+      relayoutFrame = 0;
+      pendingRelayoutPage = null;
+      pendingRelayoutSection = null;
+      relayoutPageFromSection(nextPage, nextSection);
+    });
+  }
+
+  function bindResponsiveRelayout(page, startSection) {
+    if (!page) {
+      return;
+    }
+    const schedule = () => scheduleRelayoutPageFromSection(page, startSection);
+    window.addEventListener("resize", schedule, { passive: true });
+    window.addEventListener("load", schedule, { once: true });
+    if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === "function") {
+      document.fonts.ready.then(schedule).catch(() => {});
+    }
+    page.querySelectorAll("img").forEach((image) => {
+      if (image.complete) {
+        return;
+      }
+      image.addEventListener("load", schedule, { once: true });
+    });
   }
 
   function initializeAccordionRoot(root) {
@@ -367,7 +473,7 @@
       }
 
       setAccordionItemState(item, shouldOpen);
-      relayoutPageFromSection(root.ownerDocument.querySelector(PAGE_SELECTOR), root.closest(SECTION_SELECTOR));
+      scheduleRelayoutPageFromSection(root.ownerDocument.querySelector(PAGE_SELECTOR), root.closest(SECTION_SELECTOR));
     });
 
     return true;
@@ -391,7 +497,8 @@
         .map((root) => root.closest(SECTION_SELECTOR))
         .filter(Boolean)
         .sort(compareByOriginalPosition)[0];
-      relayoutPageFromSection(page, earliestAccordionSection || null);
+      bindResponsiveRelayout(page, earliestAccordionSection || null);
+      scheduleRelayoutPageFromSection(page, earliestAccordionSection || null);
     }
   }
 

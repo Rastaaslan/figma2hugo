@@ -4,13 +4,68 @@
   position: relative;
 }
 
+[data-accordion="true"][data-layout-flow="true"] {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  gap: var(--layout-gap, 0px);
+}
+
 [data-accordion-item="true"] {
   overflow: hidden;
   border-bottom: 1px solid rgba(23, 23, 23, 0.12);
 }
 
+[data-accordion-item="true"][data-layout-flow="true"] {
+  position: relative;
+  left: auto;
+  top: auto;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+}
+
 button.content-node[data-accordion-trigger="true"] {
   cursor: pointer;
+}
+
+[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"],
+[data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"],
+button.content-node[data-accordion-trigger="true"][data-layout-flow="true"],
+[data-accordion-panel="true"][data-layout-flow="true"] {
+  position: relative;
+  left: auto;
+  top: auto;
+  width: 100%;
+  height: auto;
+}
+
+[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"] > .content-node,
+[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"] > .content-text,
+[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"] > .content-asset,
+[data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"] > .content-node,
+[data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"] > .content-text,
+[data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"] > .content-asset,
+button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > .content-node,
+button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > .content-text,
+button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > .content-asset,
+[data-accordion-panel="true"][data-layout-flow="true"] > .content-node,
+[data-accordion-panel="true"][data-layout-flow="true"] > .content-text,
+[data-accordion-panel="true"][data-layout-flow="true"] > .content-asset {
+  position: relative;
+  left: auto;
+  top: auto;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+}
+
+[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"],
+[data-accordion-panel="true"][data-layout-flow="true"] {
+  min-width: 0;
 }
 
 button.content-node[data-accordion-trigger="true"]:focus-visible {

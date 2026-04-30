@@ -1,0 +1,44 @@
+/* Style de base pour les sous-sections pilotées par le layout Figma. */
+
+.page .content-node[data-section-block="true"][data-layout-flow="true"][data-layout-shell="flow"] {
+  position: relative;
+  left: auto;
+  top: auto;
+  width: 100%;
+  height: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--layout-gap, 32px);
+  padding:
+    var(--layout-padding-top, 0px)
+    var(--layout-padding-right, 0px)
+    var(--layout-padding-bottom, 0px)
+    var(--layout-padding-left, 0px);
+}
+
+.page .content-node[data-section-block="true"][data-layout-flow="true"][data-layout-shell="flow"][data-layout-direction="row"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.page .content-node[data-section-block="true"][data-layout-flow="true"][data-layout-shell="flow"] > .content-node,
+.page .content-node[data-section-block="true"][data-layout-flow="true"][data-layout-shell="flow"] > .content-text,
+.page .content-node[data-section-block="true"][data-layout-flow="true"][data-layout-shell="flow"] > .content-asset {
+  position: relative;
+  left: auto;
+  top: auto;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+}
+
+.page .content-node[data-section-block="true"][data-layout-flow="true"][data-layout-shell="flow"] > .content-asset img {
+  width: 100%;
+  height: auto;
+}
+
+@media (max-width: 900px) {
+  .page .content-node[data-section-block="true"][data-layout-flow="true"][data-layout-shell="flow"][data-layout-direction="row"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
