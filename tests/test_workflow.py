@@ -194,3 +194,45 @@ def test_run_generation_supports_multi_page_hugo_sites(monkeypatch) -> None:
         assert not (temp_path / "site" / ".figma2hugo-tmp").exists()
         assert (temp_path / "site" / "index.html").exists()
         assert (temp_path / "site" / "about" / "index.html").exists()
+
+
+def test_run_generation_deduplicates_report_warnings(monkeypatch) -> None:
+    class WarningValidator:
+        def validate(self, target_dir: Path, *, mode: str, against_reference: Path | None = None) -> dict[str, object]:
+            del target_dir, mode, against_reference
+            return {
+                "build_ok": True,
+                "visual_score": None,
+                "missing_assets": [],
+                "missing_texts": [],
+                "warnings": ["duplicate", "duplicate", "contentMode=data_file"],
+            }
+
+    class CapturingReportWriter:
+        def __init__(self) -> None:
+            self.payload: dict[str, object] | None = None
+
+        def write(self, target_dir: Path, payload: dict[str, object]) -> None:
+            del target_dir
+            self.payload = payload
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+        monkeypatch.setattr(workflow_module, "_select_generator", lambda mode: FakeGenerator())
+        report_writer = CapturingReportWriter()
+
+        run_generation(
+            GenerationOptions(
+                figma_url=FIGMA_URL,
+                out=temp_path / "site",
+                mode=OutputMode.STATIC,
+            ),
+            extraction_service=SuccessfulExtractionService(),
+            validator=WarningValidator(),
+            report_writer=report_writer,
+        )
+
+        assert report_writer.payload is not None
+        warnings = list(report_writer.payload.get("warnings", []))
+        assert warnings.count("duplicate") == 1
+        assert warnings.count("contentMode=data_file") == 1

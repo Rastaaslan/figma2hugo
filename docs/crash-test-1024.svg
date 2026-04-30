@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="4200" viewBox="0 0 1024 4200" role="img" aria-labelledby="title desc">
+<title id="title">Crash test 1024</title>
+<desc id="desc">Planche de crash test responsive pour largeur 1024.</desc>
+<defs>
+  <linearGradient id="heroGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#12306b"/>
+    <stop offset="100%" stop-color="#345ea6"/>
+  </linearGradient>
+  <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+    <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#233047" flood-opacity="0.14"/>
+  </filter>
+</defs>
+<rect x="0" y="0" width="1024" height="4200" fill="#f6f0e7"/>
+<rect x="64" y="72" width="896" height="4056" fill="#fffdf9" stroke="#dccfbe" stroke-width="2" rx="32" filter="url(#shadow)"/>
+<text x="96" y="116" font-family="'Segoe UI', Arial, sans-serif" font-size="34" font-weight="700" fill="#17306b" text-anchor="start">Crash Test 1024 px</text>
+<text x="96" y="150" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="18" font-weight="400" fill="#7c6d60" text-anchor="start">page-crash-test-1024</text>
+<text x="928" y="116" font-family="'Segoe UI', Arial, sans-serif" font-size="18" font-weight="400" fill="#7c6d60" text-anchor="end">content 896px ? gutter 48px</text>
+<rect x="96" y="180" width="832" height="280" fill="url(#heroGrad)" rx="28"/>
+<text x="124" y="222" font-family="'Segoe UI', Arial, sans-serif" font-size="28" font-weight="700" fill="#fffaf4" text-anchor="start">section-hero</text>
+<text x="124" y="258" font-family="'Segoe UI', Arial, sans-serif" font-size="24" font-weight="700" fill="#fffaf4" text-anchor="start">titre-h1-hero</text>
+<text x="124" y="292" font-family="'Segoe UI', Arial, sans-serif" font-size="18" font-weight="400" fill="#fffaf4" text-anchor="start">texte-hero</text>
+<text x="124" y="330" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="18" font-weight="400" fill="#fffaf4" text-anchor="start">button-hero</text>
+<rect x="578.56" y="208" width="282.88" height="224" fill="#ffffff22" stroke="#ffffff55" stroke-width="2" rx="20"/>
+<text x="600.56" y="244" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="18" font-weight="400" fill="#fffaf4" text-anchor="start">hero-media / image-hero</text>
+<rect x="96" y="488" width="832" height="300" fill="#f5eee4" stroke="#dccfbe" stroke-width="2" rx="26"/>
+<text x="120" y="526" font-family="'Segoe UI', Arial, sans-serif" font-size="26" font-weight="700" fill="#17306b" text-anchor="start">section-prestation</text>
+<text x="120" y="556" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="18" font-weight="400" fill="#7c6d60" text-anchor="start">section-block-prestation</text>
+<rect x="120" y="580" width="784" height="84" fill="#ffffff" stroke="#dccfbe" stroke-width="1.5" rx="18"/>
+<rect x="120" y="684" width="784" height="84" fill="#efe5d9" stroke="#dccfbe" stroke-width="1.5" rx="18"/>
+<text x="138" y="614" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="18" font-weight="700" fill="#17306b" text-anchor="start">col-prestation-content</text>
+<text x="138" y="644" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="16" font-weight="400" fill="#17306b" text-anchor="start">titre-h2-prestation ? texte-prestation ? button-prestation</text>
+<text x="138" y="718" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="18" font-weight="700" fill="#17306b" text-anchor="start">col-prestation-media</text>
+<text x="138" y="748" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="16" font-weight="400" fill="#17306b" text-anchor="start">bg-media-prestation ? image-prestation ? decor-*</text>
+<rect x="96" y="816" width="832" height="420" fill="#fffdf9" stroke="#dccfbe" stroke-width="2" rx="26"/>
+<text x="120" y="854" font-family="'Segoe UI', Arial, sans-serif" font-size="26" font-weight="700" fill="#17306b" text-anchor="start">section-cas-clients</text>
+<text x="120" y="884" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="18" font-weight="400" fill="#7c6d60" text-anchor="start">link-grid-cas-clients</text>
+<rect x="120.0" y="912" width="382.0" height="220" fill="#ffffff" stroke="#dccfbe" stroke-width="1.5" rx="18"/>
+<rect x="136.0" y="928" width="350.0" height="110" fill="#efe5d9" stroke="#dccfbe" stroke-width="1" rx="12"/>
+<text x="140.0" y="1060" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="16" font-weight="700" fill="#17306b" text-anchor="start">href-card-projet-1</text>
+<text x="140.0" y="1088" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="14" font-weight="400" fill="#17306b" text-anchor="start">image-card-* ? href-*</text>
+<text x="140.0" y="1110" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="14" font-weight="400" fill="#17306b" text-anchor="start">link-label-* ? texte-*</text>
+<rect x="522.0" y="912" width="382.0" height="220" fill="#ffffff" stroke="#dccfbe" stroke-width="1.5" rx="18"/>
+<rect x="538.0" y="928" width="350.0" height="110" fill="#efe5d9" stroke="#dccfbe" stroke-width="1" rx="12"/>
+<text x="542.0" y="1060" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="16" font-weight="700" fill="#17306b" text-anchor="start">href-card-projet-2</text>
+<text x="542.0" y="1088" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="14" font-weight="400" fill="#17306b" text-anchor="start">image-card-* ? href-*</text>
+<text x="542.0" y="1110" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="14" font-weight="400" fill="#17306b" text-anchor="start">link-label-* ? texte-*</text>
+<rect x="120.0" y="1152" width="382.0" height="220" fill="#ffffff" stroke="#dccfbe" stroke-width="1.5" rx="18"/>
+<rect x="136.0" y="1168" width="350.0" height="110" fill="#efe5d9" stroke="#dccfbe" stroke-width="1" rx="12"/>
+<text x="140.0" y="1300" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="16" font-weight="700" fill="#17306b" text-anchor="start">href-card-projet-3</text>
+<text x="140.0" y="1328" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="14" font-weight="400" fill="#17306b" text-anchor="start">image-card-* ? href-*</text>
+<text x="140.0" y="1350" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="14" font-weight="400" fill="#17306b" text-anchor="start">link-label-* ? texte-*</text>
+<rect x="96" y="1264" width="406.0" height="320" fill="#fbf7f1" stroke="#dccfbe" stroke-width="2" rx="26"/>
+<text x="120" y="1302" font-family="'Segoe UI', Arial, sans-serif" font-size="26" font-weight="700" fill="#17306b" text-anchor="start">section-faq</text>
+<text x="120" y="1334" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="18" font-weight="400" fill="#7c6d60" text-anchor="start">accordion-single-faq</text>
+<rect x="116" y="1360" width="366.0" height="48" fill="#ffffff" stroke="#dccfbe" stroke-width="1.2" rx="12"/>
+<text x="132" y="1390" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="15" font-weight="400" fill="#17306b" text-anchor="start">accordion-item-1 ? trigger/panel</text>
+<rect x="116" y="1426" width="366.0" height="48" fill="#ffffff" stroke="#dccfbe" stroke-width="1.2" rx="12"/>
+<text x="132" y="1456" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="15" font-weight="400" fill="#17306b" text-anchor="start">accordion-item-2 ? trigger/panel</text>
+<rect x="116" y="1492" width="366.0" height="48" fill="#ffffff" stroke="#dccfbe" stroke-width="1.2" rx="12"/>
+<text x="132" y="1522" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="15" font-weight="400" fill="#17306b" text-anchor="start">accordion-item-3 ? trigger/panel</text>
+<rect x="522.0" y="1264" width="406.0" height="320" fill="#f4ede3" stroke="#dccfbe" stroke-width="2" rx="26"/>
+<text x="546.0" y="1302" font-family="'Segoe UI', Arial, sans-serif" font-size="26" font-weight="700" fill="#17306b" text-anchor="start">section-carousel</text>
+<text x="546.0" y="1334" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="18" font-weight="400" fill="#7c6d60" text-anchor="start">carousel-gallery</text>
+<rect x="546.0" y="1360" width="358.0" height="136" fill="#efe5d9" stroke="#dccfbe" stroke-width="1.2" rx="14"/>
+<text x="566.0" y="1392" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="16" font-weight="400" fill="#17306b" text-anchor="start">carousel-stage-gallery</text>
+<text x="566.0" y="1420" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="15" font-weight="400" fill="#17306b" text-anchor="start">slide-1-active ? slide-2 ? slide-3</text>
+<rect x="546.0" y="1512" width="114.0" height="40" fill="#ffffff" stroke="#dccfbe" stroke-width="1" rx="10"/>
+<text x="556.0" y="1538" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="14" font-weight="400" fill="#17306b" text-anchor="start">thumb-1</text>
+<rect x="668.0" y="1512" width="114.0" height="40" fill="#ffffff" stroke="#dccfbe" stroke-width="1" rx="10"/>
+<text x="678.0" y="1538" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="14" font-weight="400" fill="#17306b" text-anchor="start">thumb-2</text>
+<rect x="790.0" y="1512" width="114.0" height="40" fill="#ffffff" stroke="#dccfbe" stroke-width="1" rx="10"/>
+<text x="800.0" y="1538" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="14" font-weight="400" fill="#17306b" text-anchor="start">thumb-3</text>
+<rect x="96" y="1612" width="832" height="520" fill="#122c67" rx="28"/>
+<text x="120" y="1654" font-family="'Segoe UI', Arial, sans-serif" font-size="28" font-weight="700" fill="#fffaf4" text-anchor="start">section-contact</text>
+<text x="120" y="1688" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="18" font-weight="400" fill="#fffaf4" text-anchor="start">formulaire-contact-post</text>
+<rect x="120" y="1716" width="447.76" height="58" fill="#7182b2" rx="12"/>
+<text x="136" y="1752" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="15" font-weight="400" fill="#fffaf4" text-anchor="start">input-nom-prenom-required</text>
+<rect x="120" y="1790" width="447.76" height="58" fill="#7182b2" rx="12"/>
+<text x="136" y="1826" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="15" font-weight="400" fill="#fffaf4" text-anchor="start">input-societe</text>
+<rect x="120" y="1864" width="215.88" height="58" fill="#7182b2" rx="12"/>
+<rect x="351.88" y="1864" width="215.88" height="58" fill="#7182b2" rx="12"/>
+<text x="134" y="1900" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="14" font-weight="400" fill="#fffaf4" text-anchor="start">input-telephone</text>
+<text x="365.88" y="1900" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="14" font-weight="400" fill="#fffaf4" text-anchor="start">input-mail-required</text>
+<rect x="120" y="1938" width="447.76" height="58" fill="#7182b2" rx="12"/>
+<text x="134" y="1974" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="14" font-weight="400" fill="#fffaf4" text-anchor="start">input-select-demande-required</text>
+<rect x="120" y="2012" width="447.76" height="120" fill="#7182b2" rx="12"/>
+<text x="134" y="2048" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="14" font-weight="400" fill="#fffaf4" text-anchor="start">input-message-required</text>
+<text x="134" y="2076" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="14" font-weight="400" fill="#fffaf4" text-anchor="start">action-contact</text>
+<polygon points="180,2176 348,2176 320,2224 152,2224" fill="#d06d63"/>
+<text x="234" y="2208" font-family="'Segoe UI', Arial, sans-serif" font-size="20" font-weight="700" fill="#fffaf4" text-anchor="start">button-envoyer</text>
+<rect x="96" y="2160" width="832" height="168" fill="#f5eee4" stroke="#dccfbe" stroke-width="2" rx="24"/>
+<text x="120" y="2198" font-family="'Segoe UI', Arial, sans-serif" font-size="26" font-weight="700" fill="#17306b" text-anchor="start">footer-site</text>
+<text x="120" y="2230" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="18" font-weight="400" fill="#7c6d60" text-anchor="start">footer-brand ? footer-nav ? footer-legal</text>
+<text x="120" y="2264" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="16" font-weight="400" fill="#17306b" text-anchor="start">logo-footer ? texte-footer-brand ? href-card-footer-1 ? texte-footer-legal</text>
+<text x="928" y="4110" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="400" fill="#7c6d60" text-anchor="end">Crash test responsive ? tablet-landscape</text>
+</svg>

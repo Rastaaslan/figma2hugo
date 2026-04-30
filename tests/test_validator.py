@@ -263,8 +263,10 @@ def test_validator_reports_supported_scope_and_responsive_viewports(
         report = SiteValidator().validate(target_dir, mode="static")
 
         assert report["supportedScope"]["strategy"] == "desktop-first-with-flow-components"
+        assert report["responsive"]["available"] is True
         assert report["responsive"]["checked"] is True
         assert len(report["responsive"]["viewports"]) == len(SiteValidator.RESPONSIVE_VIEWPORTS)
+        assert report["responsive"]["summary"]["totalViewports"] == len(SiteValidator.RESPONSIVE_VIEWPORTS)
         assert report["responsive"]["warnings"] == []
 
 
@@ -318,6 +320,7 @@ def test_validator_flags_horizontal_overflow_in_responsive_report(
 
         assert mobile_rows
         assert "horizontal-overflow" in mobile_rows[0]["issues"]
+        assert report["responsive"]["summary"]["horizontalOverflowCount"] == 1
 
 
 def test_validator_collects_interaction_probe_results(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -370,7 +373,77 @@ def test_validator_collects_interaction_probe_results(monkeypatch: pytest.Monkey
 
         report = SiteValidator().validate(target_dir, mode="static")
 
+        assert report["interactions"]["available"] is True
         assert report["interactions"]["checked"] is True
         assert len(report["interactions"]["pages"]) == 1
         first_viewport = report["interactions"]["pages"][0]["viewports"][0]
         assert any(check["component"] == "accordion" and check["status"] == "pass" for check in first_viewport["checks"])
+        assert report["interactions"]["summary"]["passedChecks"] >= 2
+
+
+def test_validator_handles_missing_html_without_crashing(monkeypatch: pytest.MonkeyPatch) -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        target_dir = Path(temp_dir)
+        (target_dir / "page.json").write_text(
+            '{"page":{"id":"page","slug":"page"},"sections":[],"texts":{},"assets":[],"warnings":[]}',
+            encoding="utf-8",
+        )
+
+        monkeypatch.setattr(SiteValidator, "_playwright_is_available", lambda self: False)
+
+        report = SiteValidator().validate(target_dir, mode="static")
+
+        assert report["missingTexts"] == ["html-missing"]
+        assert any("Generated HTML file is missing" in warning for warning in report["warnings"])
+
+
+def test_validator_handles_missing_page_model_without_crashing(monkeypatch: pytest.MonkeyPatch) -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        target_dir = Path(temp_dir)
+        (target_dir / "index.html").write_text("<!DOCTYPE html><html><body>ok</body></html>", encoding="utf-8")
+
+        monkeypatch.setattr(SiteValidator, "_playwright_is_available", lambda self: False)
+
+        report = SiteValidator().validate(target_dir, mode="static")
+
+        assert report["buildOk"] is True
+        assert any("Missing generated page model" in warning for warning in report["warnings"])
+        assert any("No generated page model is available for validation." in warning for warning in report["warnings"])
+
+
+def test_validator_handles_invalid_page_model_json_without_crashing(monkeypatch: pytest.MonkeyPatch) -> None:
+    with tempfile.TemporaryDirectory() as temp_dir:
+        target_dir = Path(temp_dir)
+        (target_dir / "page.json").write_text("{ invalid", encoding="utf-8")
+        (target_dir / "index.html").write_text("<!DOCTYPE html><html><body>ok</body></html>", encoding="utf-8")
+
+        monkeypatch.setattr(SiteValidator, "_playwright_is_available", lambda self: False)
+
+        report = SiteValidator().validate(target_dir, mode="static")
+
+        assert report["buildOk"] is True
+        assert any("Invalid JSON in generated page model" in warning for warning in report["warnings"])
+
+
+def test_validator_serves_nested_public_pages_from_public_root(monkeypatch: pytest.MonkeyPatch) -> None:
+    validator = SiteValidator()
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        public_dir = Path(temp_dir) / "public"
+        nested_dir = public_dir / "page-slug"
+        nested_dir.mkdir(parents=True, exist_ok=True)
+        html_path = nested_dir / "index.html"
+        html_path.write_text("<!DOCTYPE html><html><body>nested</body></html>", encoding="utf-8")
+
+        captured: dict[str, str] = {}
+
+        def fake_capture(url: str, screenshot_path: Path) -> None:
+            captured["url"] = url
+            screenshot_path.write_bytes(b"placeholder")
+
+        monkeypatch.setattr(validator, "_capture_url", fake_capture)
+
+        validator._capture_page(html_path, Path(temp_dir) / "capture.png")
+
+        assert captured["url"].startswith("http://127.0.0.1:")
+        assert captured["url"].endswith("/page-slug/index.html")

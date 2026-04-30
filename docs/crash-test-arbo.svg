@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="2500" viewBox="0 0 1680 2500" role="img" aria-labelledby="title desc">
+  <title id="title">Arborescence unique de crash test figma2hugo</title>
+  <desc id="desc">Structure canonique de page de test pour valider hero, section editoriale, cards, FAQ, carousel, formulaire et footer.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f7f1e8"/>
+      <stop offset="100%" stop-color="#fffaf4"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#cbbba4" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <rect width="1680" height="2500" fill="url(#bg)"/>
+
+  <rect x="56" y="56" width="1568" height="2388" rx="28" fill="#fffdf9" stroke="#e1d6c6" stroke-width="2" filter="url(#shadow)"/>
+
+  <text x="96" y="126" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="36" font-weight="700" fill="#12306b">
+    Arborescence Unique de Crash Test
+  </text>
+  <text x="96" y="164" font-family="'Segoe UI', Arial, sans-serif" font-size="20" fill="#7c6f62">
+    Reference canonique Figma pour valider la robustesse complete du convertisseur
+  </text>
+
+  <text x="96" y="222" font-family="'Cascadia Code', 'Fira Code', Consolas, monospace" font-size="23" fill="#2d241d">
+    <tspan x="96" dy="0">page-crash-test-1920</tspan>
+    <tspan x="96" dy="32">  seo-title</tspan>
+    <tspan x="96" dy="32">  seo-description</tspan>
+    <tspan x="96" dy="32">  section-hero</tspan>
+    <tspan x="96" dy="32">    bg-hero</tspan>
+    <tspan x="96" dy="32">    decor-hero-gauche</tspan>
+    <tspan x="96" dy="32">    decor-hero-droite</tspan>
+    <tspan x="96" dy="32">    hero-content</tspan>
+    <tspan x="96" dy="32">      titre-h1-hero</tspan>
+    <tspan x="96" dy="32">      texte-hero</tspan>
+    <tspan x="96" dy="32">      button-hero</tspan>
+    <tspan x="96" dy="32">        bg-button-hero</tspan>
+    <tspan x="96" dy="32">        texte-button-hero</tspan>
+    <tspan x="96" dy="32">    hero-media</tspan>
+    <tspan x="96" dy="32">      image-hero</tspan>
+    <tspan x="96" dy="32">  section-prestation</tspan>
+    <tspan x="96" dy="32">    section-block-prestation</tspan>
+    <tspan x="96" dy="32">      row-prestation</tspan>
+    <tspan x="96" dy="32">        col-prestation-content</tspan>
+    <tspan x="96" dy="32">          titre-h2-prestation</tspan>
+    <tspan x="96" dy="32">          texte-prestation</tspan>
+    <tspan x="96" dy="32">          button-prestation</tspan>
+    <tspan x="96" dy="32">            bg-button-prestation</tspan>
+    <tspan x="96" dy="32">            texte-button-prestation</tspan>
+    <tspan x="96" dy="32">        col-prestation-media</tspan>
+    <tspan x="96" dy="32">          bg-media-prestation</tspan>
+    <tspan x="96" dy="32">          image-prestation</tspan>
+    <tspan x="96" dy="32">          decor-prestation-1</tspan>
+    <tspan x="96" dy="32">          decor-prestation-2</tspan>
+    <tspan x="96" dy="32">  section-cas-clients</tspan>
+    <tspan x="96" dy="32">    titre-h2-cas-clients</tspan>
+    <tspan x="96" dy="32">    link-grid-cas-clients</tspan>
+    <tspan x="96" dy="32">      link-row-1</tspan>
+    <tspan x="96" dy="32">        href-card-projet-1-external</tspan>
+    <tspan x="96" dy="32">          bg-card-projet-1</tspan>
+    <tspan x="96" dy="32">          image-card-projet-1</tspan>
+    <tspan x="96" dy="32">          href-projet-1</tspan>
+    <tspan x="96" dy="32">          link-label-projet-1</tspan>
+    <tspan x="96" dy="32">          texte-projet-1</tspan>
+    <tspan x="96" dy="32">        href-card-projet-2</tspan>
+    <tspan x="96" dy="32">          bg-card-projet-2</tspan>
+    <tspan x="96" dy="32">          image-card-projet-2</tspan>
+    <tspan x="96" dy="32">          href-projet-2</tspan>
+    <tspan x="96" dy="32">          link-label-projet-2</tspan>
+    <tspan x="96" dy="32">          texte-projet-2</tspan>
+    <tspan x="96" dy="32">      link-row-2</tspan>
+    <tspan x="96" dy="32">        href-card-projet-3</tspan>
+    <tspan x="96" dy="32">          bg-card-projet-3</tspan>
+    <tspan x="96" dy="32">          image-card-projet-3</tspan>
+    <tspan x="96" dy="32">          href-projet-3</tspan>
+    <tspan x="96" dy="32">          link-label-projet-3</tspan>
+    <tspan x="96" dy="32">          texte-projet-3</tspan>
+    <tspan x="96" dy="32">  section-faq</tspan>
+    <tspan x="96" dy="32">    titre-h2-faq</tspan>
+    <tspan x="96" dy="32">    accordion-single-faq</tspan>
+    <tspan x="96" dy="32">      accordion-item-1-open</tspan>
+    <tspan x="96" dy="32">        accordion-panel-1</tspan>
+    <tspan x="96" dy="32">          texte-reponse-1</tspan>
+    <tspan x="96" dy="32">        accordion-trigger-1</tspan>
+    <tspan x="96" dy="32">          texte-question-1</tspan>
+    <tspan x="96" dy="32">      accordion-item-2-closed</tspan>
+    <tspan x="96" dy="32">        accordion-panel-2</tspan>
+    <tspan x="96" dy="32">          texte-reponse-2</tspan>
+    <tspan x="96" dy="32">        accordion-trigger-2</tspan>
+    <tspan x="96" dy="32">          texte-question-2</tspan>
+    <tspan x="96" dy="32">      accordion-item-3-closed</tspan>
+    <tspan x="96" dy="32">        accordion-panel-3</tspan>
+    <tspan x="96" dy="32">          texte-reponse-3</tspan>
+    <tspan x="96" dy="32">        accordion-trigger-3</tspan>
+    <tspan x="96" dy="32">          texte-question-3</tspan>
+    <tspan x="96" dy="32">  section-carousel</tspan>
+    <tspan x="96" dy="32">    titre-h2-carousel</tspan>
+    <tspan x="96" dy="32">    carousel-gallery</tspan>
+    <tspan x="96" dy="32">      carousel-stage-gallery</tspan>
+    <tspan x="96" dy="32">        carousel-slide-1-active</tspan>
+    <tspan x="96" dy="32">          image-slide-1</tspan>
+    <tspan x="96" dy="32">        carousel-slide-2</tspan>
+    <tspan x="96" dy="32">          image-slide-2</tspan>
+    <tspan x="96" dy="32">        carousel-slide-3</tspan>
+    <tspan x="96" dy="32">          image-slide-3</tspan>
+    <tspan x="96" dy="32">      carousel-thumbs-gallery</tspan>
+    <tspan x="96" dy="32">        carousel-thumb-1</tspan>
+    <tspan x="96" dy="32">          image-thumb-1</tspan>
+    <tspan x="96" dy="32">        carousel-thumb-2</tspan>
+    <tspan x="96" dy="32">          image-thumb-2</tspan>
+    <tspan x="96" dy="32">        carousel-thumb-3</tspan>
+    <tspan x="96" dy="32">          image-thumb-3</tspan>
+    <tspan x="96" dy="32">  section-contact</tspan>
+    <tspan x="96" dy="32">    titre-h2-contact</tspan>
+    <tspan x="96" dy="32">    formulaire-contact-post</tspan>
+    <tspan x="96" dy="32">      bg-contact-formulaire</tspan>
+    <tspan x="96" dy="32">      input-nom-prenom-required</tspan>
+    <tspan x="96" dy="32">        zone-nom-prenom</tspan>
+    <tspan x="96" dy="32">        placeholder-nom-prenom</tspan>
+    <tspan x="96" dy="32">      input-societe</tspan>
+    <tspan x="96" dy="32">        zone-societe</tspan>
+    <tspan x="96" dy="32">        placeholder-societe</tspan>
+    <tspan x="96" dy="32">      ligne-contact</tspan>
+    <tspan x="96" dy="32">        input-telephone</tspan>
+    <tspan x="96" dy="32">          zone-telephone</tspan>
+    <tspan x="96" dy="32">          placeholder-telephone</tspan>
+    <tspan x="96" dy="32">        input-mail-required</tspan>
+    <tspan x="96" dy="32">          zone-mail</tspan>
+    <tspan x="96" dy="32">          placeholder-mail</tspan>
+    <tspan x="96" dy="32">      input-select-demande-required</tspan>
+    <tspan x="96" dy="32">        zone-demande</tspan>
+    <tspan x="96" dy="32">        option-choix-demande-selected</tspan>
+    <tspan x="96" dy="32">        option-demande-audit</tspan>
+    <tspan x="96" dy="32">        option-demande-expertise</tspan>
+    <tspan x="96" dy="32">        option-demande-formation</tspan>
+    <tspan x="96" dy="32">      input-message-required</tspan>
+    <tspan x="96" dy="32">        zone-message</tspan>
+    <tspan x="96" dy="32">        placeholder-message</tspan>
+    <tspan x="96" dy="32">      action-contact</tspan>
+    <tspan x="96" dy="32">      button-envoyer</tspan>
+    <tspan x="96" dy="32">        bg-button-envoyer</tspan>
+    <tspan x="96" dy="32">        texte-button-envoyer</tspan>
+    <tspan x="96" dy="32">  footer-site</tspan>
+    <tspan x="96" dy="32">    footer-content</tspan>
+    <tspan x="96" dy="32">      footer-brand</tspan>
+    <tspan x="96" dy="32">        logo-footer</tspan>
+    <tspan x="96" dy="32">        texte-footer-brand</tspan>
+    <tspan x="96" dy="32">      footer-nav</tspan>
+    <tspan x="96" dy="32">        href-card-footer-1</tspan>
+    <tspan x="96" dy="32">          href-footer-1</tspan>
+    <tspan x="96" dy="32">          link-label-footer-1</tspan>
+    <tspan x="96" dy="32">      footer-legal</tspan>
+    <tspan x="96" dy="32">        texte-footer-legal</tspan>
+  </text>
+</svg>

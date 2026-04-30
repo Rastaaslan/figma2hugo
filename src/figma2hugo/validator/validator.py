@@ -36,9 +36,10 @@ class SiteValidator:
         against_reference: Path | None = None,
     ) -> dict[str, Any]:
         mode = mode or self.detect_mode(target_dir)
-        site_manifest = self._load_site_manifest(target_dir, mode)
-        page_models = self._load_page_models(target_dir, mode, site_manifest)
-        report_warnings = self._collect_page_warnings(page_models)
+        report_warnings: list[str] = []
+        site_manifest = self._load_site_manifest(target_dir, mode, report_warnings)
+        page_models = self._load_page_models(target_dir, mode, site_manifest, report_warnings)
+        report_warnings.extend(self._collect_page_warnings(page_models))
         report = {
             "buildOk": True,
             "visualScore": None,
@@ -48,12 +49,16 @@ class SiteValidator:
             "supportedScope": self._supported_scope_payload(),
             "responsive": {
                 "checked": False,
+                "available": False,
                 "viewports": [],
+                "summary": {},
                 "warnings": [],
             },
             "interactions": {
                 "checked": False,
+                "available": False,
                 "pages": [],
+                "summary": {},
                 "warnings": [],
             },
         }
@@ -61,11 +66,17 @@ class SiteValidator:
         if mode == "hugo":
             report["buildOk"] = self._validate_hugo_build(target_dir, report["warnings"])
 
-        if len(page_models) == 1:
+        if not page_models:
+            report["warnings"].append("No generated page model is available for validation.")
+        elif len(page_models) == 1:
             html_path = self._html_path(target_dir, mode)
-            html_content = html_path.read_text(encoding="utf-8")
             report["missingAssets"] = self._missing_assets(target_dir, page_models[0], mode)
-            report["missingTexts"] = self._missing_texts(html_content, page_models[0])
+            if html_path.exists():
+                html_content = html_path.read_text(encoding="utf-8")
+                report["missingTexts"] = self._missing_texts(html_content, page_models[0])
+            else:
+                report["missingTexts"] = ["html-missing"]
+                report["warnings"].append(f"Generated HTML file is missing: {html_path}")
             report["warnings"].extend(self._validate_page_model(page_models[0]))
         else:
             report["missingAssets"] = self._missing_site_assets(target_dir, page_models, mode)
@@ -83,9 +94,15 @@ class SiteValidator:
             report["warnings"].append("Visual validation is skipped for multi-page sites.")
         elif against_reference and against_reference.exists():
             html_path = self._html_path(target_dir, mode)
-            visual_score = self._visual_compare(target_dir, html_path, against_reference, mode, report["warnings"])
-            report["visualScore"] = visual_score
+            if html_path.exists():
+                visual_score = self._visual_compare(target_dir, html_path, against_reference, mode, report["warnings"])
+                report["visualScore"] = visual_score
+            else:
+                report["warnings"].append(f"Visual validation skipped: generated HTML file is missing: {html_path}")
 
+        report["warnings"] = self._dedupe_warnings(report["warnings"])
+        report["responsive"]["warnings"] = self._dedupe_warnings(report["responsive"].get("warnings", []))
+        report["interactions"]["warnings"] = self._dedupe_warnings(report["interactions"].get("warnings", []))
         return report
 
     def detect_mode(self, target_dir: Path) -> str:
@@ -121,29 +138,32 @@ class SiteValidator:
             ],
         }
 
-    def _load_page_model(self, target_dir: Path, mode: str) -> dict[str, Any]:
+    def _load_page_model(self, target_dir: Path, mode: str, warnings: list[str]) -> dict[str, Any] | None:
         if mode == "hugo":
             path = target_dir / "data" / "page.json"
         else:
             path = target_dir / "page.json"
-        return json.loads(path.read_text(encoding="utf-8"))
+        return self._load_json_payload(path, warnings, context="generated page model")
 
-    def _load_site_manifest(self, target_dir: Path, mode: str) -> dict[str, Any] | None:
+    def _load_site_manifest(self, target_dir: Path, mode: str, warnings: list[str]) -> dict[str, Any] | None:
         if mode != "hugo":
             return None
         path = target_dir / "data" / "site.json"
         if not path.exists():
             return None
-        return json.loads(path.read_text(encoding="utf-8"))
+        payload = self._load_json_payload(path, warnings, context="site manifest")
+        return payload if isinstance(payload, dict) else None
 
     def _load_page_models(
         self,
         target_dir: Path,
         mode: str,
         site_manifest: dict[str, Any] | None,
+        warnings: list[str],
     ) -> list[dict[str, Any]]:
         if mode != "hugo" or not site_manifest:
-            return [self._load_page_model(target_dir, mode)]
+            page_model = self._load_page_model(target_dir, mode, warnings)
+            return [page_model] if isinstance(page_model, dict) else []
         pages_dir = target_dir / "data" / "pages"
         page_models: list[dict[str, Any]] = []
         for page in site_manifest.get("pages", []):
@@ -151,9 +171,35 @@ class SiteValidator:
             if not page_key:
                 continue
             path = pages_dir / f"{page_key}.json"
-            if path.exists():
-                page_models.append(json.loads(path.read_text(encoding="utf-8")))
+            payload = self._load_json_payload(path, warnings, context=f"page model `{page_key}`")
+            if isinstance(payload, dict):
+                page_models.append(payload)
+        if site_manifest.get("pages") and not page_models:
+            warnings.append("Site manifest was found but no page model could be loaded.")
         return page_models
+
+    def _load_json_payload(
+        self,
+        path: Path,
+        warnings: list[str],
+        *,
+        context: str,
+    ) -> dict[str, Any] | None:
+        if not path.exists():
+            warnings.append(f"Missing {context}: {path}")
+            return None
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            warnings.append(f"Failed to read {context}: {path} ({exc})")
+            return None
+        except ValueError as exc:
+            warnings.append(f"Invalid JSON in {context}: {path} ({exc})")
+            return None
+        if not isinstance(payload, dict):
+            warnings.append(f"Invalid {context}: expected an object in {path}")
+            return None
+        return payload
 
     def _html_path(self, target_dir: Path, mode: str) -> Path:
         if mode == "static":
@@ -179,10 +225,15 @@ class SiteValidator:
         public_dir = target_dir / "public"
         if site_manifest and len(page_models) > 1:
             targets: list[tuple[str, Path]] = []
+            seen_paths: set[Path] = set()
             for page in site_manifest.get("pages", []):
                 page_key = str(page.get("page_key") or page.get("slug") or "page").strip()
                 relative_path = str(page.get("output_path") or f"{page_key}/index.html")
-                targets.append((page_key or "page", public_dir / relative_path))
+                html_path = (public_dir / relative_path).resolve()
+                if html_path in seen_paths:
+                    continue
+                seen_paths.add(html_path)
+                targets.append((page_key or "page", html_path))
             return targets
 
         page_model = page_models[0] if page_models else {}
@@ -282,16 +333,22 @@ class SiteValidator:
     def _responsive_report(self, page_targets: list[tuple[str, Path]]) -> dict[str, Any]:
         report = {
             "checked": False,
+            "available": False,
             "viewports": [],
+            "summary": {},
             "warnings": [],
         }
         if not page_targets:
             report["warnings"].append("Responsive validation skipped: no generated HTML target was found.")
+            report["summary"] = self._responsive_summary([])
             return report
-        if not self._playwright_is_available():
+        playwright_available = self._playwright_is_available()
+        report["available"] = playwright_available
+        if not playwright_available:
             report["warnings"].append(
                 "Responsive validation skipped: Playwright is not installed in the current environment."
             )
+            report["summary"] = self._responsive_summary([])
             return report
 
         checked_any = False
@@ -328,21 +385,28 @@ class SiteValidator:
                     }
                 )
         report["checked"] = checked_any
+        report["summary"] = self._responsive_summary(report["viewports"])
         return report
 
     def _interaction_report(self, page_targets: list[tuple[str, Path]]) -> dict[str, Any]:
         report = {
             "checked": False,
+            "available": False,
             "pages": [],
+            "summary": {},
             "warnings": [],
         }
         if not page_targets:
             report["warnings"].append("Interaction validation skipped: no generated HTML target was found.")
+            report["summary"] = self._interaction_summary([])
             return report
-        if not self._playwright_is_available():
+        playwright_available = self._playwright_is_available()
+        report["available"] = playwright_available
+        if not playwright_available:
             report["warnings"].append(
                 "Interaction validation skipped: Playwright is not installed in the current environment."
             )
+            report["summary"] = self._interaction_summary([])
             return report
 
         checked_any = False
@@ -373,7 +437,46 @@ class SiteValidator:
                 )
             report["pages"].append(page_result)
         report["checked"] = checked_any
+        report["summary"] = self._interaction_summary(report["pages"])
         return report
+
+    def _responsive_summary(self, viewport_rows: list[dict[str, Any]]) -> dict[str, int]:
+        return {
+            "totalViewports": len(viewport_rows),
+            "viewportsWithIssues": sum(1 for row in viewport_rows if row.get("issues")),
+            "horizontalOverflowCount": sum(
+                1 for row in viewport_rows if "horizontal-overflow" in set(row.get("issues", []))
+            ),
+            "brokenImageCount": sum(
+                1 for row in viewport_rows if "broken-images" in set(row.get("issues", []))
+            ),
+        }
+
+    def _interaction_summary(self, pages: list[dict[str, Any]]) -> dict[str, int]:
+        checks = [
+            check
+            for page in pages
+            for viewport in page.get("viewports", [])
+            for check in viewport.get("checks", [])
+        ]
+        return {
+            "totalPages": len(pages),
+            "totalChecks": len(checks),
+            "passedChecks": sum(1 for check in checks if check.get("status") == "pass"),
+            "failedChecks": sum(1 for check in checks if check.get("status") == "fail"),
+            "skippedChecks": sum(1 for check in checks if check.get("status") == "skipped"),
+        }
+
+    def _dedupe_warnings(self, warnings: list[str]) -> list[str]:
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for warning in warnings:
+            normalized = str(warning).strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            ordered.append(normalized)
+        return ordered
 
     def _playwright_is_available(self) -> bool:
         try:
@@ -592,10 +695,16 @@ class SiteValidator:
     @contextlib.contextmanager
     def _served_page_url(self, html_path: Path):
         resolved_html_path = html_path.resolve()
-        root_dir = resolved_html_path.parent
+        root_dir = self._served_root_dir(resolved_html_path)
         relative_path = resolved_html_path.relative_to(root_dir).as_posix()
         with self._serve_directory(root_dir) as base_url:
             yield f"{base_url}/{relative_path}"
+
+    def _served_root_dir(self, html_path: Path) -> Path:
+        for ancestor in html_path.parents:
+            if ancestor.name.lower() == "public":
+                return ancestor
+        return html_path.parent
 
     @contextlib.contextmanager
     def _serve_directory(self, directory: Path):

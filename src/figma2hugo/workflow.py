@@ -114,10 +114,13 @@ def run_generation(
         shutil.rmtree(temp_path, ignore_errors=True)
         _cleanup_workspace_parent(options.out)
 
-    report_payload["warnings"] = list(report_payload.get("warnings", [])) + [
+    report_payload["warnings"] = _dedupe_warnings(
+        list(report_payload.get("warnings", []))
+        + [
         f"fidelityMode={options.fidelity_mode.value}",
         f"contentMode={options.content_mode.value}",
-    ]
+        ]
+    )
     report = GenerationReport.model_validate(report_payload)
     report_writer.write(options.out, report.model_dump(by_alias=True, mode="json"))
     return {
@@ -177,7 +180,7 @@ def validate_site(
     else:
         report_payload = validator.validate(target_dir, mode=mode, against_reference=None)
 
-    report_payload["warnings"] = list(report_payload.get("warnings", [])) + additional_warnings
+    report_payload["warnings"] = _dedupe_warnings(list(report_payload.get("warnings", [])) + additional_warnings)
     report = GenerationReport.model_validate(report_payload)
     report_writer.write(target_dir, report.model_dump(by_alias=True, mode="json"))
     return report
@@ -252,6 +255,18 @@ def _json_dump(payload: dict[str, Any]) -> str:
     import json
 
     return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+
+
+def _dedupe_warnings(warnings: list[str]) -> list[str]:
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for warning in warnings:
+        normalized = str(warning).strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        ordered.append(normalized)
+    return ordered
 
 
 def _normalized_figma_urls(options: GenerationOptions) -> list[str]:

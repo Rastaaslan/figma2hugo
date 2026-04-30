@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="390" height="2966" viewBox="0 0 390 2966" role="img" aria-labelledby="title desc">
+<title id="title">Crash test importable 390</title>
+<desc id="desc">Page de crash test importable pour largeur 390.</desc>
+<defs>
+  <linearGradient id="heroGrad" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0%" stop-color="#16316d"/>
+    <stop offset="100%" stop-color="#3d67b1"/>
+  </linearGradient>
+  <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+    <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#233047" flood-opacity="0.14"/>
+  </filter>
+</defs>
+  <rect id="page-bg" x="0.00" y="0.00" width="390.00" height="2966.00" fill="#f6f0e7"/>
+  <g id="page-crash-test-390">
+  <rect id="page-crash-test-390-shell" x="32.00" y="36.00" width="326.00" height="2894.00" fill="#fffdf9" stroke="#dccfbe" stroke-width="2.00" rx="32.00" filter="url(#shadow)"/>
+  <text id="page-crash-test-390-title" x="56.00" y="78.00" font-family="'Segoe UI', Arial, sans-serif" font-size="32" font-weight="700" fill="#17306b" text-anchor="start">Crash Test Importable 390px</text>
+  <text id="page-crash-test-390-subtitle" x="56.00" y="110.00" font-family="'Cascadia Code', Consolas, monospace" font-size="18" font-weight="400" fill="#7c6d60" text-anchor="start">page-crash-test-390</text>
+  <text id="page-crash-test-390-hint" x="334.00" y="110.00" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="400" fill="#7c6d60" text-anchor="end">mobile | content 326px | gutter 32px</text>
+  <g id="seo-meta">
+  <rect id="seo-meta-shell" x="56.00" y="130.00" width="278.00" height="74.00" fill="#f8f1e8" stroke="#e7dccf" stroke-width="1.40" rx="16.00"/>
+  <text id="seo-title" x="76.00" y="164.00" font-family="'Segoe UI', Arial, sans-serif" font-size="18" font-weight="700" fill="#17306b" text-anchor="start">Crash test figma2hugo</text>
+  <text id="seo-description" x="76.00" y="190.00" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="400" fill="#5c5b66" text-anchor="start">Page canonique importable pour verifier le pipeline, les composants et la robustesse responsive.</text>
+  </g>
+  <g id="section-hero">
+  <rect id="bg-hero" x="56.00" y="228.00" width="278.00" height="260.00" fill="url(#heroGrad)" rx="28.00"/>
+  <polygon id="decor-hero-gauche" points="80.00,246.00 176.00,246.00 128.00,314.00" fill="#d06d63"/>
+  <polygon id="decor-hero-droite" points="214.00,454.00 310.00,454.00 262.00,386.00" fill="#6e83b9"/>
+  <g id="hero-content">
+  <text id="titre-h1-hero" x="92.00" y="302.00" font-family="'Segoe UI', Arial, sans-serif" font-size="28" font-weight="700" fill="#fffaf4" text-anchor="start">Crash test canonique</text>
+  <text id="texte-hero" x="92.00" y="346.00" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="400" fill="#fffaf4" text-anchor="start">Page importable dans Figma pour valider le convertisseur, les composants et la robustesse responsive.</text>
+  <g id="button-hero">
+  <polygon id="bg-button-hero" points="92.00,408.00 268.00,408.00 244.00,454.00 68.00,454.00" fill="#d06d63"/>
+  <text id="texte-button-hero" x="120.00" y="438.00" font-family="'Segoe UI', Arial, sans-serif" font-size="18" font-weight="700" fill="#fffaf4" text-anchor="start">Demarrer le crash test</text>
+  </g>
+  </g>
+  <g id="hero-media">
+  <rect id="image-hero" x="203.48" y="270.00" width="94.52" height="176.00" fill="#ffffff22" stroke="#ffffff55" stroke-width="2.00" rx="22.00"/>
+  <text id="image-hero-label" x="239.48" y="324.00" font-family="'Cascadia Code', Consolas, monospace" font-size="16" font-weight="400" fill="#fffaf4" text-anchor="start">image-hero</text>
+  </g>
+  </g>
+  <g id="section-prestation">
+  <rect id="section-prestation-shell" x="56.00" y="516.00" width="278.00" height="320.00" fill="#f5eee4" stroke="#dccfbe" stroke-width="2.00" rx="26.00"/>
+  <g id="section-block-prestation">
+  <text id="section-prestation-label" x="80.00" y="556.00" font-family="'Segoe UI', Arial, sans-serif" font-size="26" font-weight="700" fill="#17306b" text-anchor="start">section-prestation</text>
+  <g id="row-prestation">
+  <g id="col-prestation-content">
+  <rect id="col-prestation-content-box" x="80.00" y="578.00" width="254.00" height="118.00" fill="#ffffff" stroke="#dccfbe" stroke-width="1.50" rx="18.00"/>
+  <text id="titre-h2-prestation" x="100.00" y="618.00" font-family="'Cascadia Code', Consolas, monospace" font-size="19" font-weight="700" fill="#17306b" text-anchor="start">section-block-prestation</text>
+  <text id="texte-prestation" x="100.00" y="650.00" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="400" fill="#17306b" text-anchor="start">Bloc editorial deux colonnes pour valider la structure.</text>
+  <g id="button-prestation">
+  <polygon id="bg-button-prestation" points="100.00,644.00 248.00,644.00 230.00,682.00 82.00,682.00" fill="#16316d"/>
+  <text id="texte-button-prestation" x="120.00" y="669.00" font-family="'Cascadia Code', Consolas, monospace" font-size="15" font-weight="400" fill="#fffaf4" text-anchor="start">button-prestation</text>
+  </g>
+  </g>
+  <g id="col-prestation-media">
+  <rect id="bg-media-prestation" x="80.00" y="716.00" width="254.00" height="118.00" fill="#efe5d9" stroke="#dccfbe" stroke-width="1.50" rx="18.00"/>
+  <rect id="image-prestation" x="98.00" y="734.00" width="218.00" height="64.00" fill="#d8e3f5" stroke="#bdcde8" stroke-width="1.00" rx="14.00"/>
+  <polygon id="decor-prestation-1" points="104.00,736.00 132.00,736.00 118.00,762.00" fill="#d06d63"/>
+  <polygon id="decor-prestation-2" points="300.00,818.00 334.00,818.00 318.00,788.00" fill="#6e83b9"/>
+  </g>
+  </g>
+  </g>
+  <g id="section-cas-clients">
+  <rect id="section-cas-clients-shell" x="56.00" y="864.00" width="278.00" height="580.00" fill="#fffdf9" stroke="#dccfbe" stroke-width="2.00" rx="26.00"/>
+  <text id="titre-h2-cas-clients" x="80.00" y="904.00" font-family="'Segoe UI', Arial, sans-serif" font-size="26" font-weight="700" fill="#17306b" text-anchor="start">Cas clients</text>
+  <g id="link-grid-cas-clients">
+  <g id="link-row-1">
+  <g id="href-card-projet-1-external">
+  <rect id="bg-card-projet-1" x="80.00" y="938.00" width="230.00" height="240.00" fill="#ffffff" stroke="#dccfbe" stroke-width="1.50" rx="18.00"/>
+  <rect id="image-card-projet-1" x="96.00" y="954.00" width="198.00" height="110.40" fill="#dce7f7" stroke="#c6d5ee" stroke-width="1.00" rx="12.00"/>
+  <text id="link-label-projet-1" x="100.00" y="1092.40" font-family="'Segoe UI', Arial, sans-serif" font-size="18" font-weight="700" fill="#17306b" text-anchor="start">Projet audit</text>
+  <text id="texte-projet-1" x="100.00" y="1122.40" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="400" fill="#41506d" text-anchor="start">Card lien externe avec image, label et href.</text>
+  <text id="href-projet-1" x="100.00" y="1160.00" font-family="'Cascadia Code', Consolas, monospace" font-size="12" font-weight="400" fill="#7c6d60" text-anchor="start">https://example.com/projet-1</text>
+  </g>
+  </g>
+  <g id="link-row-2">
+  <g id="href-card-projet-2">
+  <rect id="bg-card-projet-2" x="80.00" y="1198.00" width="230.00" height="240.00" fill="#ffffff" stroke="#dccfbe" stroke-width="1.50" rx="18.00"/>
+  <rect id="image-card-projet-2" x="96.00" y="1214.00" width="198.00" height="110.40" fill="#dce7f7" stroke="#c6d5ee" stroke-width="1.00" rx="12.00"/>
+  <text id="link-label-projet-2" x="100.00" y="1352.40" font-family="'Segoe UI', Arial, sans-serif" font-size="18" font-weight="700" fill="#17306b" text-anchor="start">Projet expertise</text>
+  <text id="texte-projet-2" x="100.00" y="1382.40" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="400" fill="#41506d" text-anchor="start">Card interne pour verifier la grille et le clic.</text>
+  <text id="href-projet-2" x="100.00" y="1420.00" font-family="'Cascadia Code', Consolas, monospace" font-size="12" font-weight="400" fill="#7c6d60" text-anchor="start">https://example.com/projet-2</text>
+  </g>
+  <g id="href-card-projet-3">
+  <rect id="bg-card-projet-3" x="80.00" y="1458.00" width="230.00" height="240.00" fill="#ffffff" stroke="#dccfbe" stroke-width="1.50" rx="18.00"/>
+  <rect id="image-card-projet-3" x="96.00" y="1474.00" width="198.00" height="110.40" fill="#dce7f7" stroke="#c6d5ee" stroke-width="1.00" rx="12.00"/>
+  <text id="link-label-projet-3" x="100.00" y="1612.40" font-family="'Segoe UI', Arial, sans-serif" font-size="18" font-weight="700" fill="#17306b" text-anchor="start">Projet formation</text>
+  <text id="texte-projet-3" x="100.00" y="1642.40" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="400" fill="#41506d" text-anchor="start">Troisieme card pour la matrice de liens.</text>
+  <text id="href-projet-3" x="100.00" y="1680.00" font-family="'Cascadia Code', Consolas, monospace" font-size="12" font-weight="400" fill="#7c6d60" text-anchor="start">https://example.com/projet-3</text>
+  </g>
+  </g>
+  </g>
+  </g>
+  <g id="section-faq">
+  <rect id="section-faq-shell" x="56.00" y="1472.00" width="278.00" height="280.00" fill="#fbf7f1" stroke="#dccfbe" stroke-width="2.00" rx="26.00"/>
+  <text id="titre-h2-faq" x="80.00" y="1512.00" font-family="'Segoe UI', Arial, sans-serif" font-size="26" font-weight="700" fill="#17306b" text-anchor="start">FAQ</text>
+  <g id="accordion-single-faq">
+  <g id="accordion-item-1-open">
+  <g id="accordion-trigger-1">
+  <rect id="accordion-trigger-1-shape" x="76.00" y="1542.00" width="238.00" height="46.00" fill="#ffffff" stroke="#dccfbe" stroke-width="1.20" rx="12.00"/>
+  <text id="texte-question-1" x="92.00" y="1571.00" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="400" fill="#17306b" text-anchor="start">Comment valider le build ?</text>
+  </g>
+  <g id="accordion-panel-1">
+  <rect id="accordion-panel-1-shape" x="76.00" y="1596.00" width="238.00" height="60.00" fill="#f5efe6" stroke="#e7dccf" stroke-width="1.00" rx="12.00"/>
+  <text id="texte-reponse-1" x="92.00" y="1624.00" font-family="'Segoe UI', Arial, sans-serif" font-size="14" font-weight="400" fill="#425168" text-anchor="start">Le validateur controle le build, les assets, les textes, le responsive et les interactions.</text>
+  </g>
+  </g>
+  <g id="accordion-item-2-closed">
+  <g id="accordion-trigger-2">
+  <rect id="accordion-trigger-2-shape" x="76.00" y="1674.00" width="238.00" height="46.00" fill="#ffffff" stroke="#dccfbe" stroke-width="1.20" rx="12.00"/>
+  <text id="texte-question-2" x="92.00" y="1703.00" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="400" fill="#17306b" text-anchor="start">Comment verifier les cards ?</text>
+  </g>
+  <g id="accordion-panel-2">
+  <rect id="accordion-panel-2-shape" x="76.00" y="1728.00" width="238.00" height="60.00" fill="#f7f2ea" stroke="#e7dccf" stroke-width="1.00" rx="12.00"/>
+  <text id="texte-reponse-2" x="92.00" y="1756.00" font-family="'Segoe UI', Arial, sans-serif" font-size="14" font-weight="400" fill="#425168" text-anchor="start">Les href-card sont sondees sur desktop et mobile par le validateur.</text>
+  </g>
+  </g>
+  <g id="accordion-item-3-closed">
+  <g id="accordion-trigger-3">
+  <rect id="accordion-trigger-3-shape" x="76.00" y="1806.00" width="238.00" height="46.00" fill="#ffffff" stroke="#dccfbe" stroke-width="1.20" rx="12.00"/>
+  <text id="texte-question-3" x="92.00" y="1835.00" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="400" fill="#17306b" text-anchor="start">Comment verifier le carousel ?</text>
+  </g>
+  <g id="accordion-panel-3">
+  <rect id="accordion-panel-3-shape" x="76.00" y="1860.00" width="238.00" height="60.00" fill="#f7f2ea" stroke="#e7dccf" stroke-width="1.00" rx="12.00"/>
+  <text id="texte-reponse-3" x="92.00" y="1888.00" font-family="'Segoe UI', Arial, sans-serif" font-size="14" font-weight="400" fill="#425168" text-anchor="start">Les thumbs, le stage et les transitions sont controles si le composant est present.</text>
+  </g>
+  </g>
+  </g>
+  </g>
+  <g id="section-carousel">
+  <rect id="section-carousel-shell" x="56.00" y="1780.00" width="278.00" height="280.00" fill="#f4ede3" stroke="#dccfbe" stroke-width="2.00" rx="26.00"/>
+  <text id="titre-h2-carousel" x="80.00" y="1820.00" font-family="'Segoe UI', Arial, sans-serif" font-size="26" font-weight="700" fill="#17306b" text-anchor="start">Carousel</text>
+  <g id="carousel-gallery">
+  <g id="carousel-stage-gallery">
+  <g id="carousel-slide-1-active">
+  <rect id="image-slide-1" x="80.00" y="1854.00" width="230.00" height="160.00" fill="#d8e3f5" stroke="#c6d5ee" stroke-width="1.20" rx="16.00"/>
+  <text id="image-slide-1-label" x="98.00" y="1884.00" font-family="'Cascadia Code', Consolas, monospace" font-size="15" font-weight="400" fill="#17306b" text-anchor="start">image-slide-1</text>
+  </g>
+  <g id="carousel-slide-2">
+  <rect id="image-slide-2" x="80.00" y="1854.00" width="230.00" height="160.00" fill="#e4d9cc" stroke="#d5c2ab" stroke-width="1.20" rx="16.00" opacity="0.45"/>
+  </g>
+  <g id="carousel-slide-3">
+  <rect id="image-slide-3" x="80.00" y="1854.00" width="230.00" height="160.00" fill="#dce7f7" stroke="#b6cae9" stroke-width="1.20" rx="16.00" opacity="0.25"/>
+  </g>
+  </g>
+  <g id="carousel-thumbs-gallery">
+  <g id="carousel-thumb-1">
+  <rect id="image-thumb-1" x="80.00" y="2032.00" width="67.33" height="38.00" fill="#ffffff" stroke="#dccfbe" stroke-width="1.00" rx="10.00"/>
+  <text id="image-thumb-1-label" x="92.00" y="2057.00" font-family="'Cascadia Code', Consolas, monospace" font-size="13" font-weight="400" fill="#17306b" text-anchor="start">image-thumb-1</text>
+  </g>
+  <g id="carousel-thumb-2">
+  <rect id="image-thumb-2" x="161.33" y="2032.00" width="67.33" height="38.00" fill="#ffffff" stroke="#dccfbe" stroke-width="1.00" rx="10.00"/>
+  <text id="image-thumb-2-label" x="173.33" y="2057.00" font-family="'Cascadia Code', Consolas, monospace" font-size="13" font-weight="400" fill="#17306b" text-anchor="start">image-thumb-2</text>
+  </g>
+  <g id="carousel-thumb-3">
+  <rect id="image-thumb-3" x="242.67" y="2032.00" width="67.33" height="38.00" fill="#ffffff" stroke="#dccfbe" stroke-width="1.00" rx="10.00"/>
+  <text id="image-thumb-3-label" x="254.67" y="2057.00" font-family="'Cascadia Code', Consolas, monospace" font-size="13" font-weight="400" fill="#17306b" text-anchor="start">image-thumb-3</text>
+  </g>
+  </g>
+  </g>
+  </g>
+  <g id="section-contact">
+  <rect id="section-contact-shell" x="56.00" y="2088.00" width="278.00" height="570.00" fill="#122c67" rx="28.00"/>
+  <text id="titre-h2-contact" x="80.00" y="2130.00" font-family="'Segoe UI', Arial, sans-serif" font-size="28" font-weight="700" fill="#fffaf4" text-anchor="start">Contact</text>
+  <g id="formulaire-contact-post">
+  <rect id="bg-contact-formulaire" x="80.00" y="2162.00" width="230.00" height="360.00" fill="#122c67" stroke="#3f5b97" stroke-width="1.20" rx="18.00"/>
+  <g id="input-nom-prenom-required">
+  <rect id="zone-nom-prenom" x="80.00" y="2162.00" width="230.00" height="54.00" fill="#7182b2" rx="12.00"/>
+  <text id="placeholder-nom-prenom" x="94.00" y="2195.00" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="400" fill="#edf3ff" text-anchor="start">Nom et Prenom</text>
+  <text id="input-nom-prenom-required-required-flag" x="292.00" y="2182.00" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="700" fill="#ffd8d2" text-anchor="end">*</text>
+  </g>
+  <g id="input-societe">
+  <rect id="zone-societe" x="80.00" y="2230.00" width="230.00" height="54.00" fill="#7182b2" rx="12.00"/>
+  <text id="placeholder-societe" x="94.00" y="2263.00" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="400" fill="#edf3ff" text-anchor="start">Votre societe</text>
+  </g>
+  <g id="ligne-contact">
+  <g id="input-telephone">
+  <rect id="zone-telephone" x="80.00" y="2298.00" width="108.00" height="54.00" fill="#7182b2" rx="12.00"/>
+  <text id="placeholder-telephone" x="94.00" y="2331.00" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="400" fill="#edf3ff" text-anchor="start">Votre telephone</text>
+  </g>
+  <g id="input-mail-required">
+  <rect id="zone-mail" x="202.00" y="2298.00" width="108.00" height="54.00" fill="#7182b2" rx="12.00"/>
+  <text id="placeholder-mail" x="216.00" y="2331.00" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="400" fill="#edf3ff" text-anchor="start">Votre email</text>
+  <text id="input-mail-required-required-flag" x="292.00" y="2318.00" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="700" fill="#ffd8d2" text-anchor="end">*</text>
+  </g>
+  </g>
+  <g id="input-select-demande-required">
+  <rect id="zone-demande" x="80.00" y="2366.00" width="230.00" height="54.00" fill="#7182b2" rx="12.00"/>
+  <text id="option-choix-demande-selected" x="94.00" y="2399.00" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="400" fill="#edf3ff" text-anchor="start">choisir|Choisissez le sujet de votre demande</text>
+  <text id="option-demande-audit" x="100.00" y="2442.00" font-family="'Cascadia Code', Consolas, monospace" font-size="12" font-weight="400" fill="#d8e3f5" text-anchor="start">audit|Audit</text>
+  <text id="option-demande-expertise" x="220.00" y="2442.00" font-family="'Cascadia Code', Consolas, monospace" font-size="12" font-weight="400" fill="#d8e3f5" text-anchor="start">expertise|Expertise</text>
+  <text id="option-demande-formation" x="400.00" y="2442.00" font-family="'Cascadia Code', Consolas, monospace" font-size="12" font-weight="400" fill="#d8e3f5" text-anchor="start">formation|Formation</text>
+  </g>
+  <g id="input-message-required">
+  <rect id="zone-message" x="80.00" y="2460.00" width="230.00" height="106.00" fill="#7182b2" rx="12.00"/>
+  <text id="placeholder-message" x="94.00" y="2492.00" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="400" fill="#edf3ff" text-anchor="start">Votre message</text>
+  </g>
+  <text id="action-contact" x="80.00" y="2550.00" font-family="'Cascadia Code', Consolas, monospace" font-size="12" font-weight="400" fill="#d8e3f5" text-anchor="start">https://example.com/contact</text>
+  <g id="button-envoyer">
+  <polygon id="bg-button-envoyer" points="116.00,2582.00 284.00,2582.00 256.00,2630.00 88.00,2630.00" fill="#d06d63"/>
+  <text id="texte-button-envoyer" x="144.00" y="2613.00" font-family="'Segoe UI', Arial, sans-serif" font-size="18" font-weight="700" fill="#fffaf4" text-anchor="start">button-envoyer</text>
+  </g>
+  </g>
+  <g id="contact-media">
+  <rect id="image-contact" x="80.00" y="2662.00" width="230.00" height="220.00" fill="#d8e3f5" stroke="#bdd0ea" stroke-width="1.20" rx="18.00"/>
+  <text id="image-contact-label" x="100.00" y="2696.00" font-family="'Cascadia Code', Consolas, monospace" font-size="16" font-weight="400" fill="#17306b" text-anchor="start">image-contact</text>
+  </g>
+  </g>
+  <g id="footer-site">
+  <rect id="footer-site-shell" x="56.00" y="2934.00" width="278.00" height="170.00" fill="#f5eee4" stroke="#dccfbe" stroke-width="2.00" rx="24.00"/>
+  <g id="footer-content">
+  <g id="footer-brand">
+  <rect id="logo-footer" x="80.00" y="2984.00" width="44.00" height="44.00" fill="#16316d" rx="10.00"/>
+  <text id="texte-footer-brand" x="140.00" y="3012.00" font-family="'Segoe UI', Arial, sans-serif" font-size="18" font-weight="700" fill="#17306b" text-anchor="start">Embedded In Mind</text>
+  </g>
+  <g id="footer-nav">
+  <g id="href-card-footer-1">
+  <text id="link-label-footer-1" x="80.00" y="3052.00" font-family="'Segoe UI', Arial, sans-serif" font-size="16" font-weight="400" fill="#17306b" text-anchor="start">Mentions legales</text>
+  <text id="href-footer-1" x="240.00" y="3052.00" font-family="'Cascadia Code', Consolas, monospace" font-size="12" font-weight="400" fill="#7c6d60" text-anchor="start">https://example.com/mentions-legales</text>
+  </g>
+  </g>
+  <g id="footer-legal">
+  <text id="texte-footer-legal" x="310.00" y="3052.00" font-family="'Segoe UI', Arial, sans-serif" font-size="15" font-weight="400" fill="#7c6d60" text-anchor="end">2026 - Crash test figma2hugo</text>
+  </g>
+  </g>
+  </g>
+  </g>
+</svg>
