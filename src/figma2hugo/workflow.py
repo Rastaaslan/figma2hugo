@@ -10,7 +10,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from figma2hugo.config import AssetMode, ContentMode, FidelityMode, OutputMode, parse_figma_url
+from figma2hugo.config import ContentMode, FidelityMode, OutputMode, parse_figma_url
 from figma2hugo.figma_reader import FigmaExtractionService
 from figma2hugo.generators import HugoGenerator, StaticGenerator
 from figma2hugo.model import GenerationReport, IntermediateDocument
@@ -24,7 +24,6 @@ class GenerationOptions:
     out: Path
     mode: OutputMode = OutputMode.HUGO
     fidelity_mode: FidelityMode = FidelityMode.BALANCED
-    asset_mode: AssetMode = AssetMode.MIXED
     content_mode: ContentMode = ContentMode.DATA_FILE
     figma_urls: tuple[str, ...] = ()
 
@@ -60,7 +59,6 @@ def run_generation(
             document_payload = extraction_service.extract(
                 figma_urls[0],
                 temp_path,
-                asset_mode=options.asset_mode.value,
             )
 
             stage = "validating the intermediate model"
@@ -76,7 +74,6 @@ def run_generation(
                 document_payload = extraction_service.extract(
                     figma_url,
                     page_workspace,
-                    asset_mode=options.asset_mode.value,
                 )
                 stage = f"validating the intermediate model for page {index + 1}/{len(figma_urls)}"
                 documents.append(validate_document(document_payload))

@@ -197,12 +197,9 @@ def test_extraction_service_routes_named_layer_functions_into_decorative_assets(
             file_key: str,
             assets: list[dict[str, Any]],
             assets_dir: Path,
-            *,
-            asset_mode: str = "mixed",
         ) -> list[dict[str, Any]]:
             assert file_key == "FILE"
             assert assets_dir.name == "assets"
-            assert asset_mode == "mixed"
             return assets
 
     class StubExtractionService(FigmaExtractionService):
@@ -331,12 +328,9 @@ def test_extraction_service_emits_layout_metadata_for_page_sections_and_containe
             file_key: str,
             assets: list[dict[str, Any]],
             assets_dir: Path,
-            *,
-            asset_mode: str = "mixed",
         ) -> list[dict[str, Any]]:
             assert file_key == "FILE"
             assert assets_dir.name == "assets"
-            assert asset_mode == "mixed"
             return assets
 
     output_dir = Path(__file__).resolve().parents[1] / ".figma2hugo-scratch" / "test-extraction-service-layout"
@@ -348,17 +342,20 @@ def test_extraction_service_emits_layout_metadata_for_page_sections_and_containe
     assert model["page"]["layout"]["layoutMode"] == "VERTICAL"
     assert model["page"]["layout"]["itemSpacing"] == 48.0
     assert model["page"]["layout"]["inferredStrategy"] == "flow"
+    assert model["page"]["layout"]["inferredFlow"] is False
 
     section_payload = model["sections"][0]
     assert section_payload["layout"]["layoutMode"] == "VERTICAL"
     assert section_payload["layout"]["paddingLeft"] == 80.0
     assert section_payload["layout"]["inferredStrategy"] == "flow"
+    assert section_payload["layout"]["inferredFlow"] is False
 
     container_payload = section_payload["children"][0]
     assert container_payload["layout"]["layout_mode"] == "HORIZONTAL"
     assert container_payload["layout"]["layout_wrap"] == "WRAP"
     assert container_payload["layout"]["item_spacing"] == 24.0
     assert container_payload["layout"]["inferred_strategy"] == "flow"
+    assert container_payload["layout"]["inferred_flow"] is True
 
     text_payload = model["texts"]["project-title"]
     assert text_payload["layout"]["layoutSizingHorizontal"] == "FILL"
@@ -369,6 +366,70 @@ def test_extraction_service_emits_layout_metadata_for_page_sections_and_containe
     assert asset_payload["layout"]["layoutSizingVertical"] == "FIXED"
     assert asset_payload["layout"]["constraints"]["horizontal"] == "STRETCH"
     assert asset_payload["layout"]["inferredStrategy"] == "leaf"
+
+
+def test_extraction_service_rebases_section_bounds_to_selected_root() -> None:
+    root_node = {
+        "id": "10:1",
+        "name": "Page Root",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 640, "y": 1280, "width": 1920, "height": 1080},
+        "children": [],
+    }
+    section_node = {
+        "id": "10:2",
+        "name": "Hero",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 640, "y": 1280, "width": 1920, "height": 420},
+        "children": [],
+    }
+    section = SectionCandidate(
+        id="10:2",
+        name="Hero",
+        role="header",
+        node=section_node,
+        bounds={"x": 640.0, "y": 1280.0, "width": 1920.0, "height": 420.0},
+    )
+
+    class StubLayoutAnalyzer:
+        def identify_sections(self, root: dict[str, Any]) -> list[SectionCandidate]:
+            assert root["id"] == "10:1"
+            return [section]
+
+    class StubExtractionService(FigmaExtractionService):
+        def _collect_raw_payload(self, parsed_url: Any, store: Any, warnings: list[str]) -> dict[str, Any]:
+            return {
+                "rest_tree": {"document": root_node},
+                "image_fill_urls": {},
+                "variables": {},
+                "warnings": [],
+                "source_modes": ["stub"],
+            }
+
+    class StubAssetDownloader:
+        def materialize_assets(
+            self,
+            file_key: str,
+            assets: list[dict[str, Any]],
+            assets_dir: Path,
+        ) -> list[dict[str, Any]]:
+            return assets
+
+    output_dir = Path(__file__).resolve().parents[1] / ".figma2hugo-scratch" / "test-extraction-service-rebase"
+    shutil.rmtree(output_dir, ignore_errors=True)
+
+    service = StubExtractionService(layout_analyzer=StubLayoutAnalyzer(), asset_downloader=StubAssetDownloader())
+    model = service.extract("https://www.figma.com/design/FILE/Page-Root?node-id=10-1", output_dir)
+
+    assert model["page"]["width"] == 1920
+    assert model["sections"][0]["bounds"] == {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 1920.0,
+        "height": 420.0,
+    }
 
 
 def test_extraction_service_preserves_named_nested_groups_for_forms_and_buttons() -> None:
@@ -517,12 +578,9 @@ def test_extraction_service_preserves_named_nested_groups_for_forms_and_buttons(
             file_key: str,
             assets: list[dict[str, Any]],
             assets_dir: Path,
-            *,
-            asset_mode: str = "mixed",
         ) -> list[dict[str, Any]]:
             assert file_key == "FILE"
             assert assets_dir.name == "assets"
-            assert asset_mode == "mixed"
             return assets
 
     class StubExtractionService(FigmaExtractionService):
@@ -751,12 +809,9 @@ def test_extraction_service_preserves_named_nested_groups_for_accordions() -> No
             file_key: str,
             assets: list[dict[str, Any]],
             assets_dir: Path,
-            *,
-            asset_mode: str = "mixed",
         ) -> list[dict[str, Any]]:
             assert file_key == "FILE"
             assert assets_dir.name == "assets"
-            assert asset_mode == "mixed"
             return assets
 
     service = StubExtractionService(
@@ -1021,12 +1076,9 @@ def test_extraction_service_preserves_image_only_named_carousel_groups() -> None
             file_key: str,
             assets: list[dict[str, Any]],
             assets_dir: Path,
-            *,
-            asset_mode: str = "mixed",
         ) -> list[dict[str, Any]]:
             assert file_key == "FILE"
             assert assets_dir.name == "assets"
-            assert asset_mode == "mixed"
             return assets
 
     service = StubExtractionService(

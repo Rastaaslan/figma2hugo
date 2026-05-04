@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="390" height="6600" viewBox="0 0 390 6600">
+<defs>
+  <style>
+    .sans { font-family: 'Segoe UI', Arial, sans-serif; }
+    .mono { font-family: 'Cascadia Code', Consolas, monospace; }
+  </style>
+</defs>
+<title>Responsive crash test 390</title>
+    <rect id="page-bg" x="0.00" y="0.00" width="390.00" height="6600.00" fill="#f8f5ef"/>
+  <g id="page-crash-test-390">
+    <rect id="page-crash-test-390-shell" x="24.00" y="32.00" width="342.00" height="6536.00" fill="#fffdfa" stroke="#ddd1c1" stroke-width="2.00" rx="28.00"/>
+    <text id="page-label" x="44.00" y="60.00" class="mono" font-size="18" font-weight="600" fill="#7e6d5f" text-anchor="start">page-crash-test-390</text>
+    <text id="page-width-label" x="350.00" y="60.00" class="mono" font-size="16" font-weight="500" fill="#7e6d5f" text-anchor="end">mobile</text>
+  <g id="section-hero">
+    <rect id="bg-hero" x="48.00" y="92.00" width="294.00" height="500.00" fill="#11306d" rx="24.00"/>
+    <text id="titre-h1-hero" x="96.00" y="182.00" class="sans" font-size="30" font-weight="700" fill="#ffffff" text-anchor="start">titre-h1-hero</text>
+    <text id="texte-hero" x="96.00" y="234.00" class="sans" font-size="16" font-weight="500" fill="#d56f63" text-anchor="start">texte-hero</text>
+    <text id="hero-mobile-note" x="96.00" y="268.00" class="mono" font-size="14" font-weight="400" fill="#ffffff" text-anchor="start">hero-mobile-note</text>
+    <rect id="image-hero" x="117.72" y="134.00" width="182.28" height="170.00" fill="#dbe4f3" stroke="#bfd0eb" stroke-width="2.00" rx="20.00"/>
+    <text id="image-hero-label" x="135.72" y="164.00" class="mono" font-size="16" font-weight="400" fill="#11306d" text-anchor="start">image-hero</text>
+    <polygon id="decor-hero-1" points="70.00,500.00 144.00,500.00 106.00,566.00" fill="#d56f63"/>
+    <polygon id="decor-hero-2" points="258.00,126.00 316.00,146.00 286.00,202.00" fill="#6d83b7"/>
+  </g>
+  <g id="section-accompagnement">
+    <text id="titre-h2-accompagnement" x="195.00" y="674.00" class="sans" font-size="26" font-weight="700" fill="#11306d" text-anchor="middle">titre-h2-accompagnement</text>
+  <g id="card-prestation-1">
+    <rect id="card-prestation-1-shell" x="60.00" y="712.00" width="246.00" height="180.00" fill="#fffdfa" stroke="#ddd1c1" stroke-width="1.50" rx="16.00"/>
+    <text id="titre-h3-prestation-1" x="183.00" y="746.00" class="sans" font-size="22" font-weight="700" fill="#11306d" text-anchor="middle">titre-h3-prestation-1</text>
+    <text id="texte-prestation-1" x="183.00" y="790.00" class="sans" font-size="18" font-weight="600" fill="#d56f63" text-anchor="middle">texte-prestation-1</text>
+    <text id="texte-prestation-1-details" x="82.00" y="834.00" class="mono" font-size="14" font-weight="400" fill="#1f2d45" text-anchor="start">texte-prestation-1-details</text>
+  </g>
+  <g id="card-prestation-2">
+    <rect id="card-prestation-2-shell" x="60.00" y="920.00" width="246.00" height="180.00" fill="#fffdfa" stroke="#ddd1c1" stroke-width="1.50" rx="16.00"/>
+    <text id="titre-h3-prestation-2" x="183.00" y="954.00" class="sans" font-size="22" font-weight="700" fill="#11306d" text-anchor="middle">titre-h3-prestation-2</text>
+    <text id="texte-prestation-2" x="183.00" y="998.00" class="sans" font-size="18" font-weight="600" fill="#d56f63" text-anchor="middle">texte-prestation-2</text>
+    <text id="texte-prestation-2-details" x="82.00" y="1042.00" class="mono" font-size="14" font-weight="400" fill="#1f2d45" text-anchor="start">texte-prestation-2-details</text>
+  </g>
+  <g id="button-accompagnement">
+    <polygon id="bg-button-accompagnement" points="68.00,1068.00 340.00,1068.00 316.00,1116.00 50.00,1116.00" fill="#d56f63"/>
+    <text id="texte-button-accompagnement" x="195.00" y="1100.64" class="sans" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">Tous nos accompagnements</text>
+  </g>
+  </g>
+  <g id="section-bandeau-cta">
+    <polygon id="bg-bandeau-cta" points="70.00,1168.00 342.00,1168.00 288.00,1408.00 48.00,1408.00" fill="#11306d"/>
+    <text id="texte-bandeau-cta" x="147.96" y="1258.00" class="sans" font-size="20" font-weight="700" fill="#ffffff" text-anchor="middle">texte-bandeau-cta</text>
+    <text id="texte-bandeau-cta-details" x="259.68" y="1258.00" class="mono" font-size="14" font-weight="400" fill="#ffffff" text-anchor="middle">texte-bandeau-cta-details</text>
+  </g>
+  <g id="section-embedded">
+  <g id="logo-embedded">
+    <text id="logo-embedded-wordmark" x="195.00" y="1492.00" class="sans" font-size="24" font-weight="700" fill="#11306d" text-anchor="middle">logo-embedded</text>
+  </g>
+  <g id="col-embedded-decouvrez">
+    <text id="titre-h2-embedded-decouvrez" x="195.00" y="1562.00" class="sans" font-size="24" font-weight="700" fill="#11306d" text-anchor="middle">titre-h2-embedded-decouvrez</text>
+    <text id="texte-embedded-decouvrez" x="80.00" y="1614.00" class="mono" font-size="14" font-weight="400" fill="#1f2d45" text-anchor="start">texte-embedded-decouvrez</text>
+  </g>
+  <g id="col-embedded-financez">
+    <text id="titre-h2-embedded-financez" x="195.00" y="1802.00" class="sans" font-size="24" font-weight="700" fill="#11306d" text-anchor="middle">titre-h2-embedded-financez</text>
+    <text id="texte-embedded-financez" x="80.00" y="1854.00" class="mono" font-size="14" font-weight="400" fill="#1f2d45" text-anchor="start">texte-embedded-financez</text>
+  </g>
+  <g id="button-labo">
+    <polygon id="bg-button-labo" points="102.00,1710.00 254.00,1710.00 230.00,1752.00 84.00,1752.00" fill="#d56f63"/>
+    <text id="texte-button-labo" x="169.00" y="1738.56" class="sans" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">Le Labo</text>
+  </g>
+    <rect id="image-cir" x="190.00" y="1938.00" width="112.00" height="112.00" fill="#ffffff" stroke="#bfd0eb" stroke-width="1.50" rx="56.00"/>
+    <text id="image-cir-label" x="246.00" y="2000.00" class="mono" font-size="13" font-weight="700" fill="#11306d" text-anchor="middle">image-cir</text>
+  </g>
+  <g id="section-valeurs">
+    <polygon id="bg-valeurs" points="48.00,1964.00 282.00,1964.00 342.00,2184.00 48.00,2184.00" fill="#11306d"/>
+  <g id="card-valeur-idees">
+    <rect id="image-valeur-idees" x="68.92" y="2002.00" width="64.00" height="64.00" fill="#dbe4f3" stroke="#bfd0eb" stroke-width="1.50" rx="16.00"/>
+    <text id="label-valeur-idees" x="100.92" y="2116.00" class="sans" font-size="15" font-weight="500" fill="#ffffff" text-anchor="middle">label-valeur-idees</text>
+  </g>
+  <g id="card-valeur-plus">
+    <rect id="image-valeur-plus" x="113.02" y="2002.00" width="64.00" height="64.00" fill="#dbe4f3" stroke="#bfd0eb" stroke-width="1.50" rx="16.00"/>
+    <text id="image-valeur-plus-label" x="145.02" y="2048.00" class="mono" font-size="13" font-weight="400" fill="#11306d" text-anchor="middle">image-valeur-plus</text>
+  </g>
+  <g id="card-valeur-expertises">
+    <rect id="image-valeur-expertises" x="163.00" y="2002.00" width="64.00" height="64.00" fill="#dbe4f3" stroke="#bfd0eb" stroke-width="1.50" rx="16.00"/>
+    <text id="label-valeur-expertises" x="195.00" y="2116.00" class="sans" font-size="15" font-weight="500" fill="#ffffff" text-anchor="middle">label-valeur-expertises</text>
+  </g>
+  <g id="card-valeur-equals">
+    <rect id="image-valeur-equals" x="212.98" y="2002.00" width="64.00" height="64.00" fill="#dbe4f3" stroke="#bfd0eb" stroke-width="1.50" rx="16.00"/>
+    <text id="image-valeur-equals-label" x="244.98" y="2048.00" class="mono" font-size="13" font-weight="400" fill="#11306d" text-anchor="middle">image-valeur-equals</text>
+  </g>
+  <g id="card-valeur-aventure">
+    <rect id="image-valeur-aventure" x="262.96" y="2002.00" width="64.00" height="64.00" fill="#dbe4f3" stroke="#bfd0eb" stroke-width="1.50" rx="16.00"/>
+    <text id="label-valeur-aventure" x="294.96" y="2116.00" class="sans" font-size="15" font-weight="500" fill="#ffffff" text-anchor="middle">label-valeur-aventure</text>
+  </g>
+  </g>
+  <g id="section-contact-moi">
+    <rect id="image-contact-moi" x="85.00" y="2224.00" width="220.00" height="180.00" fill="#dbe4f3" stroke="#bfd0eb" stroke-width="1.50" rx="22.00"/>
+    <text id="titre-h2-contact-moi" x="195.00" y="2456.00" class="sans" font-size="24" font-weight="700" fill="#d56f63" text-anchor="middle">titre-h2-contact-moi</text>
+    <text id="texte-contact-telephone" x="195.00" y="2500.00" class="sans" font-size="18" font-weight="400" fill="#d56f63" text-anchor="middle">texte-contact-telephone</text>
+    <text id="texte-contact-mail" x="195.00" y="2538.00" class="sans" font-size="18" font-weight="400" fill="#d56f63" text-anchor="middle">texte-contact-mail</text>
+  <g id="button-mon-cv">
+    <polygon id="bg-button-mon-cv" points="123.00,2566.00 285.00,2566.00 261.00,2610.00 105.00,2610.00" fill="#d56f63"/>
+    <text id="texte-button-mon-cv" x="195.00" y="2595.92" class="sans" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">Mon C.V</text>
+  </g>
+    <text id="contact-moi-mobile-note" x="195.00" y="2628.00" class="mono" font-size="13" font-weight="400" fill="#7e6d5f" text-anchor="middle">contact-moi-mobile-note</text>
+  <g id="col-contact-moi-gauche">
+    <text id="titre-h3-contact-moi-gauche" x="68.00" y="2684.00" class="mono" font-size="18" font-weight="700" fill="#11306d" text-anchor="start">titre-h3-contact-moi-gauche</text>
+    <text id="texte-contact-moi-gauche" x="68.00" y="2720.00" class="mono" font-size="16" font-weight="600" fill="#d56f63" text-anchor="start">texte-contact-moi-gauche</text>
+    <text id="texte-contact-moi-gauche-details" x="68.00" y="2756.00" class="mono" font-size="14" font-weight="400" fill="#1f2d45" text-anchor="start">texte-contact-moi-gauche-details</text>
+  </g>
+  <g id="col-contact-moi-droite">
+    <text id="texte-contact-moi-droite" x="68.00" y="2944.00" class="mono" font-size="14" font-weight="400" fill="#1f2d45" text-anchor="start">texte-contact-moi-droite</text>
+    <text id="titre-h4-contact-moi-droite" x="68.00" y="2980.00" class="mono" font-size="16" font-weight="700" fill="#d56f63" text-anchor="start">titre-h4-contact-moi-droite</text>
+    <text id="texte-contact-moi-droite-details" x="68.00" y="3016.00" class="mono" font-size="14" font-weight="400" fill="#1f2d45" text-anchor="start">texte-contact-moi-droite-details</text>
+  </g>
+    <polygon id="decor-contact-moi-1" points="250.00,2648.00 322.00,2660.00 302.00,2576.00" fill="#6d83b7"/>
+    <polygon id="decor-contact-moi-2" points="230.00,2690.00 254.00,2744.00 276.00,2680.00" fill="#d56f63"/>
+  </g>
+  <g id="footer">
+    <rect id="bg-footer" x="48.00" y="3462.00" width="294.00" height="58.00" fill="#11306d"/>
+  <g id="footer-bandeau-contact">
+    <rect id="bg-contact-photo" x="48.00" y="2760.00" width="294.00" height="672.00" fill="#dbe4f3" stroke="#bfd0eb" stroke-width="1.50" rx="20.00"/>
+    <rect id="image-contact-robot" x="64.00" y="3134.00" width="262.00" height="298.00" fill="#e2ebf7" stroke="#bfd0eb" stroke-width="1.50" rx="18.00"/>
+    <text id="image-contact-robot-label" x="82.00" y="3162.00" class="mono" font-size="14" font-weight="400" fill="#11306d" text-anchor="start">image-contact-robot</text>
+  <g id="contact-illu">
+    <polygon id="contact-illu-frame" points="82.00,3158.00 234.00,3252.00 142.00,3408.00 82.00,3398.00" fill="#11306d"/>
+    <text id="contact-illu-label" x="150.00" y="3238.00" class="sans" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">contact-illu</text>
+  </g>
+  <g id="formulaire-contact-post">
+    <rect id="bg-contact-formulaire" x="64.00" y="2776.00" width="262.00" height="340.00" fill="#11306d" rx="16.00"/>
+  <g id="input-nom-prenom-required">
+    <rect id="zone-nom-prenom" x="84.00" y="2796.00" width="222.00" height="44.00" fill="#7486b4" rx="8.00"/>
+    <text id="placeholder-nom-prenom" x="98.00" y="2824.00" class="mono" font-size="12" font-weight="400" fill="#1f2d45" text-anchor="start">placeholder-nom-prenom</text>
+  </g>
+  <g id="input-societe">
+    <rect id="zone-societe" x="84.00" y="2854.00" width="222.00" height="44.00" fill="#7486b4" rx="8.00"/>
+    <text id="placeholder-societe" x="98.00" y="2882.00" class="mono" font-size="12" font-weight="400" fill="#1f2d45" text-anchor="start">placeholder-societe</text>
+  </g>
+  <g id="ligne-contact">
+  <g id="input-telephone-required">
+    <rect id="zone-telephone" x="84.00" y="2912.00" width="103.00" height="44.00" fill="#7486b4" rx="8.00"/>
+    <text id="placeholder-telephone" x="98.00" y="2940.00" class="mono" font-size="12" font-weight="400" fill="#1f2d45" text-anchor="start">placeholder-telephone</text>
+  </g>
+  <g id="input-mail-required">
+    <rect id="zone-mail" x="203.00" y="2912.00" width="103.00" height="44.00" fill="#7486b4" rx="8.00"/>
+    <text id="placeholder-mail" x="217.00" y="2940.00" class="mono" font-size="12" font-weight="400" fill="#1f2d45" text-anchor="start">placeholder-mail</text>
+  </g>
+  </g>
+  <g id="input-select-demande-required">
+    <rect id="zone-demande" x="84.00" y="2970.00" width="222.00" height="44.00" fill="#7486b4" rx="8.00"/>
+    <text id="option-choix-demande-selected" x="98.00" y="2998.00" class="mono" font-size="12" font-weight="400" fill="#1f2d45" text-anchor="start">option-choix-demande-selected</text>
+    <text id="option-demande-audit" x="292.00" y="2988.00" class="mono" font-size="10" font-weight="400" fill="#7e6d5f" text-anchor="end">option-demande-audit</text>
+    <text id="option-demande-expertise" x="292.00" y="3000.00" class="mono" font-size="10" font-weight="400" fill="#7e6d5f" text-anchor="end">option-demande-expertise</text>
+    <text id="option-demande-formation" x="292.00" y="3012.00" class="mono" font-size="10" font-weight="400" fill="#7e6d5f" text-anchor="end">option-demande-formation</text>
+  </g>
+  <g id="input-message-required">
+    <rect id="zone-message" x="84.00" y="3028.00" width="222.00" height="126.00" fill="#7486b4" rx="8.00"/>
+    <text id="placeholder-message" x="98.00" y="3056.00" class="mono" font-size="12" font-weight="400" fill="#1f2d45" text-anchor="start">placeholder-message</text>
+  </g>
+    <text id="action-contact" x="84.00" y="3058.00" class="mono" font-size="11" font-weight="400" fill="#7e6d5f" text-anchor="start">action-contact</text>
+  <g id="button-envoyer">
+    <polygon id="bg-button-envoyer" points="102.00,3072.00 248.00,3072.00 224.00,3110.00 84.00,3110.00" fill="#d56f63"/>
+    <text id="texte-button-envoyer" x="166.00" y="3097.84" class="sans" font-size="18" font-weight="700" fill="#ffffff" text-anchor="middle">Envoyer</text>
+  </g>
+  </g>
+    <text id="footer-text" x="195.00" y="3500.00" class="mono" font-size="14" font-weight="400" fill="#ffffff" text-anchor="middle">footer-text</text>
+  </g>
+  </g>
+  </g>
+</svg>

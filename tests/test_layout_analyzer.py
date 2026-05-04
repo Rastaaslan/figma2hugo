@@ -238,6 +238,304 @@ def test_layout_analyzer_unwraps_single_frame_wrapper_chain_into_inner_sections(
     assert [node["id"] for node in contact_section.extra_nodes] == ["1:6"]
 
 
+def test_layout_analyzer_ignores_outer_root_orphans_when_inner_page_is_promoted() -> None:
+    root_node = {
+        "id": "0:1",
+        "name": "Selection",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 2200, "height": 2600},
+        "children": [
+            {
+                "id": "page",
+                "name": "page",
+                "type": "FRAME",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 100, "y": 100, "width": 1920, "height": 2200},
+                "children": [
+                    {
+                        "id": "hero",
+                        "name": "Hero",
+                        "type": "GROUP",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": 100, "y": 100, "width": 1920, "height": 700},
+                        "children": [],
+                    },
+                    {
+                        "id": "content",
+                        "name": "Content",
+                        "type": "GROUP",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": 100, "y": 900, "width": 1920, "height": 900},
+                        "children": [],
+                    },
+                    {
+                        "id": "hero-accent",
+                        "name": "Vector",
+                        "type": "VECTOR",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": 40, "y": 40, "width": 260, "height": 260},
+                    },
+                ],
+            },
+            {
+                "id": "debug-note",
+                "name": "J’ai un soucis de Footer",
+                "type": "TEXT",
+                "visible": True,
+                "characters": "J’ai un soucis de Footer",
+                "absoluteBoundingBox": {"x": 120, "y": 2350, "width": 1200, "height": 140},
+            },
+        ],
+    }
+
+    sections = LayoutAnalyzer().identify_sections(root_node)
+
+    assert [section.id for section in sections] == ["hero", "content"]
+    assert [node["id"] for node in sections[0].extra_nodes] == ["hero-accent"]
+    assert [node["id"] for node in sections[1].extra_nodes] == []
+
+
+def test_layout_analyzer_prefers_named_page_child_over_sibling_notes() -> None:
+    root_node = {
+        "id": "0:1",
+        "name": "Selection",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 2200, "height": 2600},
+        "children": [
+            {
+                "id": "3:964",
+                "name": "page",
+                "type": "FRAME",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 100, "y": 100, "width": 1920, "height": 2200},
+                "children": [
+                    {
+                        "id": "hero",
+                        "name": "section-hero",
+                        "type": "GROUP",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": 100, "y": 100, "width": 1920, "height": 700},
+                        "children": [],
+                    },
+                    {
+                        "id": "content",
+                        "name": "section-content",
+                        "type": "GROUP",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": 100, "y": 900, "width": 1920, "height": 900},
+                        "children": [],
+                    },
+                    {
+                        "id": "footer",
+                        "name": "footer",
+                        "type": "GROUP",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": 100, "y": 1900, "width": 1920, "height": 300},
+                        "children": [],
+                    },
+                ],
+            },
+            {
+                "id": "2019:28",
+                "name": "Frame 2",
+                "type": "FRAME",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 120, "y": 2400, "width": 1600, "height": 180},
+                "children": [
+                    {
+                        "id": "2019:29",
+                        "name": "J’ai pas touché le header",
+                        "type": "TEXT",
+                        "visible": True,
+                        "characters": "J’ai pas touché le header",
+                        "absoluteBoundingBox": {"x": 140, "y": 2420, "width": 1200, "height": 120},
+                    }
+                ],
+            },
+            {
+                "id": "2019:26",
+                "name": "Frame 1",
+                "type": "FRAME",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 120, "y": 2200, "width": 1600, "height": 180},
+                "children": [
+                    {
+                        "id": "2019:27",
+                        "name": "J’ai un soucis de Footer",
+                        "type": "TEXT",
+                        "visible": True,
+                        "characters": "J’ai un soucis de Footer",
+                        "absoluteBoundingBox": {"x": 140, "y": 2220, "width": 1200, "height": 120},
+                    }
+                ],
+            },
+        ],
+    }
+
+    sections = LayoutAnalyzer().identify_sections(root_node)
+
+    assert [section.id for section in sections] == ["hero", "content", "footer"]
+
+
+def test_layout_analyzer_keeps_multiple_real_page_sections_at_root() -> None:
+    root_node = {
+        "id": "3:964",
+        "name": "maquette-accueil-1920",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": -684, "y": -2207, "width": 1920, "height": 3931},
+        "children": [
+            {
+                "id": "2004:2",
+                "name": "section-hero",
+                "type": "FRAME",
+                "visible": True,
+                "absoluteBoundingBox": {"x": -684, "y": -2207, "width": 1920, "height": 650},
+                "children": [
+                    {
+                        "id": "hero-content",
+                        "name": "hero-content",
+                        "type": "GROUP",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": -620, "y": -2100, "width": 900, "height": 300},
+                        "children": [],
+                    }
+                ],
+            },
+            {
+                "id": "6:1100",
+                "name": "section-accompagnement",
+                "type": "FRAME",
+                "visible": True,
+                "absoluteBoundingBox": {"x": -684, "y": -1557, "width": 1920, "height": 794},
+                "children": [
+                    {
+                        "id": "9:1156",
+                        "name": "accompagnement-main",
+                        "type": "FRAME",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": -684, "y": -1557, "width": 1920, "height": 446},
+                        "children": [],
+                    },
+                    {
+                        "id": "9:1165",
+                        "name": "bandeau-droite-accompagnement",
+                        "type": "FRAME",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": -684, "y": -1111, "width": 1920, "height": 298},
+                        "children": [],
+                    },
+                ],
+            },
+            {
+                "id": "6:1103",
+                "name": "section-embedded",
+                "type": "FRAME",
+                "visible": True,
+                "absoluteBoundingBox": {"x": -683, "y": -763, "width": 1918, "height": 652},
+                "children": [
+                    {
+                        "id": "logo-embedded",
+                        "name": "logo-embedded",
+                        "type": "GROUP",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": -380, "y": -720, "width": 280, "height": 170},
+                        "children": [],
+                    },
+                    {
+                        "id": "section-embedded-infos",
+                        "name": "section-embedded-infos",
+                        "type": "FRAME",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": -540, "y": -540, "width": 1620, "height": 390},
+                        "children": [],
+                    },
+                ],
+            },
+            {
+                "id": "9:1178",
+                "name": "bandeau-gauche-content",
+                "type": "FRAME",
+                "visible": True,
+                "absoluteBoundingBox": {"x": -684, "y": -111, "width": 1920, "height": 216},
+                "children": [
+                    {
+                        "id": "image-idees",
+                        "name": "image-idees",
+                        "type": "GROUP",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": -600, "y": -80, "width": 180, "height": 140},
+                        "children": [],
+                    },
+                    {
+                        "id": "image-expertise",
+                        "name": "image-expertise",
+                        "type": "GROUP",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": 300, "y": -80, "width": 180, "height": 140},
+                        "children": [],
+                    },
+                    {
+                        "id": "image-aventure",
+                        "name": "image-aventure",
+                        "type": "GROUP",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": 1200, "y": -80, "width": 180, "height": 140},
+                        "children": [],
+                    },
+                ],
+            },
+            {
+                "id": "9:1183",
+                "name": "section-contact",
+                "type": "FRAME",
+                "visible": True,
+                "absoluteBoundingBox": {"x": -683, "y": 105, "width": 1918, "height": 909},
+                "children": [
+                    {
+                        "id": "section-contact-moi",
+                        "name": "section-contact-moi",
+                        "type": "FRAME",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": -683, "y": 105, "width": 1918, "height": 909},
+                        "children": [],
+                    }
+                ],
+            },
+            {
+                "id": "9:1220",
+                "name": "footer",
+                "type": "FRAME",
+                "visible": True,
+                "absoluteBoundingBox": {"x": -683, "y": 1014, "width": 1918, "height": 710},
+                "children": [
+                    {
+                        "id": "bandeau-image-contact-demandes",
+                        "name": "bandeau-image-contact-demandes",
+                        "type": "FRAME",
+                        "visible": True,
+                        "absoluteBoundingBox": {"x": -683, "y": 1014, "width": 1918, "height": 710},
+                        "children": [],
+                    }
+                ],
+            },
+        ],
+    }
+
+    sections = LayoutAnalyzer().identify_sections(root_node)
+
+    assert [section.id for section in sections] == [
+        "2004:2",
+        "6:1100",
+        "6:1103",
+        "9:1178",
+        "9:1183",
+        "9:1220",
+    ]
+
+
 def test_layout_analyzer_keeps_vector_only_roots_as_single_visual_section() -> None:
     root_node = {
         "id": "12:990",

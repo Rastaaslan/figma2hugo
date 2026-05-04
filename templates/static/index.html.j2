@@ -3,7 +3,19 @@
 {%- endmacro %}
 {% macro render_text(text) -%}
 <{{ text.tag | e }}{% if text.dom_id %} id="{{ text.dom_id | e }}"{% endif %}{% if text.id and text.dom_id and text.id != text.dom_id %} data-node-id="{{ text.id | e }}"{% endif %} class="content-text {{ text.class_name | e }}"{{ render_attributes(text.attributes) }}>
-  {%- if text.segments -%}
+  {%- if text.list_items -%}
+    {%- for item in text.list_items -%}
+    <li{% if item.class_name %} class="{{ item.class_name | e }}"{% endif %}>
+      {%- if item.segments -%}
+        {%- for segment in item.segments -%}
+        <span class="{{ segment.class_name | e }}"{% if segment.style %} style="{{ segment.style | e }}"{% endif %}>{{ segment.html | safe }}</span>
+        {%- endfor -%}
+      {%- else -%}
+        {{ item.html | safe }}
+      {%- endif -%}
+    </li>
+    {%- endfor -%}
+  {%- elif text.segments -%}
     {%- for segment in text.segments -%}
     <span class="{{ segment.class_name | e }}"{% if segment.style %} style="{{ segment.style | e }}"{% endif %}>{{ segment.html | safe }}</span>
     {%- endfor -%}

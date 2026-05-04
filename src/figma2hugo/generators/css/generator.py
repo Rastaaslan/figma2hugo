@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .._shared import (
+    as_mapping,
     ensure_text,
     extract_scalar_token,
     flatten_token_map,
@@ -60,6 +61,7 @@ class CssGenerator:
                 flow_cursor_bottom=flow_cursor_bottom,
             )
             lines.extend(section_lines)
+        lines.extend(self._responsive_override_lines(page_data))
         return "\n".join(lines) + "\n"
 
     def _root_variable_lines(self, page_width: int, tokens: dict[str, Any]) -> list[str]:
@@ -326,6 +328,7 @@ class CssGenerator:
             lines.extend(
                 [
                     f".{section_class} {{",
+                    *self._hidden_lines(section),
                     "  position: relative;",
                     "  left: auto;",
                     "  top: auto;",
@@ -348,6 +351,7 @@ class CssGenerator:
             lines.extend(
                 [
                     f".{section_class} {{",
+                    *self._hidden_lines(section),
                     "  position: absolute;",
                     f"  left: {section_left:.2f}px;",
                     f"  top: {section_top:.2f}px;",
@@ -381,12 +385,18 @@ class CssGenerator:
     def _node_rules(self, node: dict[str, Any], *, order: int, asset_stack_overrides: dict[str, str]) -> list[str]:
         kind = node.get("kind")
         if kind == "text":
-            return self._text_rules(node.get("text", {}), order=order)
+            text = dict(as_mapping(node.get("text")))
+            if "responsive_default_hidden" not in text:
+                text["responsive_default_hidden"] = bool(node.get("responsive_default_hidden"))
+            return self._text_rules(text, order=order)
         if kind == "asset":
             asset = node.get("asset", {})
             asset_id = ensure_text(asset.get("id") or asset.get("node_id"))
+            asset_data = dict(as_mapping(asset))
+            if "responsive_default_hidden" not in asset_data:
+                asset_data["responsive_default_hidden"] = bool(node.get("responsive_default_hidden"))
             return self._asset_rules(
-                asset,
+                asset_data,
                 order=order,
                 stack_override=asset_stack_overrides.get(asset_id, ""),
             )
@@ -397,6 +407,7 @@ class CssGenerator:
         lines = [
             "",
             f".{class_name} {{",
+            *self._hidden_lines(node),
             *self._absolute_box_rules(bounds),
             f"  z-index: {10 + order};",
             "}",
@@ -410,6 +421,7 @@ class CssGenerator:
         if not class_name:
             return []
         tag_name = ensure_text(text.get("tag")).strip().lower()
+        is_list = bool(text.get("list_items"))
         bounds = text.get("bounds", {})
         render_bounds = text.get("render_bounds", {}) or {}
         style_css = ensure_text(text.get("style_css"))
@@ -424,10 +436,19 @@ class CssGenerator:
         lines = [
             "",
             f".{class_name} {{",
+            *self._hidden_lines(text),
             *self._absolute_box_rules(bounds, include_height=False),
             f"  white-space: {white_space};",
             f"  z-index: {400 + order};",
         ]
+        if is_list:
+            lines.extend(
+                [
+                    "  box-sizing: border-box;",
+                    "  list-style-position: outside;",
+                    f"  padding-inline-start: {'1.6em' if tag_name == 'ol' else '1.4em'};",
+                ]
+            )
         preferred_height = self._preferred_text_height(text, bounds, render_bounds)
         if preferred_height > 0 and self._should_preserve_text_height(text, tag_name):
             lines.append(f"  height: {preferred_height:.2f}px;")
@@ -440,6 +461,15 @@ class CssGenerator:
         ):
             lines.append(f"  {declaration}")
         lines.append("}")
+        if is_list:
+            lines.extend(
+                [
+                    "",
+                    f".{class_name} > li {{",
+                    "  margin: 0;",
+                    "}",
+                ]
+            )
         return lines
 
     def _should_preserve_text_height(self, text: dict[str, Any], tag_name: str) -> bool:
@@ -560,6 +590,8 @@ class CssGenerator:
         centered_single_line_height: float = 0.0,
     ) -> list[str]:
         declarations = self._split_css(style_css) if style_css else []
+        if self._text_uses_segment_typography(text):
+            declarations = self._strip_parent_typography_for_segmented_text(declarations)
         compact_line_height = self._compact_segment_line_height(text)
         if compact_line_height > 0:
             declarations = self._replace_line_height(declarations, compact_line_height)
@@ -574,6 +606,43 @@ class CssGenerator:
                     adjusted.append(declaration)
             declarations = adjusted
         return declarations
+
+    def _text_uses_segment_typography(self, text: dict[str, Any]) -> bool:
+        for segment in text.get("segments", []):
+            style_text = ensure_text(segment.get("style")).strip()
+            if not style_text:
+                continue
+            if any(
+                marker in style_text
+                for marker in (
+                    "font-family:",
+                    "font-size:",
+                    "font-weight:",
+                    "font-style:",
+                    "line-height:",
+                    "letter-spacing:",
+                    "color:",
+                )
+            ):
+                return True
+        return False
+
+    def _strip_parent_typography_for_segmented_text(self, declarations: list[str]) -> list[str]:
+        blocked_prefixes = (
+            "font-family:",
+            "font-size:",
+            "font-weight:",
+            "font-style:",
+            "line-height:",
+            "letter-spacing:",
+            "color:",
+        )
+        stripped: list[str] = []
+        for declaration in declarations:
+            if declaration.startswith(blocked_prefixes):
+                continue
+            stripped.append(declaration)
+        return stripped
 
     def _replace_line_height(self, declarations: list[str], line_height: float) -> list[str]:
         updated: list[str] = []
@@ -677,6 +746,7 @@ class CssGenerator:
         lines = [
             "",
             f".{class_name} {{",
+            *self._hidden_lines(asset),
             *self._absolute_box_rules(bounds),
             f"  z-index: {z_index};",
         ]
@@ -942,3 +1012,190 @@ class CssGenerator:
                 continue
             declarations.append(f"{stripped};")
         return declarations
+
+    def _responsive_override_lines(self, page_data: dict[str, Any]) -> list[str]:
+        responsive = as_mapping(page_data.get("responsive"))
+        page = as_mapping(page_data.get("page"))
+        page_slug = ensure_text(page.get("slug")).strip()
+        raw_variants = responsive.get("variants", [])
+        if not page_slug or not isinstance(raw_variants, list):
+            return []
+
+        variants: list[tuple[int, dict[str, Any]]] = []
+        for raw_variant in raw_variants:
+            variant = as_mapping(raw_variant)
+            try:
+                width = int(variant.get("width") or 0)
+            except (TypeError, ValueError):
+                width = 0
+            variant_page = as_mapping(variant.get("page"))
+            if width <= 0 or not variant_page:
+                continue
+            variants.append((width, variant_page))
+        if not variants:
+            return []
+
+        merged_sections = [section for section in page_data.get("sections", []) if isinstance(section, dict)]
+        lines: list[str] = []
+        for width, variant_page in sorted(variants, key=lambda item: item[0], reverse=True):
+            media_lines: list[str] = []
+            media_lines.extend(self._responsive_page_shell_lines(page_slug, variant_page))
+
+            variant_section_lines = self._responsive_variant_section_lines(variant_page)
+            if variant_section_lines:
+                media_lines.extend(["", *variant_section_lines])
+
+            form_control_lines = self._responsive_form_control_override_lines(variant_page)
+            if form_control_lines:
+                media_lines.extend(["", *form_control_lines])
+
+            visibility_lines = self._responsive_visibility_lines(merged_sections, width)
+            if visibility_lines:
+                media_lines.extend(["", *visibility_lines])
+
+            if not media_lines:
+                continue
+            lines.extend(
+                [
+                    "",
+                    f"@media (max-width: {width}px) {{",
+                    *self._indent_lines(media_lines, level=1),
+                    "}",
+                ]
+            )
+        return lines
+
+    def _responsive_page_shell_lines(self, page_slug: str, variant_page: dict[str, Any]) -> list[str]:
+        page = as_mapping(variant_page.get("page"))
+        sections = [section for section in variant_page.get("sections", []) if isinstance(section, dict)]
+        page_width, page_height, _, _ = self._page_geometry(page, sections)
+        return [
+            f".page.page--{page_slug} {{",
+            f"  --page-max-width: {page_width}px;",
+            "  width: var(--page-max-width);",
+            "  max-width: none;",
+            f"  min-height: {page_height}px;" if page_height else "  min-height: 100vh;",
+            "}",
+        ]
+
+    def _responsive_variant_section_lines(self, variant_page: dict[str, Any]) -> list[str]:
+        page = as_mapping(variant_page.get("page"))
+        sections = [section for section in variant_page.get("sections", []) if isinstance(section, dict)]
+        if not sections:
+            return []
+        page_width, _, page_origin_x, page_origin_y = self._page_geometry(page, sections)
+        lines: list[str] = []
+        flow_cursor_bottom = 0.0
+        for section in sections:
+            section_lines, flow_cursor_bottom = self._section_rules(
+                section,
+                page_width,
+                page_origin_x,
+                page_origin_y,
+                flow_cursor_bottom=flow_cursor_bottom,
+            )
+            lines.extend(section_lines)
+        return lines
+
+    def _responsive_form_control_override_lines(self, variant_page: dict[str, Any]) -> list[str]:
+        lines: list[str] = []
+        for section in variant_page.get("sections", []):
+            if not isinstance(section, dict):
+                continue
+            for node in section.get("children", []):
+                lines.extend(self._responsive_node_form_control_override_lines(node))
+        return lines
+
+    def _responsive_node_form_control_override_lines(self, node: dict[str, Any]) -> list[str]:
+        if not isinstance(node, dict):
+            return []
+        lines: list[str] = []
+        if node.get("kind") == "container":
+            control = as_mapping(node.get("form_control"))
+            if control:
+                class_name = ensure_text(control.get("class_name")).strip()
+                bounds = as_mapping(control.get("bounds"))
+                if class_name and bounds:
+                    left = float(bounds.get("x", 0) or 0)
+                    top = float(bounds.get("y", 0) or 0)
+                    width = float(bounds.get("width", 0) or 0)
+                    height = float(bounds.get("height", 0) or 0)
+                    control_lines = [
+                        "",
+                        f".{class_name} {{",
+                        "  position: absolute !important;",
+                        f"  left: {left:.2f}px !important;",
+                        f"  top: {top:.2f}px !important;",
+                    ]
+                    if width > 0:
+                        control_lines.append(f"  width: {width:.2f}px !important;")
+                    if height > 0:
+                        control_lines.append(f"  height: {height:.2f}px !important;")
+                    control_lines.append("}")
+                    lines.extend(control_lines)
+            for child in node.get("children", []):
+                lines.extend(self._responsive_node_form_control_override_lines(child))
+        return lines
+
+    def _responsive_visibility_lines(self, merged_sections: list[dict[str, Any]], width: int) -> list[str]:
+        lines: list[str] = []
+        for section in merged_sections:
+            lines.extend(self._responsive_item_visibility_lines(section, width))
+        return lines
+
+    def _responsive_item_visibility_lines(self, item: dict[str, Any], width: int) -> list[str]:
+        selector = self._responsive_selector(item)
+        lines: list[str] = []
+        raw_present_widths = item.get("responsive_present_widths", [])
+        present_widths = {
+            int(value)
+            for value in raw_present_widths
+            if isinstance(value, int) or ensure_text(value).isdigit()
+        }
+        default_hidden = bool(item.get("responsive_default_hidden"))
+        if selector and present_widths:
+            if width not in present_widths:
+                lines.extend(
+                    [
+                        f"{selector} {{",
+                        "  display: none !important;",
+                        "}",
+                    ]
+                )
+                return lines
+            if default_hidden:
+                lines.extend(
+                    [
+                        f"{selector} {{",
+                        "  display: block !important;",
+                        "}",
+                    ]
+                )
+        for child in item.get("children", []):
+            if isinstance(child, dict):
+                lines.extend(self._responsive_item_visibility_lines(child, width))
+        return lines
+
+    def _responsive_selector(self, item: dict[str, Any]) -> str:
+        if not isinstance(item, dict):
+            return ""
+        if item.get("kind") == "text":
+            text = as_mapping(item.get("text"))
+            class_name = ensure_text(text.get("class_name")).strip()
+        elif item.get("kind") == "asset":
+            asset = as_mapping(item.get("asset"))
+            class_name = ensure_text(asset.get("class_name")).strip()
+        else:
+            class_name = ensure_text(item.get("class_name")).strip()
+        if not class_name:
+            return ""
+        return f".{class_name}"
+
+    def _hidden_lines(self, item: dict[str, Any]) -> list[str]:
+        if not bool(item.get("responsive_default_hidden")):
+            return []
+        return ["  display: none;"]
+
+    def _indent_lines(self, lines: list[str], *, level: int) -> list[str]:
+        indentation = "  " * max(level, 0)
+        return [f"{indentation}{line}" if line else "" for line in lines]

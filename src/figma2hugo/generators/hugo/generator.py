@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from .._responsive import detect_responsive_variant, merge_responsive_family
 from .._shared import (
     CanonicalModelBuilder,
     GenerationArtifacts,
@@ -68,12 +69,14 @@ class HugoGenerator:
         output_path = Path(output_dir)
         managed_hashes, written_files = self._prepare_output_directory(output_path)
 
+        built_pages = [self._builder.build(model) for model in models]
+        merged_pages = self._merge_responsive_pages(built_pages)
+
         site_pages: list[dict[str, Any]] = []
         used_slugs: set[str] = set()
         scoped_pages: list[dict[str, Any]] = []
 
-        for index, model in enumerate(models):
-            page_data = self._builder.build(model)
+        for index, page_data in enumerate(merged_pages):
             page_slug = self._unique_slug(str(page_data["page"]["slug"]), used_slugs)
             scoped_page = self._scope_page_data(page_data, page_slug)
             stylesheet_path = f"css/pages/{page_slug}.css"
@@ -116,6 +119,34 @@ class HugoGenerator:
             written_files=tuple(written_files),
             page_data={"pages": site_pages},
         )
+
+    def _merge_responsive_pages(self, page_datas: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        grouped: list[tuple[str, list[dict[str, Any]], str | None]] = []
+        grouped_index: dict[str, int] = {}
+
+        for page_data in page_datas:
+            detected = detect_responsive_variant(page_data)
+            if detected is None:
+                group_key = f"single::{len(grouped)}"
+                grouped_index[group_key] = len(grouped)
+                grouped.append((group_key, [page_data], None))
+                continue
+
+            family_slug, _ = detected
+            group_key = f"responsive::{family_slug}"
+            if group_key not in grouped_index:
+                grouped_index[group_key] = len(grouped)
+                grouped.append((group_key, [page_data], family_slug))
+                continue
+            grouped[grouped_index[group_key]][1].append(page_data)
+
+        merged_pages: list[dict[str, Any]] = []
+        for _, pages, family_slug in grouped:
+            if family_slug and len(pages) > 1:
+                merged_pages.append(merge_responsive_family(pages))
+            else:
+                merged_pages.extend(pages)
+        return merged_pages
 
     def _prepare_output_directory(self, output_path: Path) -> tuple[dict[str, str], list[Path]]:
         ensure_directory(output_path)
@@ -218,35 +249,54 @@ class HugoGenerator:
         scoped_page = deepcopy(page_data)
         scoped_page["page"]["slug"] = page_slug
 
-        asset_updates: dict[str, tuple[str, str, str]] = {}
-        for asset in scoped_page.get("assets", []):
+        asset_updates = self._scope_assets_for_page(scoped_page, page_slug)
+
+        responsive = scoped_page.get("responsive", {}) or {}
+        for variant in responsive.get("variants", []):
+            variant_page = variant.get("page", {}) or {}
+            self._scope_assets_for_page(variant_page, page_slug, asset_updates=asset_updates)
+
+        return scoped_page
+
+    def _scope_assets_for_page(
+        self,
+        page_data: dict[str, Any],
+        page_slug: str,
+        *,
+        asset_updates: dict[str, tuple[str, str, str]] | None = None,
+    ) -> dict[str, tuple[str, str, str]]:
+        updates: dict[str, tuple[str, str, str]] = dict(asset_updates or {})
+        for asset in page_data.get("assets", []):
             asset_id = str(asset.get("id") or asset.get("node_id") or "")
             local_path = str(asset.get("local_path") or "").strip()
             public_path = str(asset.get("public_path") or "").strip()
             css_public_path = str(asset.get("css_public_path") or "").strip()
-            if not local_path and not public_path and not css_public_path:
-                continue
-            relative_path = local_path.lstrip("/")
-            if relative_path.startswith("images/"):
-                relative_path = relative_path[len("images/") :]
-            if relative_path:
-                scoped_relative_path = f"images/{page_slug}/{relative_path}"
-                scoped_public_path = scoped_relative_path
-                scoped_css_public_path = f"/{scoped_relative_path}"
+            if asset_id and asset_id in updates:
+                scoped_relative_path, scoped_public_path, scoped_css_public_path = updates[asset_id]
             else:
-                scoped_relative_path = local_path
-                scoped_public_path = public_path
-                scoped_css_public_path = css_public_path
+                if not local_path and not public_path and not css_public_path:
+                    continue
+                relative_path = local_path.lstrip("/")
+                if relative_path.startswith("images/"):
+                    relative_path = relative_path[len("images/") :]
+                if relative_path:
+                    scoped_relative_path = f"images/{page_slug}/{relative_path}"
+                    scoped_public_path = scoped_relative_path
+                    scoped_css_public_path = f"/{scoped_relative_path}"
+                else:
+                    scoped_relative_path = local_path
+                    scoped_public_path = public_path
+                    scoped_css_public_path = css_public_path
+                if asset_id:
+                    updates[asset_id] = (scoped_relative_path, scoped_public_path, scoped_css_public_path)
+
             asset["local_path"] = scoped_relative_path
             asset["public_path"] = scoped_public_path
             asset["css_public_path"] = scoped_css_public_path
-            if asset_id:
-                asset_updates[asset_id] = (scoped_relative_path, scoped_public_path, scoped_css_public_path)
 
-        for section in scoped_page.get("sections", []):
-            self._scope_section_assets(section.get("children", []), asset_updates)
-
-        return scoped_page
+        for section in page_data.get("sections", []):
+            self._scope_section_assets(section.get("children", []), updates)
+        return updates
 
     def _scope_section_assets(
         self,
@@ -346,15 +396,11 @@ class HugoGenerator:
         return ""
 
     def _is_component_like_nested_section(self, node: dict[str, Any]) -> bool:
-        child_roles = {
-            ensure_text(child.get("role")).strip().lower()
-            for child in node.get("children", [])
-            if isinstance(child, dict)
-        }
-        if child_roles & {"card", "link-card"}:
+        attributes = node.get("attributes", {}) or {}
+        if str(attributes.get("data-section-block", "")).strip().lower() == "true":
             return True
         layout = node.get("layout", {}) or {}
-        return bool(layout.get("inferred_flow")) and len(node.get("children", [])) >= 2
+        return bool(layout.get("use_flow_shell")) and len(node.get("children", [])) >= 2
 
     def _component_slug(self, node: dict[str, Any]) -> str:
         return slugify(node.get("name") or node.get("dom_id") or node.get("id") or "component", "component")

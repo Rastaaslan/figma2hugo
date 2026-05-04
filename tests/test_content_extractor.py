@@ -1098,6 +1098,83 @@ def test_extract_uses_paragraph_tag_for_multiline_copy_blocks_even_with_large_fo
     assert result.texts["copy-block"]["tag"] == "p"
 
 
+def test_extract_detects_multiline_bullet_lists_as_unordered_lists() -> None:
+    section_node = {
+        "id": "services",
+        "name": "Services",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1440, "height": 720},
+        "children": [
+            {
+                "id": "services-list",
+                "name": "Services List",
+                "type": "TEXT",
+                "visible": True,
+                "characters": "• Audit UX detaille\n• Prototype rapide",
+                "style": {"fontFamily": "Inter", "fontSize": 20, "fontWeight": 400},
+                "absoluteBoundingBox": {"x": 120, "y": 140, "width": 420, "height": 120},
+            }
+        ],
+    }
+    section = SectionCandidate(
+        id="services",
+        name="Services",
+        role="section",
+        node=section_node,
+        bounds={"x": 0.0, "y": 0.0, "width": 1440.0, "height": 720.0},
+    )
+
+    result = ContentExtractor().extract([section], image_fill_urls={})
+
+    assert result.texts["services-list"]["tag"] == "ul"
+    assert result.texts["services-list"]["role"] == "list"
+    assert result.texts["services-list"]["value"] == "• Audit UX detaille\n• Prototype rapide"
+
+
+def test_extract_keeps_bullet_lines_as_distinct_texts() -> None:
+    section_node = {
+        "id": "roadmap",
+        "name": "Roadmap",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1440, "height": 720},
+        "children": [
+            {
+                "id": "bullet-1",
+                "name": "Bullet 1",
+                "type": "TEXT",
+                "visible": True,
+                "characters": "- premiere etape tres importante",
+                "style": {"fontFamily": "Inter", "fontSize": 18, "fontWeight": 400},
+                "absoluteBoundingBox": {"x": 120, "y": 160, "width": 420, "height": 28},
+            },
+            {
+                "id": "bullet-2",
+                "name": "Bullet 2",
+                "type": "TEXT",
+                "visible": True,
+                "characters": "- seconde etape tout aussi utile",
+                "style": {"fontFamily": "Inter", "fontSize": 18, "fontWeight": 400},
+                "absoluteBoundingBox": {"x": 120, "y": 204, "width": 420, "height": 28},
+            },
+        ],
+    }
+    section = SectionCandidate(
+        id="roadmap",
+        name="Roadmap",
+        role="section",
+        node=section_node,
+        bounds={"x": 0.0, "y": 0.0, "width": 1440.0, "height": 720.0},
+    )
+
+    result = ContentExtractor().extract([section], image_fill_urls={})
+
+    assert set(result.texts) == {"bullet-1", "bullet-2"}
+    assert result.texts["bullet-1"]["value"] == "- premiere etape tres importante"
+    assert result.texts["bullet-2"]["value"] == "- seconde etape tout aussi utile"
+
+
 def test_extract_retags_split_sentence_lines_as_paragraph_clusters() -> None:
     section_node = {
         "id": "content",

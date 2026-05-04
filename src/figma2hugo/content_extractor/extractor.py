@@ -15,6 +15,10 @@ KNOWN_CONTAINER_TYPES = {"DOCUMENT", "CANVAS", "PAGE", "SECTION"}
 KNOWN_NODE_TYPES = TEXT_TYPES | VECTOR_TYPES | IMAGE_HOST_TYPES | COMPOSITE_HOST_TYPES | KNOWN_CONTAINER_TYPES
 NAME_TOKEN_RE = re.compile(r"[a-z0-9]+")
 FILE_LIKE_NAME_RE = re.compile(r"\.(?:tif|tiff|png|jpe?g|webp|svg)$", re.IGNORECASE)
+UNORDERED_LIST_LINE_RE = re.compile(r"^(?P<indent>\s*)(?P<marker>[•◦▪‣●○·\-\*])\s+(?P<content>\S.*)$")
+ORDERED_LIST_LINE_RE = re.compile(
+    r"^(?P<indent>\s*)(?P<ordinal>\d+|[A-Za-z])(?P<delimiter>[.)])\s+(?P<content>\S.*)$"
+)
 MASK_NAME_TOKENS = {"mask", "clip", "clippath"}
 FOREGROUND_NAME_TOKENS = {"foreground", "fg"}
 BACKGROUND_NAME_TOKENS = {"background", "bg", "backdrop"}
@@ -379,6 +383,8 @@ class ContentExtractor:
             if font_size >= 30:
                 return "h2"
             return "h3"
+        if list_tag := self._list_tag_from_text(characters):
+            return list_tag
         if self._looks_like_paragraph_text(name, characters, font_size):
             return "p"
         if font_size >= 44:
@@ -413,6 +419,38 @@ class ContentExtractor:
         if len(value) >= 90 and font_size < 64:
             return True
         return False
+
+    def _list_tag_from_text(self, value: str) -> str:
+        normalized = value.replace("\r\n", "\n").replace("\r", "\n")
+        if not normalized or "\n" not in normalized:
+            return ""
+        item_count = 0
+        list_tag = ""
+        for line in normalized.split("\n"):
+            if not line.strip():
+                continue
+            if UNORDERED_LIST_LINE_RE.fullmatch(line):
+                current_tag = "ul"
+            elif ORDERED_LIST_LINE_RE.fullmatch(line):
+                current_tag = "ol"
+            else:
+                return ""
+            if list_tag and current_tag != list_tag:
+                return ""
+            list_tag = current_tag
+            item_count += 1
+        if item_count < 2:
+            return ""
+        return list_tag
+
+    def _looks_like_list_line(self, value: str) -> bool:
+        normalized = value.replace("\r\n", "\n").replace("\r", "\n").strip()
+        if not normalized or "\n" in normalized:
+            return False
+        return bool(
+            UNORDERED_LIST_LINE_RE.fullmatch(normalized)
+            or ORDERED_LIST_LINE_RE.fullmatch(normalized)
+        )
 
     def _merge_paragraph_line_clusters(self, texts: dict[str, dict[str, Any]]) -> None:
         texts_by_section: dict[str, list[dict[str, Any]]] = {}
@@ -464,6 +502,8 @@ class ContentExtractor:
             return False
         value = self._normalized_text_value(text)
         if not value:
+            return False
+        if self._looks_like_list_line(value):
             return False
         words = NAME_TOKEN_RE.findall(value.lower())
         if len(words) < 4:
@@ -961,7 +1001,12 @@ class ContentExtractor:
             "clips_content": self._bool_or_none(node, "clipsContent"),
             "constraints": self._constraints_payload(node),
             "inferred_strategy": strategy,
-            "inferred_flow": strategy == "flow",
+            "inferred_flow": self._bool_or_none(
+                {
+                    "inferred_flow": self._infer_layout_is_flow(node),
+                },
+                "inferred_flow",
+            ),
         }
         return {
             key: value
@@ -982,6 +1027,10 @@ class ContentExtractor:
         if node.get("children"):
             return "absolute"
         return fallback_strategy
+
+    def _infer_layout_is_flow(self, node: dict[str, Any]) -> bool:
+        layout_wrap = self._string_or_none(node.get("layoutWrap"))
+        return bool(layout_wrap and layout_wrap != "NO_WRAP")
 
     def _constraints_payload(self, node: dict[str, Any]) -> dict[str, Any]:
         constraints = node.get("constraints")
@@ -1268,6 +1317,10 @@ class ContentExtractor:
 
     def _guess_text_role(self, tag: str, node: dict[str, Any]) -> str:
         name = (node.get("name") or "").lower()
+        if tag in {"ul", "ol"}:
+            return "list"
+        if tag == "li":
+            return "list-item"
         if self._name_has_prefix(name, ("label", "libelle")):
             return "label"
         if self._name_has_prefix(name, ("button", "btn")):

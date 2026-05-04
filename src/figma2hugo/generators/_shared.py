@@ -24,6 +24,10 @@ PUNCTUATION_ONLY_LINE_RE = re.compile(r"^[-\u2010-\u2015/:|+*·•]+$")
 # Redefinition propre pour couvrir aussi les ponctuations isolées
 # comme "!" ou "?" que Figma peut placer sur une ligne dédiée.
 PUNCTUATION_ONLY_LINE_RE = re.compile(r"^[-!\?\u00a1\u00bf\u2010-\u2015/:|+*\u00b7\u2022]+$")
+UNORDERED_LIST_LINE_RE = re.compile(r"^(?P<indent>\s*)(?P<marker>[•◦▪‣●○·\-\*])\s+(?P<content>\S.*)$")
+ORDERED_LIST_LINE_RE = re.compile(
+    r"^(?P<indent>\s*)(?P<ordinal>\d+|[A-Za-z])(?P<delimiter>[.)])\s+(?P<content>\S.*)$"
+)
 
 @dataclass(slots=True)
 class GenerationArtifacts:
@@ -191,6 +195,23 @@ def normalize_bounds(value: Any) -> dict[str, float]:
         "y": float(coalesce(data, "y", "top", default=0) or 0),
         "width": float(coalesce(data, "width", "w", default=0) or 0),
         "height": float(coalesce(data, "height", "h", default=0) or 0),
+    }
+
+
+def union_bounds(values: Iterable[Any]) -> dict[str, float]:
+    boxes = [normalize_bounds(value) for value in values]
+    boxes = [box for box in boxes if box["width"] > 0 or box["height"] > 0]
+    if not boxes:
+        return {"x": 0.0, "y": 0.0, "width": 0.0, "height": 0.0}
+    left = min(box["x"] for box in boxes)
+    top = min(box["y"] for box in boxes)
+    right = max(box["x"] + box["width"] for box in boxes)
+    bottom = max(box["y"] + box["height"] for box in boxes)
+    return {
+        "x": left,
+        "y": top,
+        "width": right - left,
+        "height": bottom - top,
     }
 
 
@@ -556,7 +577,27 @@ def style_map_to_css(value: Any) -> str:
         declarations.append(f"font-style: {normalized_font_style};")
     line_height = coalesce(data, "lineHeight", "line_height")
     if line_height:
-        declarations.append(f"line-height: {ensure_unit(line_height)};")
+        line_height_value: float | None = None
+        font_size_value: float | None = None
+        try:
+            line_height_value = float(line_height)
+        except (TypeError, ValueError):
+            line_height_value = None
+        try:
+            font_size_value = float(font_size)
+        except (TypeError, ValueError):
+            font_size_value = None
+
+        # Figma sometimes reports line-heights that reflect wrapper geometry
+        # rather than usable text leading. Emitting those values verbatim
+        # causes severe visual distortion in browser output.
+        use_line_height = bool(line_height_value and line_height_value > 0)
+        if use_line_height and font_size_value and font_size_value > 0:
+            ratio = line_height_value / font_size_value
+            if ratio < 0.9 or ratio > 2.2:
+                use_line_height = False
+        if use_line_height:
+            declarations.append(f"line-height: {ensure_unit(line_height)};")
     letter_spacing = coalesce(data, "letterSpacing", "letter_spacing")
     if letter_spacing not in (None, ""):
         declarations.append(f"letter-spacing: {ensure_unit(letter_spacing)};")
@@ -694,13 +735,8 @@ class CanonicalModelBuilder:
             self._normalize_section(section, index)
             for index, section in enumerate(source_sections)
         ]
-        for key, value in self._global_texts.items():
-            if key not in self._text_index:
-                self._normalize_text(value, section_id="", section_index=0, text_index=0)
-        for key, value in self._global_assets.items():
-            if key not in self._asset_index:
-                self._normalize_asset(value, section_id="", asset_index=0)
         page = self._normalize_page(source.get("page"))
+        page, sections = self._promote_root_page_frame(page, sections)
         warnings = dedupe_strings(coerce_list(source.get("warnings")) + self._warnings)
         return {
             "page": page,
@@ -709,6 +745,128 @@ class CanonicalModelBuilder:
             "assets": list(self._asset_index.values()),
             "tokens": self._normalize_tokens(source.get("tokens")),
             "warnings": warnings,
+        }
+
+    def _promote_root_page_frame(
+        self,
+        page: dict[str, Any],
+        sections: list[dict[str, Any]],
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        if not sections:
+            return page, sections
+
+        page_width = float(page.get("width", 0) or 0)
+        page_height = float(page.get("height", 0) or 0)
+        should_consider_promotion = page_width <= 0 or page_height <= 0
+
+        if not should_consider_promotion:
+            return page, sections
+
+        candidate = self._pick_promotable_root_section(sections)
+        if candidate is None:
+            return page, sections
+
+        promoted_sections = self._promote_section_children(candidate)
+        if not promoted_sections:
+            return page, sections
+
+        candidate_bounds = normalize_bounds(candidate.get("bounds"))
+        promoted_page = {
+            **page,
+            "width": float(candidate_bounds.get("width", 0) or page_width or 0),
+            "height": float(candidate_bounds.get("height", 0) or page_height or 0),
+            "meta": {
+                **as_mapping(page.get("meta")),
+                "promotedRootSectionId": ensure_text(candidate.get("id")),
+                "promotedRootSectionName": ensure_text(candidate.get("name")),
+            },
+        }
+        self._warnings.append(
+            (
+                "Promoted inner frame "
+                f"'{ensure_text(candidate.get('name'), default=ensure_text(candidate.get('id')))}' "
+                "as the effective page root because the selected Figma node behaves like a page container."
+            )
+        )
+        return promoted_page, promoted_sections
+
+    def _pick_promotable_root_section(self, sections: list[dict[str, Any]]) -> dict[str, Any] | None:
+        preferred_names = {"page", "root", "canvas"}
+        eligible: list[dict[str, Any]] = []
+        for section in sections:
+            if not self._section_looks_like_page_root(section):
+                continue
+            eligible.append(section)
+        if not eligible:
+            return None
+
+        for section in eligible:
+            normalized_name = normalize_layer_name(section.get("name"))
+            if normalized_name in preferred_names:
+                return section
+
+        return max(
+            eligible,
+            key=lambda section: float(normalize_bounds(section.get("bounds")).get("width", 0) or 0)
+            * float(normalize_bounds(section.get("bounds")).get("height", 0) or 0),
+        )
+
+    def _section_looks_like_page_root(self, section: dict[str, Any]) -> bool:
+        child_sections = 0
+        for child in coerce_list(section.get("children")):
+            child_data = as_mapping(child)
+            if child_data.get("kind") != "container":
+                continue
+            child_tag = ensure_text(child_data.get("tag")).strip().lower()
+            child_role = ensure_text(child_data.get("role")).strip().lower()
+            child_name = normalize_layer_name(child_data.get("name"))
+            if (
+                child_tag in {"section", "footer", "header", "nav"}
+                or child_role in {"section", "footer", "header", "nav"}
+                or child_name.startswith("section-")
+                or child_name.startswith("footer")
+                or child_name.startswith("header")
+                or child_name.startswith("nav")
+                or child_name.startswith("bandeau-")
+            ):
+                child_sections += 1
+        return child_sections >= 2
+
+    def _promote_section_children(self, section: dict[str, Any]) -> list[dict[str, Any]]:
+        promoted: list[dict[str, Any]] = []
+        for index, child in enumerate(coerce_list(section.get("children"))):
+            child_data = as_mapping(child)
+            if child_data.get("kind") != "container":
+                continue
+            promoted.append(self._container_to_section(child_data, fallback_index=index))
+        return promoted
+
+    def _container_to_section(self, node: dict[str, Any], *, fallback_index: int) -> dict[str, Any]:
+        section_id = ensure_text(
+            coalesce(node, "id", "nodeId", "node_id", default=f"section-{fallback_index + 1}"),
+            default=f"section-{fallback_index + 1}",
+        )
+        section_name = ensure_text(coalesce(node, "name", default=section_id), default=section_id)
+        section_role = ensure_text(coalesce(node, "role", default="section"), default="section").lower()
+        section_tag = ensure_text(
+            coalesce(node, "tag", default=semantic_section_tag(section_role, fallback_index)),
+            default="section",
+        )
+        return {
+            "id": section_id,
+            "name": section_name,
+            "role": section_role,
+            "tag": section_tag,
+            "anchor": slugify(coalesce(node, "anchor", "slug", default=section_name), default=section_id),
+            "class_name": ensure_text(node.get("class_name"), default=class_name("section", section_name)),
+            "bounds": normalize_bounds(node.get("bounds")),
+            "layout": self._normalize_layout_metadata(node.get("layout"), fallback_strategy="absolute"),
+            "attributes": sanitize_attributes(node.get("attributes")),
+            "metadata": as_mapping(node.get("metadata")),
+            "texts": [],
+            "assets": [],
+            "decorative_assets": [],
+            "children": coerce_list(node.get("children")),
         }
 
     def _index_by_identifier(self, value: Any) -> dict[str, Any]:
@@ -775,11 +933,7 @@ class CanonicalModelBuilder:
         )
         inferred_flow = to_bool_or_none(coalesce(raw_layout, "inferred_flow", "inferredFlow"))
         if inferred_flow is None:
-            inferred_flow = (
-                inferred_strategy == "flow"
-                or layout_mode in {"HORIZONTAL", "VERTICAL"}
-                or (layout_wrap not in {"", "NO_WRAP"})
-            )
+            inferred_flow = layout_wrap not in {"", "NO_WRAP"}
 
         direction = ""
         if layout_mode == "HORIZONTAL":
@@ -854,7 +1008,8 @@ class CanonicalModelBuilder:
         strategy = ensure_text(layout.get("inferred_strategy")).strip().lower()
         if strategy:
             attrs["data-layout-strategy"] = strategy
-        attrs["data-layout-flow"] = "true" if bool(layout.get("inferred_flow")) else "false"
+        flow_enabled = bool(layout.get("inferred_flow")) or bool(layout.get("use_flow_shell"))
+        attrs["data-layout-flow"] = "true" if flow_enabled else "false"
         if bool(layout.get("use_flow_shell")):
             attrs["data-layout-shell"] = "flow"
 
@@ -1022,6 +1177,10 @@ class CanonicalModelBuilder:
                 ]
             )
         section_bounds = normalize_bounds(coalesce(data, "bounds", "absoluteBoundingBox", default={}))
+        section_bounds = self._expand_section_bounds_to_children(
+            bounds=section_bounds,
+            children=children,
+        )
         section_attrs = self._layout_attributes(section_layout, bounds=section_bounds)
         return {
             "id": section_id,
@@ -1040,6 +1199,38 @@ class CanonicalModelBuilder:
             "children": children,
         }
 
+    def _expand_section_bounds_to_children(
+        self,
+        *,
+        bounds: dict[str, float],
+        children: list[dict[str, Any]],
+    ) -> dict[str, float]:
+        if not children:
+            return bounds
+        section_width = float(bounds.get("width", 0.0) or 0.0)
+        section_height = float(bounds.get("height", 0.0) or 0.0)
+        if section_width <= 0 and section_height <= 0:
+            return bounds
+
+        candidate_children = [child for child in children if not self._child_is_geometry_exempt(child)]
+        if not candidate_children:
+            return bounds
+
+        union = union_bounds(child.get("bounds", {}) for child in candidate_children)
+        union_width = float(union.get("width", 0.0) or 0.0)
+        union_height = float(union.get("height", 0.0) or 0.0)
+        if union_width <= 0 and union_height <= 0:
+            return bounds
+
+        union_right = float(union.get("x", 0.0) or 0.0) + union_width
+        union_bottom = float(union.get("y", 0.0) or 0.0) + union_height
+        expanded = dict(bounds)
+        if union_right > section_width:
+            expanded["width"] = union_right
+        if union_bottom > section_height:
+            expanded["height"] = union_bottom
+        return expanded
+
     def _normalize_node(
         self,
         value: Any,
@@ -1050,6 +1241,7 @@ class CanonicalModelBuilder:
         parent_absolute_offset: tuple[float, float] = (0.0, 0.0),
         source_space: str = PARENT_COORDINATE_SPACE,
         inside_form: bool = False,
+        parent_name: str | None = None,
     ) -> dict[str, Any]:
         if isinstance(value, str):
             if value in self._global_texts:
@@ -1148,6 +1340,7 @@ class CanonicalModelBuilder:
                     parent_absolute_offset=absolute_offset,
                     source_space=child_source_space,
                     inside_form=inside_form or role == "form",
+                    parent_name=node_name,
                 )
                 for child_index, child in enumerate(coerce_list(data.get("children")))
             ]
@@ -1163,6 +1356,7 @@ class CanonicalModelBuilder:
                         parent_absolute_offset=absolute_offset,
                         source_space=child_source_space,
                         inside_form=inside_form or role == "form",
+                        parent_name=node_name,
                     )
                     for child_index, item in enumerate(
                         self._resolve_items(data.get("texts"), self._global_texts)
@@ -1177,6 +1371,7 @@ class CanonicalModelBuilder:
                         parent_absolute_offset=absolute_offset,
                         source_space=child_source_space,
                         inside_form=inside_form or role == "form",
+                        parent_name=node_name,
                     )
                     for child_index, item in enumerate(
                         self._resolve_items(data.get("assets"), self._global_assets)
@@ -1209,11 +1404,34 @@ class CanonicalModelBuilder:
             children=children,
             bounds=bounds,
         )
-        if self._is_section_block_candidate(role=role, layout=layout, children=children):
+        if not bool(layout.get("inferred_flow")) and self._should_opt_into_flow_layout(
+            role=role,
+            node_name=node_name,
+            layout=layout,
+        ):
+            layout["inferred_flow"] = True
+        if self._is_section_block_candidate(
+            node_name=node_name,
+            role=role,
+            layout=layout,
+            children=children,
+        ):
             if layout.get("use_flow_shell") is None:
                 layout["use_flow_shell"] = True
+        bounds, children = self._tighten_container_bounds_to_children(
+            node_name=node_name,
+            parent_name=parent_name,
+            role=role,
+            bounds=bounds,
+            children=children,
+        )
         attrs = self._merge_attributes(attrs, self._layout_attributes(layout, bounds=bounds))
-        if self._is_section_block_candidate(role=role, layout=layout, children=children):
+        if self._is_section_block_candidate(
+            node_name=node_name,
+            role=role,
+            layout=layout,
+            children=children,
+        ):
             attrs["data-section-block"] = "true"
         form_control = self._derive_form_control(
             role=role,
@@ -1243,16 +1461,297 @@ class CanonicalModelBuilder:
             "form_control": form_control,
         }
 
+    def _tighten_container_bounds_to_children(
+        self,
+        *,
+        node_name: str,
+        parent_name: str | None,
+        role: str,
+        bounds: dict[str, float],
+        children: list[dict[str, Any]],
+    ) -> tuple[dict[str, float], list[dict[str, Any]]]:
+        if not children:
+            return bounds, children
+        normalized_role = ensure_text(role).strip().lower()
+        if normalized_role in {"button", "field", "accordion-trigger", "carousel-thumb"}:
+            return bounds, children
+        if self._should_preserve_visual_container_bounds(
+            node_name=node_name,
+            parent_name=parent_name,
+            role=normalized_role,
+        ):
+            return bounds, children
+        bounds, children = self._expand_container_bounds_to_structural_children(bounds=bounds, children=children)
+        if self._has_covering_background_child(bounds, children):
+            return bounds, children
+
+        candidate_children = [child for child in children if not self._child_is_geometry_exempt(child)]
+        if not candidate_children:
+            return bounds, children
+
+        union = union_bounds(child.get("bounds", {}) for child in candidate_children)
+        if not union or float(union.get("width", 0.0) or 0.0) <= 0 or float(union.get("height", 0.0) or 0.0) <= 0:
+            return bounds, children
+
+        parent_width = float(bounds.get("width", 0.0) or 0.0)
+        parent_height = float(bounds.get("height", 0.0) or 0.0)
+        union_x = float(union.get("x", 0.0) or 0.0)
+        union_y = float(union.get("y", 0.0) or 0.0)
+        union_width = float(union.get("width", 0.0) or 0.0)
+        union_height = float(union.get("height", 0.0) or 0.0)
+        slack_left = union_x
+        slack_top = union_y
+        slack_right = parent_width - (union_x + union_width)
+        slack_bottom = parent_height - (union_y + union_height)
+
+        large_slack = max(slack_left, slack_top, slack_right, slack_bottom)
+        if large_slack < 120.0 and union_width > parent_width * 0.78 and union_height > parent_height * 0.78:
+            return bounds, children
+
+        tightened_bounds = {
+            "x": float(bounds.get("x", 0.0) or 0.0) + union_x,
+            "y": float(bounds.get("y", 0.0) or 0.0) + union_y,
+            "width": union_width,
+            "height": union_height,
+        }
+        tightened_children = [
+            self._rebase_child_node(child, offset_x=union_x, offset_y=union_y) for child in children
+        ]
+        return tightened_bounds, tightened_children
+
+    def _should_preserve_visual_container_bounds(
+        self,
+        *,
+        node_name: str,
+        parent_name: str | None,
+        role: str,
+    ) -> bool:
+        normalized_name = ensure_text(node_name).strip().lower()
+        normalized_parent = ensure_text(parent_name).strip().lower()
+        if not normalized_name and not normalized_parent:
+            return False
+
+        # Full-width visual bands and their direct structural children should
+        # preserve their authored Figma frames. Tightening them to the union of
+        # visible descendants is what caused the hero/CTA shells to collapse.
+        parent_is_bandeau = normalized_parent.startswith("bandeau-")
+        node_is_bandeau = normalized_name.startswith("bandeau-")
+        if node_is_bandeau:
+            return True
+        if parent_is_bandeau and role not in {"form", "field", "button", "input"}:
+            return True
+        return False
+
+    def _expand_container_bounds_to_structural_children(
+        self,
+        *,
+        bounds: dict[str, float],
+        children: list[dict[str, Any]],
+    ) -> tuple[dict[str, float], list[dict[str, Any]]]:
+        parent_width = float(bounds.get("width", 0.0) or 0.0)
+        parent_height = float(bounds.get("height", 0.0) or 0.0)
+        if parent_width <= 0 or parent_height <= 0:
+            return bounds, children
+
+        candidate_children = [
+            child
+            for child in children
+            if not self._child_is_geometry_exempt(child)
+            or self._child_is_backdrop_candidate(bounds, child)
+        ]
+        if not candidate_children:
+            return bounds, children
+
+        union = union_bounds(child.get("bounds", {}) for child in candidate_children)
+        if not union:
+            return bounds, children
+
+        union_x = float(union.get("x", 0.0) or 0.0)
+        union_y = float(union.get("y", 0.0) or 0.0)
+        union_width = float(union.get("width", 0.0) or 0.0)
+        union_height = float(union.get("height", 0.0) or 0.0)
+        if union_width <= 0 or union_height <= 0:
+            return bounds, children
+
+        needs_expand = (
+            union_x < -8.0
+            or union_y < -8.0
+            or union_x + union_width > parent_width + 8.0
+            or union_y + union_height > parent_height + 8.0
+        )
+        if not needs_expand:
+            return bounds, children
+
+        expanded_bounds = {
+            "x": float(bounds.get("x", 0.0) or 0.0) + union_x,
+            "y": float(bounds.get("y", 0.0) or 0.0) + union_y,
+            "width": union_width,
+            "height": union_height,
+        }
+        expanded_children = [
+            self._rebase_child_node(child, offset_x=union_x, offset_y=union_y) for child in children
+        ]
+        return expanded_bounds, expanded_children
+
+    def _child_is_geometry_exempt(self, child: dict[str, Any]) -> bool:
+        role = ensure_text(child.get("role")).strip().lower()
+        if role in {"decorative", "background"}:
+            return True
+        asset = as_mapping(child.get("asset"))
+        if not asset:
+            return False
+        purpose = ensure_text(asset.get("purpose")).strip().lower()
+        return purpose in {"decorative", "background"}
+
+    def _child_is_backdrop_candidate(
+        self,
+        bounds: dict[str, float],
+        child: dict[str, Any],
+    ) -> bool:
+        asset = as_mapping(child.get("asset"))
+        if not asset:
+            return False
+
+        purpose = ensure_text(asset.get("purpose")).strip().lower()
+        if purpose == "background":
+            return True
+
+        parent_width = float(bounds.get("width", 0.0) or 0.0)
+        parent_height = float(bounds.get("height", 0.0) or 0.0)
+        if parent_width <= 0 or parent_height <= 0:
+            return False
+
+        child_bounds = normalize_bounds(child.get("bounds", {}))
+        child_x = float(child_bounds.get("x", 0.0) or 0.0)
+        child_y = float(child_bounds.get("y", 0.0) or 0.0)
+        child_width = float(child_bounds.get("width", 0.0) or 0.0)
+        child_height = float(child_bounds.get("height", 0.0) or 0.0)
+        if child_width <= 0 or child_height <= 0:
+            return False
+
+        if abs(child_x) > 160.0 or abs(child_y) > 160.0:
+            return False
+
+        width_ratio = child_width / parent_width
+        height_ratio = child_height / parent_height
+        area_ratio = (child_width * child_height) / max(parent_width * parent_height, 1.0)
+        return (
+            width_ratio >= 0.9
+            or (width_ratio >= 0.65 and height_ratio >= 0.35)
+            or area_ratio >= 0.35
+        )
+
+    def _has_covering_background_child(
+        self,
+        bounds: dict[str, float],
+        children: list[dict[str, Any]],
+    ) -> bool:
+        parent_width = float(bounds.get("width", 0.0) or 0.0)
+        parent_height = float(bounds.get("height", 0.0) or 0.0)
+        if parent_width <= 0 or parent_height <= 0:
+            return False
+        for child in children:
+            asset = as_mapping(child.get("asset"))
+            if not asset:
+                continue
+            if ensure_text(asset.get("purpose")).strip().lower() != "background":
+                continue
+            child_bounds = normalize_bounds(child.get("bounds", {}))
+            child_x = float(child_bounds.get("x", 0.0) or 0.0)
+            child_y = float(child_bounds.get("y", 0.0) or 0.0)
+            child_width = float(child_bounds.get("width", 0.0) or 0.0)
+            child_height = float(child_bounds.get("height", 0.0) or 0.0)
+            if child_width < parent_width * 0.8 or child_height < parent_height * 0.8:
+                continue
+            if abs(child_x) > 120 or abs(child_y) > 120:
+                continue
+            return True
+        return False
+
+    def _rebase_child_node(
+        self,
+        child: dict[str, Any],
+        *,
+        offset_x: float,
+        offset_y: float,
+    ) -> dict[str, Any]:
+        updated = {
+            **child,
+            "bounds": {
+                "x": float(child.get("bounds", {}).get("x", 0.0) or 0.0) - offset_x,
+                "y": float(child.get("bounds", {}).get("y", 0.0) or 0.0) - offset_y,
+                "width": float(child.get("bounds", {}).get("width", 0.0) or 0.0),
+                "height": float(child.get("bounds", {}).get("height", 0.0) or 0.0),
+            },
+        }
+        text = as_mapping(child.get("text"))
+        if text:
+            updated["text"] = {
+                **text,
+                "bounds": {
+                    "x": float(text.get("bounds", {}).get("x", 0.0) or 0.0) - offset_x,
+                    "y": float(text.get("bounds", {}).get("y", 0.0) or 0.0) - offset_y,
+                    "width": float(text.get("bounds", {}).get("width", 0.0) or 0.0),
+                    "height": float(text.get("bounds", {}).get("height", 0.0) or 0.0),
+                },
+                "render_bounds": self._offset_optional_bounds(text.get("render_bounds"), offset_x, offset_y),
+            }
+        asset = as_mapping(child.get("asset"))
+        if asset:
+            updated["asset"] = {
+                **asset,
+                "bounds": {
+                    "x": float(asset.get("bounds", {}).get("x", 0.0) or 0.0) - offset_x,
+                    "y": float(asset.get("bounds", {}).get("y", 0.0) or 0.0) - offset_y,
+                    "width": float(asset.get("bounds", {}).get("width", 0.0) or 0.0),
+                    "height": float(asset.get("bounds", {}).get("height", 0.0) or 0.0),
+                },
+            }
+        return updated
+
+    def _offset_optional_bounds(self, bounds: Any, offset_x: float, offset_y: float) -> dict[str, float]:
+        data = as_mapping(bounds)
+        if not data:
+            return {"x": 0.0, "y": 0.0, "width": 0.0, "height": 0.0}
+        normalized = normalize_bounds(data)
+        return {
+            "x": float(normalized.get("x", 0.0) or 0.0) - offset_x,
+            "y": float(normalized.get("y", 0.0) or 0.0) - offset_y,
+            "width": float(normalized.get("width", 0.0) or 0.0),
+            "height": float(normalized.get("height", 0.0) or 0.0),
+        }
+
     def _is_section_block_candidate(
         self,
         *,
+        node_name: str,
         role: str,
         layout: dict[str, Any],
         children: list[dict[str, Any]],
     ) -> bool:
         if ensure_text(role).strip().lower() != "section":
             return False
-        if not bool(layout.get("inferred_flow")):
+        normalized_name = slugify(node_name, default="").lower()
+        if not normalized_name.startswith(
+            (
+                "section-block-",
+                "row-",
+                "col-",
+                "column-",
+                "line-",
+                "ligne-",
+                "stack-",
+                "split-",
+                "link-row-",
+                "grid-",
+            )
+        ):
+            return False
+        explicit_flow_layout = (
+            ensure_text(layout.get("layout_mode")).strip().upper() in {"HORIZONTAL", "VERTICAL"}
+            or ensure_text(layout.get("layout_wrap")).strip().upper() not in {"", "NO_WRAP"}
+        )
+        if not bool(layout.get("inferred_flow")) and not explicit_flow_layout:
             return False
         meaningful_children = [
             child
@@ -1260,6 +1759,49 @@ class CanonicalModelBuilder:
             if child.get("kind") in {"container", "text", "asset"}
         ]
         return len(meaningful_children) >= 2
+
+    def _should_opt_into_flow_layout(
+        self,
+        *,
+        role: str,
+        node_name: str,
+        layout: dict[str, Any],
+    ) -> bool:
+        normalized_role = ensure_text(role).strip().lower()
+        if normalized_role in {
+            "accordion",
+            "accordion-item",
+            "accordion-trigger",
+            "accordion-panel",
+            "carousel",
+            "carousel-stage",
+            "carousel-nav",
+            "carousel-slide",
+            "carousel-thumb",
+            "form",
+            "field",
+            "link-grid",
+        }:
+            return True
+
+        normalized_name = slugify(node_name, default="").lower()
+        if normalized_role == "section" and normalized_name.startswith(
+            (
+                "section-block-",
+                "row-",
+                "col-",
+                "column-",
+                "line-",
+                "ligne-",
+                "stack-",
+                "split-",
+                "link-row-",
+                "grid-",
+            )
+        ):
+            return True
+
+        return ensure_text(layout.get("layout_wrap")).strip().upper() not in {"", "NO_WRAP"}
 
     def _apply_container_naming_conventions(
         self,
@@ -2385,18 +2927,43 @@ class CanonicalModelBuilder:
             role=role,
             style_runs=style_runs,
         )
-        segments = self._normalize_segments(display_value, style_runs)
+        list_payload = None
+        if tag in {"p", "ul", "ol"} and role not in {"label", "link", "button"}:
+            list_payload = self._normalize_list_items(
+                display_value,
+                style_runs=style_runs,
+                text_id=text_id,
+            )
+        effective_tag = "ol" if list_payload and list_payload["kind"] == "ordered" else ("ul" if list_payload else tag)
+        effective_role = "list" if list_payload else role
+        if list_payload:
+            attrs = dict(attrs)
+            attrs.setdefault("data-list", "true")
+            attrs["data-list-kind"] = list_payload["kind"]
+            if list_payload.get("start") not in (None, 1):
+                attrs.setdefault("start", str(list_payload["start"]))
+        normalized_value = (
+            "\n".join(item["value"] for item in list_payload["items"])
+            if list_payload
+            else display_value
+        )
+        plain_text = (
+            " ".join(item["plain_text"] for item in list_payload["items"])
+            if list_payload
+            else " ".join(normalized_value.split())
+        )
+        segments = [] if list_payload else self._normalize_segments(display_value, style_runs)
         normalized = {
             "id": text_id,
             "dom_id": dom_identifier(text_id, default=f"{section_id or 'page'}-text-{text_index + 1}"),
             "name": ensure_text(coalesce(data, "name", default=text_id), default=text_id),
-            "heading_level": int(tag[1]) if re.fullmatch(r"h[1-6]", tag) else None,
-            "value": display_value,
+            "heading_level": int(effective_tag[1]) if re.fullmatch(r"h[1-6]", effective_tag) else None,
+            "value": normalized_value,
             "source_value": raw_value,
-            "plain_text": " ".join(display_value.split()),
-            "html": html_with_line_breaks(display_value),
-            "tag": tag,
-            "role": role,
+            "plain_text": plain_text,
+            "html": html_with_line_breaks(normalized_value),
+            "tag": effective_tag,
+            "role": effective_role,
             "section_id": section_id,
             "class_name": self._unique_class_name(
                 "text",
@@ -2409,17 +2976,19 @@ class CanonicalModelBuilder:
             "style": as_mapping(coalesce(data, "style", default={})),
             "style_css": style_map_to_css(coalesce(data, "style", default={})),
             "layout": layout,
-            "hard_breaks": self._has_hard_breaks(display_value),
-            "nowrap": self._should_nowrap_text(
-                display_value,
+            "hard_breaks": self._has_hard_breaks(normalized_value),
+            "nowrap": False if list_payload else self._should_nowrap_text(
+                normalized_value,
                 normalize_bounds(coalesce(data, "bounds", "absoluteBoundingBox", default={})),
                 as_mapping(coalesce(data, "style", default={})),
             ),
-            "preserve_spaces": self._should_preserve_spaces(display_value),
+            "preserve_spaces": False if list_payload else self._should_preserve_spaces(normalized_value),
             "normalized_break_lines": normalized_break_lines,
             "source_line_count": self._line_count(raw_value),
-            "display_line_count": self._line_count(display_value),
+            "display_line_count": self._line_count(normalized_value),
             "segments": segments,
+            "list_items": list_payload["items"] if list_payload else [],
+            "list_kind": list_payload["kind"] if list_payload else "",
         }
         if not has_contextual_bounds:
             self._text_index[text_id] = normalized
@@ -2467,6 +3036,98 @@ class CanonicalModelBuilder:
             return 0
         normalized = value.replace("\r\n", "\n").replace("\r", "\n")
         return len(normalized.split("\n"))
+
+    def _normalize_list_items(
+        self,
+        text_value: str,
+        *,
+        style_runs: Any,
+        text_id: str,
+    ) -> dict[str, Any] | None:
+        normalized_value = text_value.replace("\r\n", "\n").replace("\r", "\n")
+        if not normalized_value or "\n" not in normalized_value:
+            return None
+
+        items: list[dict[str, Any]] = []
+        list_kind = ""
+        start_value: int | None = None
+        cursor = 0
+        for line_index, line in enumerate(normalized_value.split("\n")):
+            line_start = cursor
+            cursor += len(line) + 1
+
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            match, item_kind = self._match_list_line(line)
+            if match is None:
+                return None
+            if list_kind and item_kind != list_kind:
+                return None
+            list_kind = item_kind
+
+            ordinal = match.groupdict().get("ordinal")
+            if list_kind == "ordered" and start_value is None and ordinal and ordinal.isdigit():
+                start_value = int(ordinal)
+
+            item_value = ensure_text(match.group("content")).rstrip()
+            if not item_value:
+                return None
+
+            item_start = line_start + match.start("content")
+            item_end = item_start + len(item_value)
+            item_style_runs = self._slice_style_runs(style_runs, start=item_start, end=item_end)
+            items.append(
+                {
+                    "id": f"{text_id}-item-{line_index + 1}",
+                    "class_name": class_name("list-item", text_id, f"item-{line_index + 1}"),
+                    "value": item_value,
+                    "plain_text": " ".join(item_value.split()),
+                    "html": html_with_line_breaks(item_value),
+                    "segments": self._normalize_segments(item_value, item_style_runs),
+                }
+            )
+
+        if len(items) < 2 or not list_kind:
+            return None
+        return {"kind": list_kind, "items": items, "start": start_value}
+
+    def _match_list_line(self, value: str) -> tuple[re.Match[str] | None, str]:
+        if unordered_match := UNORDERED_LIST_LINE_RE.fullmatch(value):
+            return unordered_match, "unordered"
+        if ordered_match := ORDERED_LIST_LINE_RE.fullmatch(value):
+            return ordered_match, "ordered"
+        return None, ""
+
+    def _slice_style_runs(
+        self,
+        value: Any,
+        *,
+        start: int,
+        end: int,
+    ) -> list[dict[str, Any]]:
+        if end <= start:
+            return []
+        sliced: list[dict[str, Any]] = []
+        for run in coerce_list(value):
+            data = as_mapping(run)
+            run_start = data.get("start", data.get("startIndex"))
+            run_end = data.get("end", data.get("endIndex"))
+            if not isinstance(run_start, int) or not isinstance(run_end, int):
+                continue
+            overlap_start = max(run_start, start)
+            overlap_end = min(run_end, end)
+            if overlap_end <= overlap_start:
+                continue
+            sliced.append(
+                {
+                    "start": overlap_start - start,
+                    "end": overlap_end - start,
+                    "style": as_mapping(data.get("style")),
+                }
+            )
+        return sliced
 
     def _normalize_segments(self, text_value: str, value: Any) -> list[dict[str, Any]]:
         runs = coerce_list(value)

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="2280" height="2800" viewBox="0 0 2280 2800">
+<defs>
+  <style>
+    .sans { font-family: 'Segoe UI', Arial, sans-serif; }
+    .mono { font-family: 'Cascadia Code', Consolas, monospace; }
+  </style>
+</defs>
+<title>Responsive variant board</title>
+    <rect id="board-bg" x="0.00" y="0.00" width="2280.00" height="2800.00" fill="#f8f5ef"/>
+    <text id="board-title" x="80.00" y="84.00" class="sans" font-size="42" font-weight="700" fill="#11306d" text-anchor="start">Responsive Figma Variants</text>
+    <text id="board-subtitle" x="80.00" y="122.00" class="sans" font-size="20" font-weight="400" fill="#7e6d5f" text-anchor="start">Board multi-largeurs pour tester le merge responsive par pages.</text>
+    <rect id="board-card-1" x="80.00" y="180.00" width="960.00" height="610.00" fill="#fffdfa" stroke="#ddd1c1" stroke-width="2.00" rx="22.00"/>
+    <text id="board-label-1" x="104.00" y="214.00" class="mono" font-size="18" font-weight="700" fill="#11306d" text-anchor="start">responsive-variant-1920.svg</text>
+    <rect id="board-card-2" x="1160.00" y="180.00" width="640.00" height="700.00" fill="#fffdfa" stroke="#ddd1c1" stroke-width="2.00" rx="22.00"/>
+    <text id="board-label-2" x="1184.00" y="214.00" class="mono" font-size="18" font-weight="700" fill="#11306d" text-anchor="start">responsive-variant-1280.svg</text>
+    <rect id="board-card-3" x="80.00" y="920.00" width="540.00" height="820.00" fill="#fffdfa" stroke="#ddd1c1" stroke-width="2.00" rx="22.00"/>
+    <text id="board-label-3" x="104.00" y="954.00" class="mono" font-size="18" font-weight="700" fill="#11306d" text-anchor="start">responsive-variant-768.svg</text>
+    <rect id="board-card-4" x="700.00" y="920.00" width="360.00" height="1320.00" fill="#fffdfa" stroke="#ddd1c1" stroke-width="2.00" rx="22.00"/>
+    <text id="board-label-4" x="724.00" y="954.00" class="mono" font-size="18" font-weight="700" fill="#11306d" text-anchor="start">responsive-variant-390.svg</text>
+</svg>

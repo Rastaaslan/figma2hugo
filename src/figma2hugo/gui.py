@@ -10,7 +10,7 @@ from pathlib import Path
 from queue import Empty, Queue
 from typing import Any
 
-from figma2hugo.config import AssetMode, OutputMode
+from figma2hugo.config import OutputMode
 from figma2hugo.local_config import get_local_config_path, get_local_figma_token
 from figma2hugo.workflow import GenerationOptions, run_generation
 
@@ -36,10 +36,8 @@ class Figma2HugoGUI:
         self.url_vars: list[Any] = [tk.StringVar()]
         self.url_entries: list[Any] = []
         self.url_add_buttons: list[Any] = []
-        self.url_remove_buttons: list[Any] = []
         self.destination_var = tk.StringVar(value=str(Path.cwd() / "site"))
         self.token_var = tk.StringVar(value=get_local_figma_token() or "")
-        self.asset_mode_var = tk.StringVar(value=AssetMode.MIXED.value)
         self.status_var = tk.StringVar(value="Pret")
         self.summary_var = tk.StringVar(value="Saisis une ou plusieurs URLs Figma et un dossier de destination.")
 
@@ -109,32 +107,23 @@ class Figma2HugoGUI:
         self.browse_button = ttk.Button(form_card, text="Parcourir", style="Secondary.TButton", command=self._choose_directory)
         self.browse_button.grid(row=5, column=1, sticky="ew")
 
-        ttk.Label(form_card, text="Mode assets", style="Field.TLabel").grid(row=6, column=0, columnspan=2, sticky="w", pady=(14, 0))
-        self.asset_mode_combo = ttk.Combobox(
-            form_card,
-            textvariable=self.asset_mode_var,
-            values=[mode.value for mode in AssetMode],
-            state="readonly",
-            font=("Segoe UI", 10),
-        )
-        self.asset_mode_combo.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(6, 0), ipady=4)
         ttk.Label(
             form_card,
-            text="`lightweight` reduit le poids des gros rasters et baisse le rendu PNG Figma.",
+            text="Les assets sont exportes en mode lightweight pour reduire le poids des rasters.",
             style="CardBody.TLabel",
-        ).grid(row=8, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(14, 0))
 
-        ttk.Label(form_card, text="Token Figma", style="Field.TLabel").grid(row=9, column=0, columnspan=2, sticky="w", pady=(14, 0))
+        ttk.Label(form_card, text="Token Figma", style="Field.TLabel").grid(row=7, column=0, columnspan=2, sticky="w", pady=(14, 0))
         self.token_entry = ttk.Entry(form_card, textvariable=self.token_var, font=("Consolas", 10), show="*")
-        self.token_entry.grid(row=10, column=0, columnspan=2, sticky="ew", pady=(6, 0), ipady=6)
+        self.token_entry.grid(row=8, column=0, columnspan=2, sticky="ew", pady=(6, 0), ipady=6)
         ttk.Label(
             form_card,
             text=f"Optionnel si present dans {get_local_config_path().name}, FIGMA_ACCESS_TOKEN, ou un bridge MCP.",
             style="CardBody.TLabel",
-        ).grid(row=11, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        ).grid(row=9, column=0, columnspan=2, sticky="w", pady=(6, 0))
 
         actions = ttk.Frame(form_card, style="Card.TFrame")
-        actions.grid(row=12, column=0, columnspan=2, sticky="ew", pady=(18, 0))
+        actions.grid(row=10, column=0, columnspan=2, sticky="ew", pady=(18, 0))
         actions.columnconfigure(0, weight=1)
         actions.columnconfigure(1, weight=1)
         actions.columnconfigure(2, weight=1)
@@ -254,7 +243,6 @@ class Figma2HugoGUI:
                     figma_urls=tuple(figma_urls),
                     out=destination,
                     mode=mode,
-                    asset_mode=AssetMode(self.asset_mode_var.get()),
                 )
             )
             self._queue.put(("success", result))
@@ -297,14 +285,12 @@ class Figma2HugoGUI:
         self._is_running = running
         for entry in self.url_entries:
             entry.configure(state=state)
-        for button in self.url_add_buttons + self.url_remove_buttons:
+        for button in self.url_add_buttons:
             button.configure(state=state)
         if hasattr(self, "destination_entry"):
             self.destination_entry.configure(state=state)
         if hasattr(self, "token_entry"):
             self.token_entry.configure(state=state)
-        if hasattr(self, "asset_mode_combo"):
-            self.asset_mode_combo.configure(state="disabled" if running else "readonly")
         if hasattr(self, "browse_button"):
             self.browse_button.configure(state=state)
         if hasattr(self, "generate_hugo_button"):
@@ -321,7 +307,6 @@ class Figma2HugoGUI:
             child.destroy()
         self.url_entries = []
         self.url_add_buttons = []
-        self.url_remove_buttons = []
 
         for index, variable in enumerate(self.url_vars):
             row = ttk.Frame(self.url_rows_frame, style="Card.TFrame")
@@ -338,21 +323,9 @@ class Figma2HugoGUI:
                 command=self._add_url_row,
             )
             add_button.grid(row=0, column=1, padx=(8, 4))
-            remove_button = ttk.Button(
-                row,
-                text="-",
-                width=3,
-                style="Secondary.TButton",
-                command=lambda row_index=index: self._remove_url_row(row_index),
-            )
-            remove_button.grid(row=0, column=2)
-
-            if len(self.url_vars) == 1:
-                remove_button.configure(state="disabled")
 
             self.url_entries.append(entry)
             self.url_add_buttons.append(add_button)
-            self.url_remove_buttons.append(remove_button)
 
         self._set_running_state(self._is_running)
 
@@ -361,15 +334,6 @@ class Figma2HugoGUI:
         self._render_url_rows()
         if self.url_entries:
             self.url_entries[-1].focus_set()
-
-    def _remove_url_row(self, index: int) -> None:
-        if len(self.url_vars) <= 1:
-            return
-        self.url_vars.pop(index)
-        self._render_url_rows()
-        if self.url_entries:
-            focus_index = min(index, len(self.url_entries) - 1)
-            self.url_entries[focus_index].focus_set()
 
     def _set_output(self, content: str) -> None:
         self.output_text.configure(state="normal")

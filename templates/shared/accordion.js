@@ -149,11 +149,28 @@
     );
   }
 
+  function isFlowAccordionContentContainer(element) {
+    if (!element || !element.matches || !element.matches(".content-node")) {
+      return false;
+    }
+    if (element.dataset.accordionTrigger !== "true" && element.dataset.accordionPanel !== "true") {
+      return false;
+    }
+    // Quand l'item accordion est deja converti en flux, ses sous-blocs
+    // trigger/panel doivent conserver leurs enfants en flux local au lieu de
+    // se faire recaler avec des coordonnees absolues de page.
+    const parentItem = element.closest('[data-accordion-item="true"]');
+    return Boolean(parentItem && parentItem.dataset.layoutFlow === "true");
+  }
+
   function isFlowLayoutContainer(element) {
     return Boolean(
       element &&
         element.matches &&
-        (element.dataset.linkGrid === "true" || element.dataset.linkCard === "true" || isLinkGridRow(element)),
+        (element.dataset.linkGrid === "true" ||
+          element.dataset.linkCard === "true" ||
+          isLinkGridRow(element) ||
+          isFlowAccordionContentContainer(element)),
     );
   }
 

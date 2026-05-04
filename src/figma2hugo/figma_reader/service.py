@@ -92,8 +92,6 @@ class FigmaExtractionService:
         self,
         figma_url: str,
         out_dir: str | Path,
-        *,
-        asset_mode: str = "mixed",
     ) -> dict[str, Any]:
         store = ExtractionStore(Path(out_dir))
 
@@ -113,7 +111,6 @@ class FigmaExtractionService:
             parsed_url.file_key,
             extracted.assets,
             store.dirs.assets_dir,
-            asset_mode=asset_mode,
         )
         warnings.extend(raw_payload.get("warnings", []))
         warnings.extend(extracted.warnings)
@@ -135,7 +132,13 @@ class FigmaExtractionService:
             },
             "sections": [
                 {
-                    **section.to_dict(),
+                    **{
+                        **section.to_dict(),
+                        "bounds": self._rebase_section_bounds(
+                            section.bounds,
+                            root_bounds=(root_node.get("absoluteBoundingBox") or root_node.get("absoluteRenderBounds") or {}),
+                        ),
+                    },
                     "children": self._build_section_children(
                         section.node,
                         text_ids={
@@ -654,7 +657,7 @@ class FigmaExtractionService:
             "clips_content": self._bool_or_none(node, "clipsContent"),
             "constraints": self._constraints_payload(node),
             "inferred_strategy": strategy,
-            "inferred_flow": strategy == "flow",
+            "inferred_flow": self._infer_layout_is_flow(node),
         }
         return {
             key: value
@@ -675,6 +678,29 @@ class FigmaExtractionService:
         if node.get("children"):
             return "absolute"
         return fallback_strategy
+
+    def _infer_layout_is_flow(self, node: dict[str, Any]) -> bool:
+        layout_wrap = self._string_or_none(node.get("layoutWrap"))
+        return bool(layout_wrap and layout_wrap != "NO_WRAP")
+
+    def _rebase_section_bounds(
+        self,
+        bounds: dict[str, Any],
+        *,
+        root_bounds: dict[str, Any],
+    ) -> dict[str, float]:
+        root_x = self._number_or_none(root_bounds.get("x")) or 0.0
+        root_y = self._number_or_none(root_bounds.get("y")) or 0.0
+        section_x = self._number_or_none(bounds.get("x")) or 0.0
+        section_y = self._number_or_none(bounds.get("y")) or 0.0
+        section_width = self._number_or_none(bounds.get("width")) or 0.0
+        section_height = self._number_or_none(bounds.get("height")) or 0.0
+        return {
+            "x": section_x - root_x,
+            "y": section_y - root_y,
+            "width": section_width,
+            "height": section_height,
+        }
 
     def _container_layout_fallback(self, role: str) -> str:
         if role in {"accordion", "accordion-item", "accordion-panel", "accordion-trigger", "link-grid", "card", "link-card"}:

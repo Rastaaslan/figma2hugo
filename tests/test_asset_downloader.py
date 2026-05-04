@@ -126,7 +126,6 @@ def test_asset_downloader_batches_large_render_requests(monkeypatch: pytest.Monk
             "file-key",
             assets,
             Path(temp_dir),
-            asset_mode="svg-first",
         )
 
     assert [len(call[1]) for call in rest_client.calls] == [50, 5]
@@ -160,7 +159,7 @@ def test_asset_downloader_batches_by_query_length(monkeypatch: pytest.MonkeyPatc
     ]
 
     with tempfile.TemporaryDirectory(dir=str(scratch_root)) as temp_dir:
-        downloader.materialize_assets("file-key", assets, Path(temp_dir), asset_mode="raster-first")
+        downloader.materialize_assets("file-key", assets, Path(temp_dir))
 
     assert [call[1] for call in rest_client.calls] == [["1234:5678"], ["2234:5678"], ["3234:5678"]]
 
@@ -195,7 +194,6 @@ def test_asset_downloader_splits_render_batches_on_figma_timeout(monkeypatch: py
             "file-key",
             assets,
             Path(temp_dir),
-            asset_mode="raster-first",
         )
 
     assert rest_client.calls[0][1] == ["1:1", "2:1", "3:1", "4:1"]
@@ -223,7 +221,7 @@ def test_asset_downloader_uses_scale_one_for_lightweight_raster_renders(monkeypa
     assets = [{"nodeId": "1:1", "name": "Photo", "format": "png", "isVector": False}]
 
     with tempfile.TemporaryDirectory(dir=str(scratch_root)) as temp_dir:
-        downloader.materialize_assets("file-key", assets, Path(temp_dir), asset_mode="lightweight")
+        downloader.materialize_assets("file-key", assets, Path(temp_dir))
 
     assert rest_client.calls[0][2]["scale"] == 1
 

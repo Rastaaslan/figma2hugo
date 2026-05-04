@@ -88,10 +88,8 @@ class StubExtractionService:
         self,
         figma_url: str,
         out_dir: str | Path,
-        *,
-        asset_mode: str = "mixed",
     ) -> dict[str, object]:
-        del figma_url, out_dir, asset_mode
+        del figma_url, out_dir
         return self.document
 
 
@@ -107,10 +105,8 @@ class MultiPageExtractionService:
         self,
         figma_url: str,
         out_dir: str | Path,
-        *,
-        asset_mode: str = "mixed",
     ) -> dict[str, object]:
-        del out_dir, asset_mode
+        del out_dir
         if "About" in figma_url:
             document = _sample_document(self.asset_source)
             document["page"]["name"] = "About Page"

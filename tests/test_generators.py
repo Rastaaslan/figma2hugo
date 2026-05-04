@@ -151,6 +151,54 @@ def build_hugo_site(model: dict[str, object], site_dir: Path) -> Path:
 
 
 class CssGeneratorTests(unittest.TestCase):
+    def test_canonical_builder_ignores_unreferenced_global_texts_and_assets(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Page", "width": 1200, "height": 800},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "hero",
+                    "bounds": {"x": 0, "y": 0, "width": 1200, "height": 400},
+                    "texts": ["hero-title"],
+                }
+            ],
+            "texts": {
+                "hero-title": {
+                    "id": "hero-title",
+                    "name": "Hero Title",
+                    "sectionId": "hero",
+                    "value": "Hello",
+                    "bounds": {"x": 80, "y": 80, "width": 300, "height": 80},
+                },
+                "debug-note": {
+                    "id": "debug-note",
+                    "name": "Debug Note",
+                    "sectionId": "debug-section",
+                    "value": "Should not render",
+                    "bounds": {"x": 0, "y": 700, "width": 400, "height": 80},
+                },
+            },
+            "assets": [
+                {
+                    "nodeId": "debug-logo",
+                    "name": "Debug Logo",
+                    "sectionId": "debug-section",
+                    "format": "png",
+                    "localPath": "images/debug.png",
+                    "bounds": {"x": 0, "y": 0, "width": 100, "height": 100},
+                }
+            ],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        canonical = CanonicalModelBuilder(mode="static").build(model)
+
+        self.assertIn("hero-title", canonical["texts"])
+        self.assertNotIn("debug-note", canonical["texts"])
+        self.assertEqual(canonical["assets"], [])
+
     def test_css_generator_emits_root_tokens_and_sections(self) -> None:
         canonical = CanonicalModelBuilder(mode="static").build(SAMPLE_MODEL)
         css = CssGenerator().generate(canonical)
@@ -206,6 +254,57 @@ class CssGeneratorTests(unittest.TestCase):
         self.assertIn("left: 120.00px;", css)
         self.assertIn("top: 90.00px;", css)
         self.assertIn("position: absolute;", css)
+
+    def test_css_generator_does_not_emit_parent_typography_for_segmented_text(self) -> None:
+        page_data = {
+            "page": {"id": "page", "name": "Page", "width": 1200, "height": 400},
+            "sections": [
+                {
+                    "id": "content",
+                    "name": "Content",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1200, "height": 400},
+                    "children": [
+                        {
+                            "kind": "text",
+                            "id": "segmented-title",
+                            "text": {
+                                "id": "segmented-title",
+                                "name": "Segmented Title",
+                                "tag": "p",
+                                "role": "body",
+                                "class_name": "text-segmented-title",
+                                "bounds": {"x": 100, "y": 100, "width": 400, "height": 80},
+                                "value": "Hello world",
+                                "style_css": 'font-size: 48px; line-height: 22px; color: #1434cb; font-weight: 700;',
+                                "segments": [
+                                    {
+                                        "id": "seg-1",
+                                        "class_name": "segment-seg-1",
+                                        "html": "Hello",
+                                        "style": 'font-size: 18px; line-height: 24px; color: #1434cb;',
+                                    }
+                                ],
+                            },
+                        }
+                    ],
+                }
+            ],
+            "tokens": {},
+            "warnings": [],
+            "texts": {},
+            "assets": [],
+        }
+
+        css = CssGenerator().generate(page_data)
+
+        match = re.search(r"\.text-segmented-title \{(?P<body>.*?)\n\}", css, re.S)
+        self.assertIsNotNone(match)
+        body = match.group("body")
+        self.assertNotIn("font-size:", body)
+        self.assertNotIn("line-height:", body)
+        self.assertNotIn("color:", body)
+        self.assertNotIn("font-weight:", body)
 
     def test_css_generator_positions_sections_from_global_canvas_bounds(self) -> None:
         model = {
@@ -407,6 +506,134 @@ class CssGeneratorTests(unittest.TestCase):
         canonical = CanonicalModelBuilder(mode="static").build(model)
 
         self.assertEqual(["hero", "footer"], [section["id"] for section in canonical["sections"]])
+
+    def test_builder_promotes_inner_page_frame_when_selected_root_is_a_figma_page_container(self) -> None:
+        model = {
+            "page": {"id": "0:1", "name": "Landing", "width": 0, "height": 0},
+            "sections": [
+                {
+                    "id": "3:964",
+                    "name": "page",
+                    "role": "section",
+                    "bounds": {"x": -100, "y": -200, "width": 800, "height": 1200},
+                    "layout": {"layoutMode": "VERTICAL"},
+                    "children": [
+                        {
+                            "id": "hero",
+                            "name": "section-hero",
+                            "role": "section",
+                            "tag": "section",
+                            "bounds": {"x": 0, "y": 0, "width": 800, "height": 400},
+                            "children": [],
+                        },
+                        {
+                            "id": "cta",
+                            "name": "bandeau-full-cta",
+                            "role": "container",
+                            "tag": "div",
+                            "bounds": {"x": 0, "y": 420, "width": 800, "height": 160},
+                            "children": [],
+                        },
+                        {
+                            "id": "footer",
+                            "name": "footer",
+                            "role": "footer",
+                            "tag": "footer",
+                            "bounds": {"x": 0, "y": 1040, "width": 800, "height": 160},
+                            "children": [],
+                        },
+                    ],
+                },
+                {
+                    "id": "frame-2",
+                    "name": "Frame 2",
+                    "role": "section",
+                    "bounds": {"x": 1000, "y": 0, "width": 300, "height": 300},
+                    "children": [],
+                },
+            ],
+            "texts": {},
+            "assets": {},
+            "tokens": {},
+            "warnings": [],
+        }
+
+        canonical = CanonicalModelBuilder(mode="static").build(model)
+
+        self.assertEqual(800.0, canonical["page"]["width"])
+        self.assertEqual(1200.0, canonical["page"]["height"])
+        self.assertEqual(
+            ["section-hero", "bandeau-full-cta", "footer"],
+            [section["name"] for section in canonical["sections"]],
+        )
+        self.assertIn("promotedRootSectionId", canonical["page"]["meta"])
+        self.assertTrue(
+            any("Promoted inner frame" in warning for warning in canonical["warnings"]),
+            canonical["warnings"],
+        )
+
+    def test_builder_keeps_existing_top_level_sections_when_page_dimensions_are_known(self) -> None:
+        model = {
+            "page": {"id": "179:2", "name": "page-a-propos-1920", "width": 1917, "height": 3504},
+            "sections": [
+                {
+                    "id": "2041:837",
+                    "name": "section-hero",
+                    "role": "header",
+                    "bounds": {"x": 0, "y": 0, "width": 1917, "height": 524},
+                    "children": [],
+                },
+                {
+                    "id": "192:829",
+                    "name": "section-passion",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 524, "width": 1917, "height": 736},
+                    "children": [
+                        {
+                            "id": "192:830",
+                            "name": "section-passion-embedded",
+                            "kind": "container",
+                            "role": "section",
+                            "tag": "section",
+                            "bounds": {"x": 0, "y": 69, "width": 1917, "height": 381},
+                            "children": [],
+                        },
+                        {
+                            "id": "2009:476",
+                            "name": "bandeau-gauche-content",
+                            "kind": "container",
+                            "role": "container",
+                            "tag": "div",
+                            "bounds": {"x": 0, "y": 450, "width": 1917, "height": 216},
+                            "children": [],
+                        },
+                    ],
+                },
+                {
+                    "id": "2034:414",
+                    "name": "footer",
+                    "role": "footer",
+                    "bounds": {"x": 0, "y": 2794, "width": 1917, "height": 710},
+                    "children": [],
+                },
+            ],
+            "texts": {},
+            "assets": {},
+            "tokens": {},
+            "warnings": [],
+        }
+
+        canonical = CanonicalModelBuilder(mode="static").build(model)
+
+        self.assertEqual(
+            ["2041:837", "192:829", "2034:414"],
+            [section["id"] for section in canonical["sections"]],
+        )
+        self.assertNotIn("promotedRootSectionId", canonical["page"]["meta"])
+        self.assertFalse(
+            any("Promoted inner frame" in warning for warning in canonical["warnings"]),
+            canonical["warnings"],
+        )
 
     def test_css_generator_keeps_single_line_labels_on_one_line(self) -> None:
         model = {
@@ -2099,6 +2326,52 @@ class StaticGeneratorTests(unittest.TestCase):
                 re.compile(r'style="font-family: (?:&quot;|&#34;)Inter(?:&quot;|&#34;), sans-serif;'),
             )
 
+    def test_static_generator_renders_bullet_text_as_unordered_list(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Page", "width": 800, "height": 400},
+            "sections": [
+                {
+                    "id": "services",
+                    "name": "Services",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 800, "height": 400},
+                    "texts": [
+                        {
+                            "id": "feature-list",
+                            "name": "Feature List",
+                            "role": "body",
+                            "value": "• Audit UX detaille\n• Prototype rapide",
+                            "bounds": {"x": 80, "y": 60, "width": 320, "height": 100},
+                            "style": {"fontFamily": "Inter", "fontSize": 18, "fontWeight": 400},
+                        }
+                    ],
+                    "children": ["feature-list"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            StaticGenerator().generate(model, temp_dir)
+            html_content = (Path(temp_dir) / "index.html").read_text(encoding="utf-8")
+            page_data = json.loads((Path(temp_dir) / "page.json").read_text(encoding="utf-8"))
+
+            self.assertIn('<ul id="feature-list"', html_content)
+            self.assertIn("<li", html_content)
+            self.assertIn("Audit UX detaille</li>", html_content)
+            self.assertIn("Prototype rapide</li>", html_content)
+            self.assertNotIn("• Audit UX detaille", html_content)
+
+            text_payload = page_data["sections"][0]["children"][0]["text"]
+            self.assertEqual(text_payload["tag"], "ul")
+            self.assertEqual(
+                [item["value"] for item in text_payload["list_items"]],
+                ["Audit UX detaille", "Prototype rapide"],
+            )
+
     def test_static_generator_preserves_segment_line_height_overrides(self) -> None:
         model = {
             "page": {"id": "page", "name": "Page", "width": 800, "height": 400},
@@ -3056,6 +3329,8 @@ class StaticGeneratorTests(unittest.TestCase):
             self.assertIn('data-accordion-trigger="true"', js_content)
             self.assertIn('item.dataset.accordionOpen = open ? "true" : "false";', js_content)
             self.assertIn('function isFlowLayoutContainer(element)', js_content)
+            self.assertIn('function isFlowAccordionContentContainer(element)', js_content)
+            self.assertIn("parentItem && parentItem.dataset.layoutFlow === \"true\"", js_content)
             self.assertIn('function isPageFlowShell(page)', js_content)
             self.assertIn('function scheduleRelayoutPageFromSection(page, startSection)', js_content)
             self.assertIn('element.dataset.linkGrid === "true"', js_content)
@@ -3836,7 +4111,7 @@ class HugoGeneratorTests(unittest.TestCase):
                         },
                         {
                             "id": "section-prestation-demo",
-                            "name": "section-prestation-demo",
+                            "name": "section-block-prestation-demo",
                             "bounds": {"x": 120, "y": 980, "width": 940, "height": 180},
                             "coordinate_space": "section",
                             "children_coordinate_space": "section",
@@ -3989,18 +4264,76 @@ class HugoGeneratorTests(unittest.TestCase):
             self.assertIn('[data-card="true"]', link_grid_css_content)
             self.assertIn('[data-link-grid="true"]', link_grid_css_content)
             self.assertIn('[data-layout-direction="row"]', link_grid_css_content)
+            self.assertIn("@media (max-width: 1024px)", link_grid_css_content)
             self.assertIn("grid-template-columns:", link_grid_css_content)
             self.assertIn("grid-auto-rows: auto;", link_grid_css_content)
+            self.assertIn("justify-self: center;", link_grid_css_content)
+            self.assertIn("overflow: hidden;", link_grid_css_content)
             self.assertIn("grid-row: 1;", link_grid_css_content)
             self.assertIn("> figure.content-asset img", link_grid_css_content)
             self.assertIn('[data-accordion-item="true"]', accordion_css_content)
             self.assertIn('[data-layout-flow="true"]', accordion_css_content)
+            self.assertIn('> [data-purpose="background"]', accordion_css_content)
+            self.assertIn("inset: 0;", accordion_css_content)
+            self.assertIn(':has(> .content-asset[data-purpose="icon"])', accordion_css_content)
+            self.assertIn("grid-template-columns: minmax(0, 1fr) auto;", accordion_css_content)
+            self.assertIn("justify-self: end;", accordion_css_content)
             self.assertIn('[data-carousel-nav="true"]', carousel_css_content)
             self.assertIn('[data-layout-flow="true"]', carousel_css_content)
             self.assertIn('[data-section-block="true"][data-layout-flow="true"][data-layout-shell="flow"]', section_block_css_content)
             self.assertNotIn('a.content-node[data-link-card="true"] {', page_css_content)
             self.assertNotIn("--component-card-padding", link_grid_css_content)
             self.assertNotIn("--component-card-shadow", link_grid_css_content)
+
+    def test_hugo_generator_does_not_auto_promote_inferred_flow_sections_to_section_block(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Desktop Page", "width": 1200, "height": 800},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "section-hero",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1200, "height": 600},
+                    "layout": {
+                        "layoutMode": "HORIZONTAL",
+                        "itemSpacing": 24,
+                        "inferredStrategy": "flow",
+                        "inferredFlow": True,
+                    },
+                    "children": ["hero-copy", "hero-media"],
+                }
+            ],
+            "texts": {
+                "hero-copy": {
+                    "id": "hero-copy",
+                    "name": "texte-hero",
+                    "role": "body",
+                    "value": "Desktop hero copy",
+                    "bounds": {"x": 120, "y": 120, "width": 420, "height": 120},
+                }
+            },
+            "assets": [
+                {
+                    "id": "hero-media",
+                    "name": "image-hero",
+                    "nodeId": "hero-media",
+                    "format": "png",
+                    "purpose": "content",
+                    "local_path": "images/hero.png",
+                    "bounds": {"x": 700, "y": 80, "width": 320, "height": 240},
+                }
+            ],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            HugoGenerator().generate(model, temp_dir)
+            page_data = json.loads((Path(temp_dir) / "data" / "page.json").read_text(encoding="utf-8"))
+
+            serialized = json.dumps(page_data)
+            self.assertNotIn("components/section-block.html", serialized)
+            self.assertNotIn('"data-section-block": "true"', serialized)
 
     def test_hugo_generator_prefers_custom_component_partial_without_overwriting_it(self) -> None:
         model = {
@@ -4156,6 +4489,185 @@ class HugoGeneratorTests(unittest.TestCase):
             self.assertEqual(
                 ["about-page", "contact-page"],
                 [page["slug"] for page in site_manifest["pages"]],
+            )
+
+    def test_hugo_generator_merges_responsive_page_variants_into_one_page(self) -> None:
+        desktop_model = {
+            "page": {"id": "landing-1920", "name": "Landing Page 1920", "width": 1920, "height": 900},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1920, "height": 520},
+                    "texts": [
+                        {
+                            "id": "hero-title",
+                            "name": "Hero Title",
+                            "role": "heading",
+                            "value": "Hello desktop",
+                            "bounds": {"x": 120, "y": 72, "width": 560, "height": 88},
+                        },
+                        {
+                            "id": "hero-copy",
+                            "name": "Hero Copy",
+                            "role": "body",
+                            "value": "Desktop layout copy",
+                            "bounds": {"x": 120, "y": 188, "width": 420, "height": 60},
+                        },
+                    ],
+                    "assets": [
+                        {
+                            "id": "hero-image",
+                            "name": "Hero Image",
+                            "nodeId": "hero-image",
+                            "format": "png",
+                            "purpose": "content",
+                            "local_path": "images/hero-image.png",
+                            "bounds": {"x": 1080, "y": 56, "width": 520, "height": 320},
+                        }
+                    ],
+                    "children": ["hero-title", "hero-copy", "hero-image"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+        mobile_model = {
+            "page": {"id": "landing-390", "name": "Landing Page 390", "width": 390, "height": 900},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 390, "height": 620},
+                    "texts": [
+                        {
+                            "id": "hero-title",
+                            "name": "Hero Title",
+                            "role": "heading",
+                            "value": "Hello mobile",
+                            "bounds": {"x": 24, "y": 40, "width": 240, "height": 92},
+                        },
+                        {
+                            "id": "hero-copy",
+                            "name": "Hero Copy",
+                            "role": "body",
+                            "value": "Mobile layout copy",
+                            "bounds": {"x": 24, "y": 152, "width": 240, "height": 72},
+                        },
+                        {
+                            "id": "hero-mobile-note",
+                            "name": "Hero Mobile Note",
+                            "role": "body",
+                            "value": "Visible only on mobile",
+                            "bounds": {"x": 24, "y": 252, "width": 220, "height": 48},
+                        },
+                    ],
+                    "assets": [
+                        {
+                            "id": "hero-image",
+                            "name": "Hero Image",
+                            "nodeId": "hero-image",
+                            "format": "png",
+                            "purpose": "content",
+                            "local_path": "images/hero-image.png",
+                            "bounds": {"x": 24, "y": 336, "width": 240, "height": 180},
+                        }
+                    ],
+                    "children": ["hero-title", "hero-copy", "hero-mobile-note", "hero-image"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = HugoGenerator().generate_many([desktop_model, mobile_model], temp_dir)
+
+            site_manifest = json.loads((Path(temp_dir) / "data" / "site.json").read_text(encoding="utf-8"))
+            self.assertEqual(["landing-page"], [page["slug"] for page in site_manifest["pages"]])
+            self.assertTrue((Path(temp_dir) / "content" / "landing-page.md").exists())
+            self.assertFalse((Path(temp_dir) / "content" / "landing-page-390.md").exists())
+            self.assertTrue((Path(temp_dir) / "data" / "pages" / "landing-page.json").exists())
+
+            page_payload = json.loads((Path(temp_dir) / "data" / "pages" / "landing-page.json").read_text(encoding="utf-8"))
+            self.assertEqual("landing-page", page_payload["page"]["slug"])
+            self.assertIn("responsive", page_payload)
+            self.assertEqual([390], page_payload["responsive"]["breakpoints"])
+
+            css_content = (Path(temp_dir) / "assets" / "css" / "pages" / "landing-page.css").read_text(encoding="utf-8")
+            self.assertIn("@media (max-width: 390px)", css_content)
+            self.assertIn(".text-hero-mobile-note {", css_content)
+            self.assertIn("display: none;", css_content)
+            self.assertIn("display: block !important;", css_content)
+            self.assertGreaterEqual(len(result.written_files), 6)
+
+    def test_hugo_generator_warns_when_shared_responsive_text_differs(self) -> None:
+        desktop_model = {
+            "page": {"id": "landing-1920", "name": "Landing Page 1920", "width": 1920, "height": 600},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1920, "height": 400},
+                    "texts": [
+                        {
+                            "id": "hero-title",
+                            "name": "Hero Title",
+                            "role": "heading",
+                            "value": "Hello desktop",
+                            "bounds": {"x": 120, "y": 72, "width": 560, "height": 88},
+                        }
+                    ],
+                    "assets": [],
+                    "children": ["hero-title"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+        mobile_model = {
+            "page": {"id": "landing-390", "name": "Landing Page 390", "width": 390, "height": 700},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 390, "height": 420},
+                    "texts": [
+                        {
+                            "id": "hero-title",
+                            "name": "Hero Title",
+                            "role": "heading",
+                            "value": "Hello mobile",
+                            "bounds": {"x": 24, "y": 40, "width": 240, "height": 92},
+                        }
+                    ],
+                    "assets": [],
+                    "children": ["hero-title"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            HugoGenerator().generate_many([desktop_model, mobile_model], temp_dir)
+            page_payload = json.loads((Path(temp_dir) / "data" / "pages" / "landing-page.json").read_text(encoding="utf-8"))
+            warnings = page_payload.get("warnings", [])
+            self.assertTrue(
+                any("changes text content" in warning for warning in warnings),
+                warnings,
             )
 
     @unittest.skipIf(not HUGO_BIN, "Hugo CLI is not available")
@@ -4326,6 +4838,107 @@ class HugoGeneratorTests(unittest.TestCase):
                 html_content,
                 re.compile(r'style="font-family: (?:&quot;|&#34;)Inter(?:&quot;|&#34;), sans-serif;'),
             )
+
+    @unittest.skipIf(not HUGO_BIN, "Hugo CLI is not available")
+    def test_hugo_build_renders_numbered_text_as_ordered_list(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Page", "width": 800, "height": 400},
+            "sections": [
+                {
+                    "id": "process",
+                    "name": "Process",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 800, "height": 400},
+                    "texts": [
+                        {
+                            "id": "process-list",
+                            "name": "Process List",
+                            "role": "body",
+                            "value": "1. Audit initial\n2. Prototype rapide",
+                            "bounds": {"x": 80, "y": 60, "width": 320, "height": 100},
+                            "style": {"fontFamily": "Inter", "fontSize": 18, "fontWeight": 400},
+                        }
+                    ],
+                    "children": ["process-list"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            site_dir = Path(temp_dir) / "site"
+            public_dir = build_hugo_site(model, site_dir)
+            html_content = (public_dir / "index.html").read_text(encoding="utf-8")
+
+            self.assertIn("<ol", html_content)
+            self.assertIn('id="process-list"', html_content)
+            self.assertIn("<li", html_content)
+            self.assertIn("Audit initial</li>", html_content)
+            self.assertIn("Prototype rapide</li>", html_content)
+            self.assertNotIn("1. Audit initial", html_content)
+
+    @unittest.skipIf(not HUGO_BIN, "Hugo CLI is not available")
+    def test_hugo_build_supports_legacy_page_data_without_list_items(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Page", "width": 800, "height": 400},
+            "sections": [
+                {
+                    "id": "legal",
+                    "name": "Legal",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 800, "height": 400},
+                    "texts": [
+                        {
+                            "id": "legal-copy",
+                            "name": "Legal Copy",
+                            "role": "body",
+                            "value": "Premiere ligne\nSeconde ligne",
+                            "bounds": {"x": 80, "y": 60, "width": 320, "height": 100},
+                            "style": {"fontFamily": "Inter", "fontSize": 18, "fontWeight": 400},
+                        }
+                    ],
+                    "children": ["legal-copy"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        def strip_list_fields(value: object) -> None:
+            if isinstance(value, dict):
+                value.pop("list_items", None)
+                value.pop("list_kind", None)
+                for item in value.values():
+                    strip_list_fields(item)
+                return
+            if isinstance(value, list):
+                for item in value:
+                    strip_list_fields(item)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            site_dir = Path(temp_dir) / "site"
+            HugoGenerator().generate(model, site_dir)
+            page_json_path = site_dir / "data" / "page.json"
+            page_payload = json.loads(page_json_path.read_text(encoding="utf-8"))
+            strip_list_fields(page_payload)
+            page_json_path.write_text(json.dumps(page_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+            public_dir = site_dir / "public"
+            subprocess.run(
+                [HUGO_BIN, "--source", str(site_dir), "--destination", str(public_dir), "--quiet"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+
+            html_content = (public_dir / "index.html").read_text(encoding="utf-8")
+            self.assertIn("Premiere ligne", html_content)
+            self.assertIn("Seconde ligne", html_content)
 
     @unittest.skipIf(not HUGO_BIN, "Hugo CLI is not available")
     def test_hugo_build_skips_mask_assets_in_markup(self) -> None:

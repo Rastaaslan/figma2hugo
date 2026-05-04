@@ -8,7 +8,7 @@ import typer
 from pydantic import BaseModel, ValidationError
 
 from figma2hugo import __version__
-from figma2hugo.config import AssetMode, ContentMode, FidelityMode, FigmaUrl, OutputMode, parse_figma_url
+from figma2hugo.config import ContentMode, FidelityMode, FigmaUrl, OutputMode, parse_figma_url
 from figma2hugo.figma_reader import FigmaExtractionService
 from figma2hugo.model import GenerationReport
 from figma2hugo.reporting import ReportWriter
@@ -87,16 +87,12 @@ def inspect(
 def extract(
     figma_url: Annotated[str, typer.Argument(help="Figma file/design URL with node-id.")],
     out: Annotated[Path, typer.Option("--out", help="Directory for extracted artifacts.")] = Path("./figma-extract"),
-    asset_mode: Annotated[
-        AssetMode, typer.Option("--asset-mode", help="Asset extraction strategy.")
-    ] = AssetMode.MIXED,
 ) -> None:
     figma = _parse_or_bad_parameter(figma_url)
     out.mkdir(parents=True, exist_ok=True)
     payload = _make_extraction_service().extract(
         figma.source_url,
         out,
-        asset_mode=asset_mode.value,
     )
     document = validate_document(payload)
     (out / "page.json").write_text(
@@ -125,9 +121,6 @@ def generate(
     fidelity_mode: Annotated[
         FidelityMode, typer.Option("--fidelity-mode", help="Rendering fidelity strategy.")
     ] = FidelityMode.BALANCED,
-    asset_mode: Annotated[
-        AssetMode, typer.Option("--asset-mode", help="Asset extraction strategy.")
-    ] = AssetMode.MIXED,
     content_mode: Annotated[
         ContentMode, typer.Option("--content-mode", help="Content placement strategy.")
     ] = ContentMode.DATA_FILE,
@@ -140,7 +133,6 @@ def generate(
                 out=out,
                 mode=mode,
                 fidelity_mode=fidelity_mode,
-                asset_mode=asset_mode,
                 content_mode=content_mode,
             ),
             extraction_service=_make_extraction_service(),
@@ -176,9 +168,6 @@ def build_site(
     fidelity_mode: Annotated[
         FidelityMode, typer.Option("--fidelity-mode", help="Rendering fidelity strategy.")
     ] = FidelityMode.BALANCED,
-    asset_mode: Annotated[
-        AssetMode, typer.Option("--asset-mode", help="Asset extraction strategy.")
-    ] = AssetMode.MIXED,
     content_mode: Annotated[
         ContentMode, typer.Option("--content-mode", help="Content placement strategy.")
     ] = ContentMode.DATA_FILE,
@@ -193,7 +182,6 @@ def build_site(
                 out=out,
                 mode=OutputMode.HUGO,
                 fidelity_mode=fidelity_mode,
-                asset_mode=asset_mode,
                 content_mode=content_mode,
             ),
             extraction_service=_make_extraction_service(),

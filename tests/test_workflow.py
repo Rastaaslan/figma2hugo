@@ -23,10 +23,8 @@ class FailingExtractionService:
         self,
         figma_url: str,
         out_dir: str | Path,
-        *,
-        asset_mode: str = "mixed",
     ) -> dict[str, object]:
-        del figma_url, asset_mode
+        del figma_url
         Path(out_dir, "raw").mkdir(parents=True, exist_ok=True)
         Path(out_dir, "raw", "marker.txt").write_text("started", encoding="utf-8")
         raise RuntimeError("boom")
@@ -37,10 +35,8 @@ class SuccessfulExtractionService:
         self,
         figma_url: str,
         out_dir: str | Path,
-        *,
-        asset_mode: str = "mixed",
     ) -> dict[str, object]:
-        del figma_url, asset_mode
+        del figma_url
         Path(out_dir, "raw").mkdir(parents=True, exist_ok=True)
         Path(out_dir, "raw", "marker.txt").write_text("started", encoding="utf-8")
         return {
@@ -103,10 +99,7 @@ class SuccessfulMultiExtractionService:
         self,
         figma_url: str,
         out_dir: str | Path,
-        *,
-        asset_mode: str = "mixed",
     ) -> dict[str, object]:
-        del asset_mode
         Path(out_dir, "raw").mkdir(parents=True, exist_ok=True)
         page_name = "About Page" if "about" in figma_url else "Contact Page"
         Path(out_dir, "raw", f"{page_name}.txt").write_text("started", encoding="utf-8")

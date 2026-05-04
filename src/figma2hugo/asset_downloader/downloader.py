@@ -25,15 +25,12 @@ class AssetDownloader:
         file_key: str,
         assets: list[dict[str, Any]],
         assets_dir: Path,
-        *,
-        asset_mode: str = "mixed",
     ) -> list[dict[str, Any]]:
         assets_dir.mkdir(parents=True, exist_ok=True)
 
         render_queue_svg: list[str] = []
         render_queue_png: list[str] = []
         asset_map = {asset["nodeId"]: asset for asset in assets if asset.get("nodeId")}
-        png_scale = 1 if asset_mode == "lightweight" else 2
 
         with httpx.Client(timeout=60.0, follow_redirects=True) as client:
             for asset in assets:
@@ -46,19 +43,14 @@ class AssetDownloader:
                         assets_dir / self._asset_filename(asset),
                         client,
                     )
-                    if asset_mode == "lightweight":
-                        self._optimize_lightweight_raster(local_path, asset)
+                    self._optimize_lightweight_raster(local_path, asset)
                     asset["localPath"] = local_path
                     continue
 
                 if not self.rest_client.available or not asset.get("nodeId"):
                     continue
 
-                if asset_mode == "svg-first" and asset.get("isVector"):
-                    render_queue_svg.append(asset["nodeId"])
-                elif asset_mode == "raster-first":
-                    render_queue_png.append(asset["nodeId"])
-                elif asset.get("isVector"):
+                if asset.get("isVector"):
                     render_queue_svg.append(asset["nodeId"])
                 else:
                     render_queue_png.append(asset["nodeId"])
@@ -79,7 +71,7 @@ class AssetDownloader:
                     file_key,
                     render_queue_png,
                     image_format="png",
-                    scale=png_scale,
+                    scale=1,
                     use_absolute_bounds=False,
                     contents_only=True,
                 )

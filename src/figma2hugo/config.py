@@ -29,13 +29,6 @@ class FidelityMode(StrEnum):
     SEMANTIC = "semantic"
 
 
-class AssetMode(StrEnum):
-    SVG_FIRST = "svg-first"
-    RASTER_FIRST = "raster-first"
-    MIXED = "mixed"
-    LIGHTWEIGHT = "lightweight"
-
-
 class ContentMode(StrEnum):
     INLINE = "inline"
     DATA_FILE = "data-file"
@@ -100,7 +93,6 @@ class ExtractConfig(FigmaBaseModel):
 class GenerateConfig(ExtractConfig):
     output_mode: OutputMode = OutputMode.HUGO
     fidelity_mode: FidelityMode = FidelityMode.BALANCED
-    asset_mode: AssetMode = AssetMode.SVG_FIRST
     content_mode: ContentMode = ContentMode.DATA_FILE
 
 

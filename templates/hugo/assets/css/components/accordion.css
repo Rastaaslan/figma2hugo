@@ -68,6 +68,59 @@ button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > .c
   min-width: 0;
 }
 
+[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"] > [data-purpose="background"],
+[data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"] > [data-purpose="background"],
+button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > [data-purpose="background"],
+[data-accordion-panel="true"][data-layout-flow="true"] > [data-purpose="background"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  z-index: 0;
+}
+
+[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"] > :not([data-purpose="background"]),
+[data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"] > :not([data-purpose="background"]),
+button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > :not([data-purpose="background"]),
+[data-accordion-panel="true"][data-layout-flow="true"] > :not([data-purpose="background"]) {
+  z-index: 1;
+}
+
+/* Quand un trigger contient une icone, on lui redonne une vraie ligne
+   texte + icone au lieu de laisser la source HTML absolue s'empiler. */
+[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"]:has(> .content-asset[data-purpose="icon"]),
+button.content-node[data-accordion-trigger="true"][data-layout-flow="true"]:has(> .content-asset[data-purpose="icon"]) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 24px;
+}
+
+[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"]:has(> .content-asset[data-purpose="icon"]) > .content-text,
+button.content-node[data-accordion-trigger="true"][data-layout-flow="true"]:has(> .content-asset[data-purpose="icon"]) > .content-text {
+  grid-column: 1;
+  min-width: 0;
+}
+
+[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"]:has(> .content-asset[data-purpose="icon"]) > .content-asset[data-purpose="icon"],
+button.content-node[data-accordion-trigger="true"][data-layout-flow="true"]:has(> .content-asset[data-purpose="icon"]) > .content-asset[data-purpose="icon"] {
+  grid-column: 2;
+  justify-self: end;
+  align-self: center;
+  width: auto;
+  max-width: none;
+  height: auto;
+}
+
+[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"]:has(> .content-asset[data-purpose="icon"]) > .content-asset[data-purpose="icon"] img,
+button.content-node[data-accordion-trigger="true"][data-layout-flow="true"]:has(> .content-asset[data-purpose="icon"]) > .content-asset[data-purpose="icon"] img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+
 button.content-node[data-accordion-trigger="true"]:focus-visible {
   outline: 2px solid currentColor;
   outline-offset: 4px;

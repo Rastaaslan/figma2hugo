@@ -9,9 +9,33 @@
 {{- range $name, $value := $text.attributes -}}
   {{- $attrs = $attrs | append (printf "%s=%q" $name $value) -}}
 {{- end -}}
+{{- $listItems := slice -}}
+{{- with index $text "list_items" -}}
+  {{- $listItems = . -}}
+{{- end -}}
+{{- $segments := slice -}}
+{{- with index $text "segments" -}}
+  {{- $segments = . -}}
+{{- end -}}
 {{ printf "<%s %s>" $text.tag (delimit $attrs " ") | safeHTML }}
-  {{- if gt (len $text.segments) 0 -}}
-    {{- range $text.segments -}}
+  {{- if gt (len $listItems) 0 -}}
+    {{- range $listItems -}}
+      {{- $itemSegments := slice -}}
+      {{- with index . "segments" -}}
+        {{- $itemSegments = . -}}
+      {{- end -}}
+      <li{{ with .class_name }} class="{{ . }}"{{ end }}>
+        {{- if gt (len $itemSegments) 0 -}}
+          {{- range $itemSegments -}}
+            <span class="{{ .class_name }}"{{ with .style }} style="{{ . | safeCSS }}"{{ end }}>{{ .html | safeHTML }}</span>
+          {{- end -}}
+        {{- else -}}
+          {{- .html | safeHTML -}}
+        {{- end -}}
+      </li>
+    {{- end -}}
+  {{- else if gt (len $segments) 0 -}}
+    {{- range $segments -}}
       <span class="{{ .class_name }}"{{ with .style }} style="{{ . | safeCSS }}"{{ end }}>{{ .html | safeHTML }}</span>
     {{- end -}}
   {{- else -}}

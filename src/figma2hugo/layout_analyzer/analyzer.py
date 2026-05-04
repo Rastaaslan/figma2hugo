@@ -69,9 +69,12 @@ class LayoutAnalyzer:
                 )
             )
         self._attach_orphan_nodes(analysis_root, result)
-        if analysis_root is not root_node:
-            ignored_ids = {analysis_root.get("id"), *wrapper_chain_ids}
-            self._attach_orphan_nodes(root_node, result, ignored_ids={node_id for node_id in ignored_ids if node_id})
+        # When we promote an inner frame/group as the effective page root, the
+        # outer wrapper often contains editor notes, exports, or other siblings
+        # that are not part of the page itself. Re-attaching those "orphans"
+        # from the outer root pollutes the rendered page with huge stray texts
+        # and graphics, so we keep orphan attachment scoped to the promoted
+        # analysis root only.
         return result
 
     def _unwrap_single_section_wrapper(self, root_node: dict[str, Any]) -> dict[str, Any]:
@@ -87,6 +90,10 @@ class LayoutAnalyzer:
 
             visible_children = self._visible_section_children(current)
             if len(visible_children) != 1:
+                promoted_child = self._pick_dominant_page_root_child(current, visible_children)
+                if promoted_child is not None:
+                    current = promoted_child
+                    continue
                 return current
 
             wrapper = visible_children[0]
@@ -101,6 +108,56 @@ class LayoutAnalyzer:
             current = wrapper
 
         return current
+
+    def _pick_dominant_page_root_child(
+        self,
+        parent: dict[str, Any],
+        visible_children: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        parent_bounds = self._bounds(parent)
+        parent_area = max(parent_bounds["width"] * parent_bounds["height"], 1.0)
+        eligible: list[tuple[int, float, dict[str, Any]]] = []
+        substantial_children = 0
+
+        for child in visible_children:
+            child_bounds = self._bounds(child)
+            child_area = child_bounds["width"] * child_bounds["height"]
+            child_area_ratio = child_area / parent_area
+            if child_area_ratio >= 0.12:
+                substantial_children += 1
+            if child_area_ratio < 0.2:
+                continue
+
+            child_visible_children = self._visible_section_children(child)
+            section_like_children = [item for item in child_visible_children if self._looks_like_section(item, child)]
+            if len(section_like_children) < 2:
+                continue
+
+            normalized_name = (child.get("name") or "").strip().lower()
+            name_priority = 1 if normalized_name in {"page", "root", "canvas"} else 0
+            eligible.append((name_priority, child_area, child))
+
+        if not eligible:
+            return None
+
+        eligible.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        best_priority, best_area, best_child = eligible[0]
+        if best_priority > 0:
+            return best_child
+        if substantial_children > 1:
+            return None
+        best_area_ratio = best_area / parent_area
+        if best_area_ratio < 0.55:
+            return None
+        if len(eligible) == 1:
+            return best_child
+
+        _, second_area, _ = eligible[1]
+        if second_area <= 0:
+            return best_child
+        if best_area / second_area >= 2.0:
+            return best_child
+        return None
 
     def _wrapper_chain_ids(self, root_node: dict[str, Any], analysis_root: dict[str, Any]) -> set[str]:
         if root_node is analysis_root:

@@ -163,18 +163,10 @@ class StaticGenerator:
 
     def _render_text(self, text_item: dict[str, Any], *, indent: str) -> list[str]:
         attrs = self._render_attributes(text_item.get("attributes", {}))
-        if text_item.get("segments"):
-            segments = []
-            for segment in text_item["segments"]:
-                style_attr = (
-                    f' style="{html.escape(segment["style"], quote=True)}"'
-                    if segment.get("style")
-                    else ""
-                )
-                segments.append(
-                    f'<span class="{html.escape(segment["class_name"])}"{style_attr}>{segment["html"]}</span>'
-                )
-            content = "".join(segments)
+        if text_item.get("list_items"):
+            content = "".join(self._render_list_item(item) for item in text_item["list_items"])
+        elif text_item.get("segments"):
+            content = self._render_segmented_text(text_item["segments"])
         else:
             content = text_item["html"]
         wrapper_attrs = self._render_attributes(
@@ -183,6 +175,31 @@ class StaticGenerator:
         return [
             f'{indent}<{text_item["tag"]}{wrapper_attrs}{attrs}>{content}</{text_item["tag"]}>'
         ]
+
+    def _render_list_item(self, item: dict[str, Any]) -> str:
+        class_attr = (
+            f' class="{html.escape(ensure_text(item.get("class_name")), quote=True)}"'
+            if item.get("class_name")
+            else ""
+        )
+        if item.get("segments"):
+            content = self._render_segmented_text(item["segments"])
+        else:
+            content = item["html"]
+        return f"<li{class_attr}>{content}</li>"
+
+    def _render_segmented_text(self, segments: list[dict[str, Any]]) -> str:
+        rendered_segments: list[str] = []
+        for segment in segments:
+            style_attr = (
+                f' style="{html.escape(segment["style"], quote=True)}"'
+                if segment.get("style")
+                else ""
+            )
+            rendered_segments.append(
+                f'<span class="{html.escape(segment["class_name"])}"{style_attr}>{segment["html"]}</span>'
+            )
+        return "".join(rendered_segments)
 
     def _render_asset(self, asset: dict[str, Any], *, indent: str) -> list[str]:
         if asset.get("render") is False:

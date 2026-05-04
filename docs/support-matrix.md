@@ -1,27 +1,28 @@
 # Support Matrix
 
-Ce document fige le périmètre actuellement supporté par `figma2hugo`.
+Ce document fige le perimetre actuellement supporte par `figma2hugo`.
 
-## Stratégie générale
+## Strategie generale
 
-- Rendu **desktop-first** fidèle à Figma par défaut
-- Blocs **responsive-friendly** activés de manière ciblée via le layout et les conventions de nommage
-- Validation automatique du build, des assets, des textes, du responsive multi-viewports et des interactions clés
+- Rendu **desktop-first** fidele a Figma par defaut
+- Blocs **responsive-friendly** actives de maniere ciblee via le layout et les conventions de nommage
+- Validation automatique du build, des assets, des textes, du responsive multi-viewports et des interactions cles
 
 ## Stable aujourd'hui
 
-- Génération statique
-- Génération Hugo mono-page et multi-pages
-- Extraction des textes, assets et wrappers sémantiques
-- FAQ / accordéons
+- Generation statique
+- Generation Hugo mono-page et multi-pages
+- Extraction des textes, assets et wrappers semantiques
+- FAQ / accordions
 - Matrices de `href-card` / `link-grid`
 - Carrousels
 - Formulaires HTML basiques enrichis
 - Sous-sections `section-block` en flux opt-in
+- Fusion responsive multi-variantes basee sur les noms de pages `page-<slug>-<width>`
 
 ## Responsive-friendly garanti
 
-- Shell desktop fixe conservé tant qu'aucun mode flow n'est explicitement demandé
+- Shell desktop fixe conserve tant qu'aucun mode flow n'est explicitement demande
 - Validation multi-breakpoints sur :
   - `1440`
   - `1280`
@@ -29,7 +30,7 @@ Ce document fige le périmètre actuellement supporté par `figma2hugo`.
   - `768`
   - `390`
 - Sondes d'interaction sur :
-  - accordéons
+  - accordions
   - link cards
   - carrousels
   - formulaires
@@ -37,5 +38,5 @@ Ce document fige le périmètre actuellement supporté par `figma2hugo`.
 ## Non garanti pour l'instant
 
 - Conversion automatique de n'importe quelle page absolue Figma en layout web fluide
-- Fusion automatique de plusieurs variantes Figma d'une même page pour produire les breakpoints
+- Resize ou adaptation automatique des maquettes entre largeurs
 - Responsive global complet sans conventions de structure explicites
