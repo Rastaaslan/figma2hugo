@@ -1,27 +1,21 @@
 # Figma Naming Conventions
 
-Ce document rassemble la nomenclature recommandee pour que `figma2hugo` comprenne mieux les intentions de structure, de fond, de decor, d'interaction et de responsive.
+Ce document rassemble la nomenclature recommandee pour que `figma2hugo` comprenne mieux les intentions de structure, de fond, de decor et d'interaction.
 
 ## Principes generaux
 
 - utiliser des noms simples, explicites et stables
 - preferer les minuscules avec tirets: `section-hero`, `bg-button-envoyer`
-- garder le meme nom pour le meme element logique entre variantes responsive
 - si un element change vraiment de contenu ou de role, lui donner un autre nom
 - separer le contenu, le fond et le decor plutot que tout melanger dans un seul groupe
 
-## Pages et variantes
-
-- une page par largeur
-- meme famille de page avec suffixe numerique
+## Pages
 
 Exemples:
 
-- `page-accueil-1920`
-- `page-accueil-1280`
-- `page-accueil-768`
-- `page-accueil-390`
-- `page-prestation-1920`
+- `page-accueil`
+- `page-prestation`
+- `page-contact`
 
 ## Sections et structure
 
@@ -193,22 +187,6 @@ Prefixes utiles:
 - `option-*`
 - `action-*`
 
-## Responsive
-
-Pour les variantes responsive:
-
-- garder les memes noms pour les memes elements logiques
-- ne pas renommer un item juste parce qu'il change de position
-- si un element n'existe qu'a une largeur, lui donner un nom distinct
-- si le contenu textuel change vraiment, dupliquer l'element au lieu d'utiliser exactement le meme nom
-
-Exemple:
-
-- `page-prestation-1920`
-- `page-prestation-1280`
-- `page-prestation-768`
-- `page-prestation-390`
-
 ## En cas de doute
 
 Si tu hesites sur un nom:
@@ -220,5 +198,3 @@ Si tu hesites sur un nom:
 Voir aussi:
 
 - [README.md](../README.md)
-- [responsive-figma-variants.md](./responsive-figma-variants.md)
-- [cahier-des-charges-responsive.md](./cahier-des-charges-responsive.md)
