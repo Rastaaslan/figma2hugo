@@ -186,3 +186,19 @@ The main heuristics consolidated from those passes are:
 - asset downloads reuse a single HTTP client per generation pass and keep already materialized files when possible, which makes heavy reruns much faster on large Figma files
 
 These are still heuristics, not a full semantic reconstruction of every Figma construct, but they make the exporter much cleaner and more stable on the patterns we validated repeatedly.
+
+## Figma Naming Conventions
+
+For the exporter to behave predictably, explicit layer naming matters a lot. The recommended conventions are now documented here:
+
+- [`docs/figma-naming-conventions.md`](./docs/figma-naming-conventions.md)
+- [`docs/responsive-figma-variants.md`](./docs/responsive-figma-variants.md)
+
+That naming guide covers:
+
+- page families such as `page-prestation-1920` / `page-prestation-1280`
+- semantic sections like `section-hero`, `section-faq`, `footer`
+- text prefixes like `titre-h2-*`, `texte-*`, `label-*`
+- asset roles like `bg-*`, `image-*`, `icon-*`, `decor-*`
+- component structures for buttons, accordions, cards, and forms
+- the expected `accordion-trigger-* > bg-accordion-trigger-*` pattern for FAQ backgrounds
