@@ -36,6 +36,16 @@ REPEATED_COMPONENT_EXCLUDED_ROLES = {
     "header",
     "nav",
 }
+GEOMETRY_FLOW_NAME_PREFIXES = (
+    "grid-",
+    "line-",
+    "ligne-",
+    "link-row-",
+    "row-",
+    "section-block-",
+    "split-",
+    "stack-",
+)
 SECTION_COORDINATE_SPACE = "section"
 PARENT_COORDINATE_SPACE = "parent"
 PUNCTUATION_ONLY_LINE_RE = re.compile(r"^[-!\?\u00a1\u00bf\u2010-\u2015/:|+*\u00b7\u2022]+$")
@@ -52,6 +62,19 @@ class GenerationArtifacts:
     output_dir: Path
     written_files: tuple[Path, ...]
     page_data: dict[str, Any]
+
+
+@dataclass(slots=True)
+class GeometryFlowInference:
+    axis: str
+    direction: str
+    item_spacing: float
+    counter_axis_spacing: float | None
+    padding_top: float
+    padding_right: float
+    padding_bottom: float
+    padding_left: float
+    confidence: float
 
 
 def ensure_directory(path: Path) -> Path:
@@ -961,6 +984,7 @@ class CanonicalModelBuilder:
         page, sections = self._promote_root_page_frame(page, sections)
         self._demote_nested_interactive_containers(sections)
         self._annotate_repeated_component_groups(sections)
+        self._reconcile_geometry_layouts(sections)
         warnings = dedupe_strings(coerce_list(source.get("warnings")) + self._warnings)
         return {
             "page": page,
@@ -1113,6 +1137,410 @@ class CanonicalModelBuilder:
             attrs.setdefault("data-card", "true")
 
         item["attributes"] = attrs
+
+    def _reconcile_geometry_layouts(self, sections: list[dict[str, Any]]) -> None:
+        for section in sections:
+            self._reconcile_geometry_node(section, is_section=True)
+
+    def _reconcile_geometry_node(self, node: dict[str, Any], *, is_section: bool) -> None:
+        raw_children = node.get("children", [])
+        children = [child for child in raw_children if isinstance(child, dict)]
+        for child in children:
+            if child.get("kind") == "container":
+                self._reconcile_geometry_node(child, is_section=False)
+
+        inference = self._infer_geometry_flow(node, children)
+        if inference is None:
+            return
+
+        if not self._apply_geometry_flow(node, inference, is_section=is_section):
+            return
+
+        parent_bounds = self._geometry_reference_bounds(node)
+        for child in self._geometry_children(children):
+            self._annotate_position_constraints(child, parent_bounds=parent_bounds)
+
+    def _infer_geometry_flow(
+        self,
+        parent: dict[str, Any],
+        children: list[dict[str, Any]],
+    ) -> GeometryFlowInference | None:
+        parent_bounds = self._geometry_reference_bounds(parent)
+        parent_width = float(parent_bounds.get("width", 0.0) or 0.0)
+        parent_height = float(parent_bounds.get("height", 0.0) or 0.0)
+        if parent_width <= 0 or parent_height <= 0:
+            return None
+
+        boxes = [
+            self._geometry_reference_bounds(child)
+            for child in self._geometry_children(children)
+        ]
+        boxes = [
+            box
+            for box in boxes
+            if float(box.get("width", 0.0) or 0.0) > 0
+            and float(box.get("height", 0.0) or 0.0) > 0
+        ]
+        if len(boxes) < 2:
+            return None
+
+        row = self._linear_geometry_flow(parent_bounds, boxes, axis="row")
+        column = self._linear_geometry_flow(parent_bounds, boxes, axis="column")
+        grid = self._grid_geometry_flow(parent_bounds, boxes)
+        candidates = [candidate for candidate in (row, column, grid) if candidate is not None]
+        if not candidates:
+            return None
+        candidates.sort(key=lambda candidate: candidate.confidence, reverse=True)
+        best = candidates[0]
+        if best.confidence < 0.68:
+            return None
+        return best
+
+    def _linear_geometry_flow(
+        self,
+        parent_bounds: dict[str, float],
+        boxes: list[dict[str, float]],
+        *,
+        axis: str,
+    ) -> GeometryFlowInference | None:
+        if axis == "row":
+            primary_start = "x"
+            primary_size = "width"
+            cross_start = "y"
+            cross_size = "height"
+            direction = "row"
+        else:
+            primary_start = "y"
+            primary_size = "height"
+            cross_start = "x"
+            cross_size = "width"
+            direction = "column"
+
+        ordered = sorted(
+            boxes,
+            key=lambda box: (
+                float(box.get(primary_start, 0.0) or 0.0),
+                float(box.get(cross_start, 0.0) or 0.0),
+            ),
+        )
+        primary_gaps: list[float] = []
+        overlap_penalty = 0.0
+        for previous, current in zip(ordered, ordered[1:], strict=False):
+            previous_start = float(previous.get(primary_start, 0.0) or 0.0)
+            previous_size = float(previous.get(primary_size, 0.0) or 0.0)
+            current_start = float(current.get(primary_start, 0.0) or 0.0)
+            current_size = float(current.get(primary_size, 0.0) or 0.0)
+            gap = current_start - (previous_start + previous_size)
+            primary_gaps.append(gap)
+            allowed_overlap = min(previous_size, current_size) * 0.14
+            if gap < -allowed_overlap:
+                overlap_penalty += min(0.35, abs(gap) / max(min(previous_size, current_size), 1.0))
+
+        if overlap_penalty >= 0.35:
+            return None
+
+        cross_starts = [float(box.get(cross_start, 0.0) or 0.0) for box in ordered]
+        cross_ends = [
+            float(box.get(cross_start, 0.0) or 0.0)
+            + float(box.get(cross_size, 0.0) or 0.0)
+            for box in ordered
+        ]
+        cross_sizes = [float(box.get(cross_size, 0.0) or 0.0) for box in ordered]
+        median_cross_size = self._median(cross_sizes)
+        cross_span = max(cross_ends) - min(cross_starts)
+        cross_slack = max(cross_span - median_cross_size, 0.0)
+        cross_penalty = min(0.45, cross_slack / max(median_cross_size * 1.6, 1.0))
+        if cross_span > median_cross_size * 2.35 + 20.0:
+            return None
+
+        usable_gaps = [max(0.0, gap) for gap in primary_gaps]
+        spacing = self._median(usable_gaps)
+        confidence = max(0.0, 1.0 - overlap_penalty - cross_penalty)
+        return self._geometry_inference(
+            parent_bounds,
+            ordered,
+            axis=axis,
+            direction=direction,
+            item_spacing=spacing,
+            counter_axis_spacing=None,
+            confidence=confidence,
+        )
+
+    def _grid_geometry_flow(
+        self,
+        parent_bounds: dict[str, float],
+        boxes: list[dict[str, float]],
+    ) -> GeometryFlowInference | None:
+        if len(boxes) < 4:
+            return None
+
+        median_height = self._median([float(box.get("height", 0.0) or 0.0) for box in boxes])
+        row_tolerance = max(12.0, median_height * 0.35)
+        rows: list[list[dict[str, float]]] = []
+        for box in sorted(boxes, key=lambda item: float(item.get("y", 0.0) or 0.0)):
+            top = float(box.get("y", 0.0) or 0.0)
+            target_row: list[dict[str, float]] | None = None
+            for row in rows:
+                row_top = self._median([float(item.get("y", 0.0) or 0.0) for item in row])
+                if abs(top - row_top) <= row_tolerance:
+                    target_row = row
+                    break
+            if target_row is None:
+                rows.append([box])
+            else:
+                target_row.append(box)
+
+        rows = [sorted(row, key=lambda item: float(item.get("x", 0.0) or 0.0)) for row in rows]
+        if len(rows) < 2 or max(len(row) for row in rows) < 2:
+            return None
+
+        column_gaps: list[float] = []
+        row_gaps: list[float] = []
+        overlap_penalty = 0.0
+        for row in rows:
+            for previous, current in zip(row, row[1:], strict=False):
+                gap = float(current.get("x", 0.0) or 0.0) - (
+                    float(previous.get("x", 0.0) or 0.0)
+                    + float(previous.get("width", 0.0) or 0.0)
+                )
+                column_gaps.append(max(0.0, gap))
+                if gap < -min(
+                    float(previous.get("width", 0.0) or 0.0),
+                    float(current.get("width", 0.0) or 0.0),
+                ) * 0.14:
+                    overlap_penalty += 0.2
+
+        row_bounds = [union_bounds(row) for row in rows]
+        for previous, current in zip(row_bounds, row_bounds[1:], strict=False):
+            gap = float(current.get("y", 0.0) or 0.0) - (
+                float(previous.get("y", 0.0) or 0.0)
+                + float(previous.get("height", 0.0) or 0.0)
+            )
+            row_gaps.append(max(0.0, gap))
+            if gap < -min(
+                float(previous.get("height", 0.0) or 0.0),
+                float(current.get("height", 0.0) or 0.0),
+            ) * 0.14:
+                overlap_penalty += 0.2
+
+        if overlap_penalty >= 0.35:
+            return None
+
+        return self._geometry_inference(
+            parent_bounds,
+            boxes,
+            axis="grid",
+            direction="row",
+            item_spacing=self._median(column_gaps),
+            counter_axis_spacing=self._median(row_gaps),
+            confidence=max(0.0, 0.86 - overlap_penalty),
+        )
+
+    def _geometry_inference(
+        self,
+        parent_bounds: dict[str, float],
+        boxes: list[dict[str, float]],
+        *,
+        axis: str,
+        direction: str,
+        item_spacing: float,
+        counter_axis_spacing: float | None,
+        confidence: float,
+    ) -> GeometryFlowInference:
+        union = union_bounds(boxes)
+        parent_width = float(parent_bounds.get("width", 0.0) or 0.0)
+        parent_height = float(parent_bounds.get("height", 0.0) or 0.0)
+        left = max(0.0, float(union.get("x", 0.0) or 0.0))
+        top = max(0.0, float(union.get("y", 0.0) or 0.0))
+        right = max(
+            0.0,
+            parent_width
+            - (float(union.get("x", 0.0) or 0.0) + float(union.get("width", 0.0) or 0.0)),
+        )
+        bottom = max(
+            0.0,
+            parent_height
+            - (float(union.get("y", 0.0) or 0.0) + float(union.get("height", 0.0) or 0.0)),
+        )
+        return GeometryFlowInference(
+            axis=axis,
+            direction=direction,
+            item_spacing=item_spacing,
+            counter_axis_spacing=counter_axis_spacing,
+            padding_top=top,
+            padding_right=right,
+            padding_bottom=bottom,
+            padding_left=left,
+            confidence=confidence,
+        )
+
+    def _apply_geometry_flow(
+        self,
+        node: dict[str, Any],
+        inference: GeometryFlowInference,
+        *,
+        is_section: bool,
+    ) -> bool:
+        layout = dict(as_mapping(node.get("layout")))
+        already_flow = bool(layout.get("inferred_flow")) or ensure_text(
+            layout.get("layout_mode")
+        ).strip().upper() in {"HORIZONTAL", "VERTICAL"}
+        attrs = dict(as_mapping(node.get("attributes")))
+        is_component_list = attrs.get("data-component-list") == "true"
+        should_promote = already_flow or is_component_list or self._is_geometry_flow_candidate(node)
+        if not should_promote:
+            return False
+
+        layout["geometry_source"] = "bounds"
+        layout["geometry_axis"] = inference.axis
+        layout["geometry_confidence"] = round(inference.confidence, 3)
+        layout["inferred_flow"] = True
+        if not ensure_text(layout.get("inferred_strategy")).strip():
+            layout["inferred_strategy"] = "flow"
+        if ensure_text(layout.get("inferred_strategy")).strip().lower() == "absolute":
+            layout["inferred_strategy"] = "flow"
+
+        if not ensure_text(layout.get("layout_mode")).strip():
+            layout["layout_mode"] = "VERTICAL" if inference.direction == "column" else "HORIZONTAL"
+        if not ensure_text(layout.get("direction")).strip():
+            layout["direction"] = inference.direction
+        if inference.axis == "grid" and not ensure_text(layout.get("layout_wrap")).strip():
+            layout["layout_wrap"] = "WRAP"
+        if to_float_or_none(layout.get("item_spacing")) is None:
+            layout["item_spacing"] = round(inference.item_spacing, 2)
+        if (
+            inference.counter_axis_spacing is not None
+            and to_float_or_none(layout.get("counter_axis_spacing")) is None
+        ):
+            layout["counter_axis_spacing"] = round(inference.counter_axis_spacing, 2)
+
+        for key, value in (
+            ("padding_top", inference.padding_top),
+            ("padding_right", inference.padding_right),
+            ("padding_bottom", inference.padding_bottom),
+            ("padding_left", inference.padding_left),
+        ):
+            if to_float_or_none(layout.get(key)) is None:
+                layout[key] = round(value, 2)
+
+        if not is_section and (is_component_list or self._is_geometry_flow_shell_candidate(node)):
+            layout["use_flow_shell"] = True
+
+        attrs = self._merge_attributes(attrs, self._layout_attributes(layout, bounds=node.get("bounds")))
+        attrs["data-layout-source"] = "geometry"
+        attrs["data-layout-axis"] = inference.axis
+        attrs["data-layout-confidence"] = f"{inference.confidence:.2f}"
+        if self._is_geometry_flow_shell_candidate(node) and not is_section:
+            attrs.setdefault("data-section-block", "true")
+
+        node["layout"] = layout
+        node["attributes"] = attrs
+        return True
+
+    def _is_geometry_flow_candidate(self, node: dict[str, Any]) -> bool:
+        if node.get("kind") != "container":
+            return False
+        normalized_name = slugify(node.get("name"), default="").lower()
+        return normalized_name.startswith(GEOMETRY_FLOW_NAME_PREFIXES)
+
+    def _is_geometry_flow_shell_candidate(self, node: dict[str, Any]) -> bool:
+        if node.get("kind") != "container":
+            return False
+        role = ensure_text(node.get("role")).strip().lower()
+        if role != "section":
+            return False
+        normalized_name = slugify(node.get("name"), default="").lower()
+        return normalized_name.startswith(GEOMETRY_FLOW_NAME_PREFIXES)
+
+    def _annotate_position_constraints(
+        self,
+        child: dict[str, Any],
+        *,
+        parent_bounds: dict[str, float],
+    ) -> None:
+        child_bounds = self._geometry_reference_bounds(child)
+        parent_width = float(parent_bounds.get("width", 0.0) or 0.0)
+        parent_height = float(parent_bounds.get("height", 0.0) or 0.0)
+        if parent_width <= 0 or parent_height <= 0:
+            return
+
+        left = float(child_bounds.get("x", 0.0) or 0.0)
+        top = float(child_bounds.get("y", 0.0) or 0.0)
+        width = float(child_bounds.get("width", 0.0) or 0.0)
+        height = float(child_bounds.get("height", 0.0) or 0.0)
+        right = parent_width - (left + width)
+        bottom = parent_height - (top + height)
+        horizontal_anchor = self._position_anchor(
+            start=left,
+            end=right,
+            size=width,
+            parent_size=parent_width,
+        )
+        vertical_anchor = self._position_anchor(
+            start=top,
+            end=bottom,
+            size=height,
+            parent_size=parent_height,
+        )
+        horizontal_size = "fill" if horizontal_anchor == "stretch" else "fixed"
+        vertical_size = "fill" if vertical_anchor == "stretch" else "fixed"
+
+        layout = dict(as_mapping(child.get("layout")))
+        layout.update(
+            {
+                "position_anchor_horizontal": horizontal_anchor,
+                "position_anchor_vertical": vertical_anchor,
+                "size_policy_horizontal": horizontal_size,
+                "size_policy_vertical": vertical_size,
+                "margin_left": round(left, 2),
+                "margin_right": round(right, 2),
+                "margin_top": round(top, 2),
+                "margin_bottom": round(bottom, 2),
+            }
+        )
+        attrs = dict(as_mapping(child.get("attributes")))
+        attrs["data-position-x"] = horizontal_anchor
+        attrs["data-position-y"] = vertical_anchor
+        attrs["data-size-x"] = horizontal_size
+        attrs["data-size-y"] = vertical_size
+        child["layout"] = layout
+        child["attributes"] = attrs
+
+    def _geometry_reference_bounds(self, node: dict[str, Any]) -> dict[str, float]:
+        metadata = as_mapping(node.get("metadata"))
+        authored_bounds = as_mapping(
+            coalesce(metadata, "authoredBounds", "authored_bounds", default={})
+        )
+        if bounds_area(authored_bounds) > 0:
+            return normalize_bounds(authored_bounds)
+        return normalize_bounds(node.get("bounds"))
+
+    def _position_anchor(
+        self,
+        *,
+        start: float,
+        end: float,
+        size: float,
+        parent_size: float,
+    ) -> str:
+        tolerance = max(6.0, parent_size * 0.03)
+        if size >= parent_size - tolerance or (abs(start) <= tolerance and abs(end) <= tolerance):
+            return "stretch"
+        center_offset = abs((start + size / 2.0) - (parent_size / 2.0))
+        if center_offset <= tolerance:
+            return "center"
+        if abs(end) + tolerance < abs(start):
+            return "end"
+        return "start"
+
+    def _median(self, values: list[float]) -> float:
+        numbers = sorted(float(value) for value in values if value is not None)
+        if not numbers:
+            return 0.0
+        middle = len(numbers) // 2
+        if len(numbers) % 2:
+            return numbers[middle]
+        return (numbers[middle - 1] + numbers[middle]) / 2.0
 
     def _promote_root_page_frame(
         self,
@@ -1414,6 +1842,45 @@ class CanonicalModelBuilder:
                 "use_flow_shell",
                 "useFlowShell",
             ),
+            "geometry_source": self._layout_text(
+                raw_layout,
+                "geometry_source",
+                "geometrySource",
+            ),
+            "geometry_axis": self._layout_text(
+                raw_layout,
+                "geometry_axis",
+                "geometryAxis",
+            ),
+            "geometry_confidence": self._layout_float(
+                raw_layout,
+                "geometry_confidence",
+                "geometryConfidence",
+            ),
+            "position_anchor_horizontal": self._layout_text(
+                raw_layout,
+                "position_anchor_horizontal",
+                "positionAnchorHorizontal",
+            ),
+            "position_anchor_vertical": self._layout_text(
+                raw_layout,
+                "position_anchor_vertical",
+                "positionAnchorVertical",
+            ),
+            "size_policy_horizontal": self._layout_text(
+                raw_layout,
+                "size_policy_horizontal",
+                "sizePolicyHorizontal",
+            ),
+            "size_policy_vertical": self._layout_text(
+                raw_layout,
+                "size_policy_vertical",
+                "sizePolicyVertical",
+            ),
+            "margin_left": self._layout_float(raw_layout, "margin_left", "marginLeft"),
+            "margin_right": self._layout_float(raw_layout, "margin_right", "marginRight"),
+            "margin_top": self._layout_float(raw_layout, "margin_top", "marginTop"),
+            "margin_bottom": self._layout_float(raw_layout, "margin_bottom", "marginBottom"),
             "direction": direction,
         }
 
@@ -1459,6 +1926,18 @@ class CanonicalModelBuilder:
         sizing_vertical = ensure_text(layout.get("layout_sizing_vertical")).strip().lower()
         if sizing_vertical:
             attrs["data-layout-sizing-vertical"] = sizing_vertical
+
+        geometry_source = ensure_text(layout.get("geometry_source")).strip().lower()
+        if geometry_source:
+            attrs["data-layout-source"] = geometry_source
+
+        geometry_axis = ensure_text(layout.get("geometry_axis")).strip().lower()
+        if geometry_axis:
+            attrs["data-layout-axis"] = geometry_axis
+
+        geometry_confidence = to_float_or_none(layout.get("geometry_confidence"))
+        if geometry_confidence is not None:
+            attrs["data-layout-confidence"] = f"{geometry_confidence:.2f}"
 
         inline_style = self._layout_inline_style(layout, bounds=bounds)
         if inline_style:
@@ -1805,6 +2284,7 @@ class CanonicalModelBuilder:
             parent_absolute_offset=parent_absolute_offset,
             source_space=node_source_space,
         )
+        authored_bounds = dict(bounds)
         child_source_space = ensure_text(
             coalesce(
                 data,
@@ -1946,9 +2426,34 @@ class CanonicalModelBuilder:
             "bounds": bounds,
             "layout": layout,
             "attributes": attrs,
+            "metadata": self._container_metadata(data, authored_bounds=authored_bounds, bounds=bounds),
             "children": children,
             "form_control": form_control,
         }
+
+    def _container_metadata(
+        self,
+        data: dict[str, Any],
+        *,
+        authored_bounds: dict[str, float],
+        bounds: dict[str, float],
+    ) -> dict[str, Any]:
+        metadata = dict(as_mapping(data.get("metadata")))
+        if not self._bounds_are_close(authored_bounds, bounds):
+            metadata.setdefault("authoredBounds", authored_bounds)
+        return metadata
+
+    def _bounds_are_close(
+        self,
+        first: dict[str, float],
+        second: dict[str, float],
+        *,
+        tolerance: float = 0.01,
+    ) -> bool:
+        for key in ("x", "y", "width", "height"):
+            if abs(float(first.get(key, 0.0) or 0.0) - float(second.get(key, 0.0) or 0.0)) > tolerance:
+                return False
+        return True
 
     def _tighten_container_bounds_to_children(
         self,

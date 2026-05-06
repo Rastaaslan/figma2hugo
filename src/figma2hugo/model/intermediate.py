@@ -38,6 +38,19 @@ class LayoutMetadata(FigmaBaseModel):
     constraints: dict[str, Any] = Field(default_factory=dict)
     inferred_strategy: str | None = None
     inferred_flow: bool | None = None
+    use_flow_shell: bool | None = None
+    direction: str | None = None
+    geometry_source: str | None = None
+    geometry_axis: str | None = None
+    geometry_confidence: float | None = None
+    position_anchor_horizontal: str | None = None
+    position_anchor_vertical: str | None = None
+    size_policy_horizontal: str | None = None
+    size_policy_vertical: str | None = None
+    margin_left: float | None = None
+    margin_right: float | None = None
+    margin_top: float | None = None
+    margin_bottom: float | None = None
 
 
 class PageNode(FigmaBaseModel):

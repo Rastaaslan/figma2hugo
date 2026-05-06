@@ -22,6 +22,7 @@ Ce document fige le perimetre actuellement supporte par `figma2hugo`.
 - FAQ / accordions
 - Matrices de `href-card` / `link-grid`
 - Collections de composants repetitifs detectees (`component-list`)
+- Inference geometrique prudente pour les collections repetitives : axe, gap, padding et ancres deduits des bounds Figma exportes
 - Carrousels
 - Formulaires HTML basiques enrichis
 - Sous-sections `section-block` en flux opt-in
@@ -32,6 +33,7 @@ Ce document fige le perimetre actuellement supporte par `figma2hugo`.
 ## Responsive-friendly garanti
 
 - Shell desktop fixe conserve tant qu'aucun mode flow n'est explicitement demande
+- Les `component-list` coherentes peuvent activer un flow responsive meme sans auto-layout Figma explicite
 - Validation multi-breakpoints sur :
   - `1920`
   - `1440`
@@ -47,7 +49,7 @@ Ce document fige le perimetre actuellement supporte par `figma2hugo`.
 
 ## Non garanti pour l'instant
 
-- Conversion automatique de n'importe quelle page absolue Figma en layout web fluide
+- Conversion automatique de n'importe quelle page absolue Figma en layout web fluide hors familles de composants supportees
 - Resize ou adaptation automatique des maquettes entre largeurs
 - Responsive global complet sans conventions de structure explicites
 - Merge fiable si les noms de pages ou la structure partagee divergent entre variantes

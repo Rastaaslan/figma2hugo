@@ -220,6 +220,7 @@ class SiteValidator:
             "responsiveOptInComponents": [
                 "accordion",
                 "component-list",
+                "geometry-inferred component-list flow",
                 "link-grid",
                 "link-card",
                 "carousel",
@@ -233,12 +234,16 @@ class SiteValidator:
                     "responsive multi-variant Hugo pages are merged when variants follow "
                     "`page-<slug>-<width>` and keep stable shared structure"
                 ),
+                (
+                    "repeated component collections can infer row, column or grid flow "
+                    "from exported Figma bounds when the structure is coherent"
+                ),
                 "responsive probes run on multiple viewport widths when Playwright is available",
                 "interactive probes cover accordion, cards, carousel and forms when present",
             ],
             "notGuaranteedYet": [
                 "fully fluid page shells for every Figma page",
-                "automatic responsive inference for arbitrary absolute layouts",
+                "automatic responsive inference for arbitrary absolute layouts outside supported component families",
                 (
                     "responsive merge reliability when naming conventions or shared layer "
                     "structure drift across variants"

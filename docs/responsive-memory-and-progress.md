@@ -1800,6 +1800,50 @@ Ordre recommande pour la suite :
 - controle statique :
   - `ruff --select I,F src tests` OK
 
+### 2026-05-07 - Passe 48 : reconciliation geometrique amont
+
+- declencheur :
+  - besoin de gerer dimensions, emplacements et logiques positionnelles plus tot que les reparations navigateur
+  - objectif : exploiter les bounds Figma exportes pour deduire des flows coherents quand la structure le permet
+- implementation dans `src/figma2hugo/generators/_shared.py` :
+  - ajout d'une passe `geometry reconciliation` apres la detection des composants repetitifs
+  - conservation des bounds Figma auteur dans `metadata.authoredBounds` lorsque le canonique resserre un conteneur autour de ses enfants
+  - inference prudente :
+    - axe `row`, `column` ou `grid`
+    - gap principal et cross-gap
+    - padding top/right/bottom/left
+    - confiance de detection
+  - activation du flow uniquement pour les cas controles :
+    - collections `component-list`
+    - conteneurs nommes comme des blocs de layout (`row-*`, `grid-*`, `stack-*`, `split-*`, `section-block-*`, etc.)
+    - layouts deja explicitement flow
+  - annotation des enfants avec ancres et politiques de taille :
+    - `data-position-x`
+    - `data-position-y`
+    - `data-size-x`
+    - `data-size-y`
+- schema / validation :
+  - `LayoutMetadata` expose maintenant les champs de reconciliation :
+    - `geometrySource`, `geometryAxis`, `geometryConfidence`
+    - `positionAnchorHorizontal`, `positionAnchorVertical`
+    - `sizePolicyHorizontal`, `sizePolicyVertical`
+    - marges derivees
+  - matrice de support mise a jour : l'inference reste limitee aux familles de composants supportees
+- idiome Hugo :
+  - pas de correction aveugle dans le navigateur
+  - les donnees enrichies restent dans le JSON canonique
+  - les partials et CSS existants (`component-list`, `section-block`) consomment les attributs `data-layout-*`
+- validation ciblee :
+  - `PYTHONPATH=src python -m pytest tests/test_generators.py -k "geometry_flow or repeated_component_groups" -q`
+  - resultat : `2 passed`
+- validation globale :
+  - `PYTHONPATH=src python -m pytest -p no:cacheprovider`
+  - resultat : `237 passed, 1 skipped`
+  - `PYTHONPATH=src python -m ruff check --select I,F src tests`
+  - resultat : OK
+  - `PYTHONPATH=src python -m figma2hugo.cli validate site`
+  - resultat : `buildOk=true`, `0 / 6` viewports avec issues, `strictReady=true` sur la famille locale
+
 ## Points Ouverts
 
 - la couverture "responsive complet" n'est pas encore synonyme de "toute page absolue Figma devient automatiquement fluide"

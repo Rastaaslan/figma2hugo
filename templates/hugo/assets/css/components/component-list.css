@@ -1,6 +1,7 @@
 /* Generic repeated component collections detected from structurally similar
    siblings. Fixed Figma geometry remains authoritative by default; responsive
-   flow only activates when the source layout already exposes flow/autolayout. */
+   flow activates when source auto-layout or geometry reconciliation marks the
+   collection as coherent. */
 
 .page :where([data-component-list="true"]) {
   --component-list-gap: var(--layout-gap, 24px);

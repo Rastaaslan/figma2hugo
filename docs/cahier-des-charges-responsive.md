@@ -190,8 +190,12 @@ footer-bandeau-contact
 
 ## Contraintes De Production
 
-- aucune adaptation automatique des dimensions de la maquette
-- le travail de mise en page responsive est fait a la main dans Figma
+- aucune conversion automatique globale d'une page absolue arbitraire en layout fluide
+- les familles supportees peuvent recevoir une aide amont :
+  - collections repetitives detectees
+  - axe, gap, padding et ancres deduits des bounds Figma exportes
+  - activation responsive du flow uniquement si la structure est coherente
+- le travail de mise en page responsive principal reste fait dans Figma
 - le moteur se contente de fusionner des variantes coherentes
 
 ## Critere D'Acceptation

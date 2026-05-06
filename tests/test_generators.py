@@ -4942,6 +4942,96 @@ class HugoGeneratorTests(unittest.TestCase):
         self.assertIn('[data-component-list="true"]', css_content)
         self.assertIn('[data-component-item="true"]', css_content)
 
+    def test_canonical_builder_infers_geometry_flow_for_repeated_component_groups(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Geometry Flow", "width": 1200, "height": 640},
+            "sections": [
+                {
+                    "id": "features",
+                    "name": "Features",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1200, "height": 640},
+                    "children": [
+                        {
+                            "id": "feature-row",
+                            "name": "feature-row",
+                            "bounds": {"x": 80, "y": 120, "width": 1040, "height": 320},
+                            "coordinate_space": "section",
+                            "children_coordinate_space": "section",
+                            "children": [
+                                {
+                                    "id": "feature-a",
+                                    "name": "Feature Example",
+                                    "bounds": {"x": 80, "y": 120, "width": 320, "height": 220},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["feature-a-title", "feature-a-copy"],
+                                },
+                                {
+                                    "id": "feature-b",
+                                    "name": "Feature Example",
+                                    "bounds": {"x": 440, "y": 120, "width": 320, "height": 220},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["feature-b-title", "feature-b-copy"],
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "texts": {
+                "feature-a-title": {
+                    "id": "feature-a-title",
+                    "name": "Specific Example Title",
+                    "role": "heading",
+                    "value": "First",
+                    "bounds": {"x": 104, "y": 144, "width": 240, "height": 36},
+                },
+                "feature-a-copy": {
+                    "id": "feature-a-copy",
+                    "name": "Specific Example Copy",
+                    "role": "body",
+                    "value": "First copy",
+                    "bounds": {"x": 104, "y": 196, "width": 240, "height": 80},
+                },
+                "feature-b-title": {
+                    "id": "feature-b-title",
+                    "name": "Other Example Title",
+                    "role": "heading",
+                    "value": "Second",
+                    "bounds": {"x": 464, "y": 144, "width": 240, "height": 36},
+                },
+                "feature-b-copy": {
+                    "id": "feature-b-copy",
+                    "name": "Other Example Copy",
+                    "role": "body",
+                    "value": "Second copy",
+                    "bounds": {"x": 464, "y": 196, "width": 240, "height": 80},
+                },
+            },
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        canonical = CanonicalModelBuilder(mode="static").build(model)
+        feature_row = canonical["sections"][0]["children"][0]
+        feature_items = feature_row["children"]
+
+        self.assertEqual(feature_row["attributes"]["data-component-list"], "true")
+        self.assertEqual(feature_row["layout"]["geometry_source"], "bounds")
+        self.assertEqual(feature_row["layout"]["geometry_axis"], "row")
+        self.assertEqual(feature_row["layout"]["direction"], "row")
+        self.assertTrue(feature_row["layout"]["inferred_flow"])
+        self.assertTrue(feature_row["layout"]["use_flow_shell"])
+        self.assertEqual(feature_row["layout"]["item_spacing"], 40.0)
+        self.assertEqual(feature_row["attributes"]["data-layout-source"], "geometry")
+        self.assertEqual(feature_row["attributes"]["data-layout-axis"], "row")
+        self.assertIn("--layout-gap: 40.00px", feature_row["attributes"]["style"])
+        self.assertEqual(feature_items[0]["attributes"]["data-position-x"], "start")
+        self.assertEqual(feature_items[1]["attributes"]["data-position-x"], "center")
+
     def test_hugo_generator_does_not_auto_promote_inferred_flow_sections_to_section_block(self) -> None:
         model = {
             "page": {"id": "page", "name": "Desktop Page", "width": 1200, "height": 800},
