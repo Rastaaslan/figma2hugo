@@ -9,6 +9,11 @@ from figma2hugo.model.intermediate import (
     TextNode,
     TextStyleRun,
     TokenBag,
+    intermediate_document_name,
+    intermediate_document_names,
+    intermediate_document_width,
+    serialize_intermediate_payload,
+    validate_intermediate_payload,
 )
 from figma2hugo.model.report import GenerationReport
 
@@ -25,4 +30,9 @@ __all__ = [
     "TextNode",
     "TextStyleRun",
     "TokenBag",
+    "intermediate_document_name",
+    "intermediate_document_names",
+    "intermediate_document_width",
+    "serialize_intermediate_payload",
+    "validate_intermediate_payload",
 ]

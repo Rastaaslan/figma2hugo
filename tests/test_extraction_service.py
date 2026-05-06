@@ -7,7 +7,6 @@ from typing import Any
 
 import pytest
 
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from figma2hugo.content_extractor.extractor import ExtractionResult
@@ -366,6 +365,118 @@ def test_extraction_service_emits_layout_metadata_for_page_sections_and_containe
     assert asset_payload["layout"]["layoutSizingVertical"] == "FIXED"
     assert asset_payload["layout"]["constraints"]["horizontal"] == "STRETCH"
     assert asset_payload["layout"]["inferredStrategy"] == "leaf"
+
+
+def test_extraction_service_splits_top_level_responsive_variant_frames_from_single_root() -> None:
+    root_node = {
+        "id": "200:1",
+        "name": "OK - Mentions-legales",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1920, "height": 3200},
+        "children": [
+            {
+                "id": "200:10",
+                "name": "page-mentions-legales-402",
+                "type": "FRAME",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 0, "y": 2200, "width": 402, "height": 1800},
+                "children": [],
+            },
+            {
+                "id": "200:11",
+                "name": "page-mentions-legales-834",
+                "type": "FRAME",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 0, "y": 1120, "width": 834, "height": 1800},
+                "children": [],
+            },
+            {
+                "id": "200:12",
+                "name": "page-mentions-legales-1920",
+                "type": "FRAME",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+                "children": [],
+            },
+        ],
+    }
+
+    class StubLayoutAnalyzer:
+        def identify_sections(self, root: dict[str, Any]) -> list[SectionCandidate]:
+            bounds = root["absoluteBoundingBox"]
+            return [
+                SectionCandidate(
+                    id=root["id"],
+                    name=root["name"],
+                    role="section",
+                    node=root,
+                    bounds={
+                        "x": float(bounds["x"]),
+                        "y": float(bounds["y"]),
+                        "width": float(bounds["width"]),
+                        "height": float(bounds["height"]),
+                    },
+                )
+            ]
+
+    class StubContentExtractor:
+        def extract(
+            self,
+            sections: list[SectionCandidate],
+            *,
+            image_fill_urls: dict[str, str] | None = None,
+            token_payload: dict[str, Any] | None = None,
+        ) -> ExtractionResult:
+            del image_fill_urls, token_payload
+            assert len(sections) == 1
+            return ExtractionResult(texts={}, assets=[], tokens={}, warnings=[])
+
+    class StubAssetDownloader:
+        def materialize_assets(
+            self,
+            file_key: str,
+            assets: list[dict[str, Any]],
+            assets_dir: Path,
+        ) -> list[dict[str, Any]]:
+            assert file_key == "FILE"
+            assert assets_dir.name == "assets"
+            return assets
+
+    class StubExtractionService(FigmaExtractionService):
+        def _collect_raw_payload(self, parsed_url: Any, store: Any, warnings: list[str]) -> dict[str, Any]:
+            del parsed_url, store, warnings
+            return {
+                "rest_tree": {"document": root_node},
+                "image_fill_urls": {},
+                "variables": {},
+                "warnings": [],
+                "source_modes": ["stub"],
+            }
+
+    output_dir = Path(__file__).resolve().parents[1] / ".figma2hugo-scratch" / "test-extraction-service-responsive-board"
+    shutil.rmtree(output_dir, ignore_errors=True)
+
+    service = StubExtractionService(
+        layout_analyzer=StubLayoutAnalyzer(),
+        content_extractor=StubContentExtractor(),
+        asset_downloader=StubAssetDownloader(),
+    )
+    models = service.extract_documents("https://www.figma.com/design/FILE/Mentions?node-id=200-1", output_dir)
+
+    assert [model["page"]["name"] for model in models] == [
+        "page-mentions-legales-1920",
+        "page-mentions-legales-834",
+        "page-mentions-legales-402",
+    ]
+    assert [model["page"]["width"] for model in models] == [1920, 834, 402]
+    assert [model["page"]["id"] for model in models] == ["200:12", "200:11", "200:10"]
+    assert all(model["page"]["meta"]["responsiveBoardSplit"] is True for model in models)
+    assert all(model["page"]["meta"]["responsiveBoardRootId"] == "200:1" for model in models)
+    assert (output_dir / "responsive-board.json").exists()
+    assert (output_dir / "variants" / "page-mentions-legales-1920" / "page.json").exists()
+    assert (output_dir / "variants" / "page-mentions-legales-834" / "page.json").exists()
+    assert (output_dir / "variants" / "page-mentions-legales-402" / "page.json").exists()
 
 
 def test_extraction_service_rebases_section_bounds_to_selected_root() -> None:

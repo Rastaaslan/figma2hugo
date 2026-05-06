@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import html
 import json
+import re
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
-import re
-import shutil
-import subprocess
-
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -17,7 +16,21 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from figma2hugo.generators import HugoGenerator, StaticGenerator
-from figma2hugo.generators._shared import CanonicalModelBuilder
+from figma2hugo.generators._responsive import (
+    merge_responsive_family,
+    merge_responsive_page_groups,
+)
+from figma2hugo.generators._shared import (
+    CanonicalModelBuilder,
+    asset_destination_path,
+    asset_relative_path,
+    ensure_asset_output_directory,
+    ensure_unit,
+    normalize_css_literal,
+    page_contains_assets,
+    style_map_to_css,
+    write_generation_report,
+)
 from figma2hugo.generators.css import CssGenerator
 
 try:
@@ -138,6 +151,46 @@ SAMPLE_MODEL = {
 }
 
 
+class ResponsivePageGroupTests(unittest.TestCase):
+    def test_merges_width_suffixed_pages_by_family_and_preserves_page_order(self) -> None:
+        about_page = self._page("about")
+        landing_mobile = self._page("landing-390")
+        landing_desktop = self._page("landing-1920")
+        contact_page = self._page("contact")
+
+        merged_pages = merge_responsive_page_groups(
+            [about_page, landing_mobile, landing_desktop, contact_page]
+        )
+
+        self.assertEqual([page["page"]["slug"] for page in merged_pages], ["about", "landing", "contact"])
+        self.assertNotIn("responsive", merged_pages[0])
+        self.assertEqual(merged_pages[1]["responsive"]["family"], "landing")
+        self.assertEqual(merged_pages[1]["responsive"]["base_width"], 1920)
+        self.assertEqual(merged_pages[1]["responsive"]["breakpoints"], [390])
+        self.assertNotIn("responsive", merged_pages[2])
+
+    def test_keeps_single_width_suffixed_page_unmerged(self) -> None:
+        landing_mobile = self._page("landing-390")
+
+        merged_pages = merge_responsive_page_groups([landing_mobile])
+
+        self.assertEqual(merged_pages, [landing_mobile])
+
+    def _page(self, slug: str) -> dict[str, object]:
+        return {
+            "page": {
+                "id": slug,
+                "slug": slug,
+                "name": slug,
+                "title": slug,
+                "width": int(slug.rsplit("-", 1)[-1]) if slug.rsplit("-", 1)[-1].isdigit() else 800,
+            },
+            "sections": [],
+            "assets": [],
+            "warnings": [],
+        }
+
+
 def build_hugo_site(model: dict[str, object], site_dir: Path) -> Path:
     HugoGenerator().generate(model, site_dir)
     public_dir = site_dir / "public"
@@ -151,6 +204,90 @@ def build_hugo_site(model: dict[str, object], site_dir: Path) -> Path:
 
 
 class CssGeneratorTests(unittest.TestCase):
+    def test_shared_asset_path_helpers_normalize_generator_destinations(self) -> None:
+        self.assertEqual(
+            asset_destination_path(Path("/site"), "images/hero.png", mode="static"),
+            Path("/site/images/hero.png"),
+        )
+        self.assertEqual(
+            asset_destination_path(Path("/site"), "images/hero.png", mode="hugo"),
+            Path("/site/static/images/hero.png"),
+        )
+        self.assertEqual(
+            asset_relative_path("", fallback_name="Hero Image", fallback_format="webp"),
+            "images/hero-image.webp",
+        )
+        self.assertEqual(
+            asset_relative_path("static/images/page/hero.png", "Fallback", "png"),
+            "images/page/hero.png",
+        )
+        self.assertEqual(
+            asset_relative_path("https://cdn.example.com/assets/photo.jpg", "Fallback", "png"),
+            "images/photo.jpg",
+        )
+
+    def test_shared_generation_support_helpers_write_report_and_asset_dirs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir)
+            report = {"buildOk": True}
+
+            self.assertEqual([], write_generation_report(output_path, None))
+            self.assertEqual(
+                [output_path / "report.json"],
+                write_generation_report(output_path, report),
+            )
+            self.assertEqual(
+                report,
+                json.loads((output_path / "report.json").read_text(encoding="utf-8")),
+            )
+
+            self.assertFalse(page_contains_assets({"assets": []}))
+            self.assertTrue(page_contains_assets({"assets": [{"id": "hero"}]}))
+            self.assertIsNone(
+                ensure_asset_output_directory(output_path, {"assets": []}, mode="static")
+            )
+            self.assertEqual(
+                output_path / "images",
+                ensure_asset_output_directory(
+                    output_path,
+                    {"assets": [{"id": "hero"}]},
+                    mode="static",
+                ),
+            )
+            self.assertTrue((output_path / "images").exists())
+            self.assertEqual(
+                output_path / "static" / "images",
+                ensure_asset_output_directory(
+                    output_path,
+                    [{"assets": []}, {"assets": [{"id": "hero"}]}],
+                    mode="hugo",
+                ),
+            )
+            self.assertTrue((output_path / "static" / "images").exists())
+
+    def test_shared_css_value_helpers_normalize_numbers_and_units(self) -> None:
+        self.assertEqual(ensure_unit(12.0), "12px")
+        self.assertEqual(ensure_unit("12.50px"), "12.5px")
+        self.assertEqual(normalize_css_literal("-0.0001"), "0")
+        self.assertEqual(normalize_css_literal("1.230rem"), "1.23rem")
+
+    def test_shared_style_map_to_css_normalizes_common_declarations(self) -> None:
+        css = style_map_to_css(
+            {
+                "fontSize": "18.00",
+                "letterSpacing": "0.50",
+                "opacity": "0.500",
+                "color": {"r": 1, "g": 0, "b": 0, "a": 0.25},
+                "textAlignHorizontal": "CENTER",
+            }
+        )
+
+        self.assertIn("font-size: 18px;", css)
+        self.assertIn("letter-spacing: 0.5px;", css)
+        self.assertIn("opacity: 0.5;", css)
+        self.assertIn("color: rgb(255 0 0 / 0.25);", css)
+        self.assertIn("text-align: center;", css)
+
     def test_canonical_builder_ignores_unreferenced_global_texts_and_assets(self) -> None:
         model = {
             "page": {"id": "page", "name": "Page", "width": 1200, "height": 800},
@@ -255,6 +392,64 @@ class CssGeneratorTests(unittest.TestCase):
         self.assertIn("top: 90.00px;", css)
         self.assertIn("position: absolute;", css)
 
+    def test_css_generator_rounds_numeric_typography_values_and_simplifies_duplicate_class_names(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Page", "width": 1440, "height": 500},
+            "sections": [
+                {
+                    "id": "content",
+                    "name": "Content",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1440, "height": 500},
+                    "texts": [
+                        {
+                            "id": "info-a",
+                            "name": "Info",
+                            "role": "body",
+                            "value": "Premier texte",
+                            "bounds": {"x": 80, "y": 80, "width": 420, "height": 60},
+                            "style": {
+                                "fontFamily": "Inter",
+                                "fontSize": 16.1151065826416,
+                                "fontWeight": 700,
+                                "letterSpacing": 0.24172659873962402,
+                                "lineHeight": 24.037559509277344,
+                            },
+                        },
+                        {
+                            "id": "info-b",
+                            "name": "Info",
+                            "role": "body",
+                            "value": "Second texte",
+                            "bounds": {"x": 80, "y": 180, "width": 420, "height": 60},
+                            "style": {
+                                "fontFamily": "Inter",
+                                "fontSize": 16.1151065826416,
+                                "fontWeight": 700,
+                                "letterSpacing": 0.24172659873962402,
+                                "lineHeight": 24.037559509277344,
+                            },
+                        },
+                    ],
+                    "children": ["info-a", "info-b"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        canonical = CanonicalModelBuilder(mode="static").build(model)
+        css = CssGenerator().generate(canonical)
+
+        self.assertIn(".text-info {", css)
+        self.assertIn(".text-info-2 {", css)
+        self.assertIn("font-size: 16.12px;", css)
+        self.assertIn("letter-spacing: 0.24px;", css)
+        self.assertNotIn("16.1151065826416px", css)
+        self.assertNotIn("0.24172659873962402px", css)
+
     def test_css_generator_does_not_emit_parent_typography_for_segmented_text(self) -> None:
         page_data = {
             "page": {"id": "page", "name": "Page", "width": 1200, "height": 400},
@@ -302,9 +497,222 @@ class CssGeneratorTests(unittest.TestCase):
         self.assertIsNotNone(match)
         body = match.group("body")
         self.assertNotIn("font-size:", body)
-        self.assertNotIn("line-height:", body)
         self.assertNotIn("color:", body)
         self.assertNotIn("font-weight:", body)
+        self.assertIn("line-height: 22.00px;", body)
+        self.assertIn(".text-segmented-title > .segment-seg-1 {", css)
+        self.assertIn("font-size: 18px !important;", css)
+        self.assertIn("line-height: 24px !important;", css)
+        self.assertIn("color: #1434cb !important;", css)
+
+    def test_css_generator_emits_parent_line_height_for_segments_without_line_height(self) -> None:
+        page_data = {
+            "page": {"id": "page", "name": "Page", "width": 1200, "height": 400},
+            "sections": [
+                {
+                    "id": "content",
+                    "name": "Content",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1200, "height": 400},
+                    "children": [
+                        {
+                            "kind": "text",
+                            "id": "segmented-title",
+                            "text": {
+                                "id": "segmented-title",
+                                "name": "Segmented Title",
+                                "tag": "h4",
+                                "role": "heading",
+                                "class_name": "text-segmented-title",
+                                "bounds": {"x": 100, "y": 100, "width": 400, "height": 40},
+                                "value": "Hello\nworld",
+                                "style": {"lineHeight": 10},
+                                "style_css": 'font-size: 11px; line-height: 10px; color: #cc685f;',
+                                "segments": [
+                                    {
+                                        "id": "seg-1",
+                                        "class_name": "segment-seg-1",
+                                        "html": "Hello<br>\n",
+                                        "style": 'font-size: 11px; color: #cc685f;',
+                                    }
+                                ],
+                            },
+                        }
+                    ],
+                }
+            ],
+            "tokens": {},
+            "warnings": [],
+            "texts": {},
+            "assets": [],
+        }
+
+        css = CssGenerator().generate(page_data)
+
+        self.assertIn(".text-segmented-title > .segment-seg-1 {", css)
+        self.assertIn("font-size: 11px !important;", css)
+        self.assertIn("line-height: 10.00px !important;", css)
+
+    def test_css_generator_emits_responsive_segment_typography_overrides(self) -> None:
+        base_section = {
+            "id": "hero",
+            "name": "Hero",
+            "role": "section",
+            "bounds": {"x": 0, "y": 0, "width": 1200, "height": 220},
+            "children": [
+                {
+                    "kind": "text",
+                    "id": "title",
+                    "text": {
+                        "id": "title",
+                        "name": "Title",
+                        "tag": "h4",
+                        "role": "heading",
+                        "class_name": "text-title",
+                        "bounds": {"x": 120, "y": 40, "width": 480, "height": 86},
+                        "value": "Big\nSmall",
+                        "style": {"lineHeight": 45},
+                        "style_css": 'font-size: 33px; line-height: 45px; color: #ffffff;',
+                        "segments": [
+                            {
+                                "id": "segment-1",
+                                "class_name": "segment-segment-1",
+                                "html": "Big<br>\n",
+                                "style": 'font-size: 18px; line-height: 22.5px; color: #cc685f;',
+                            },
+                            {
+                                "id": "segment-2",
+                                "class_name": "segment-segment-2",
+                                "html": "Small",
+                                "style": 'font-size: 17px; line-height: 22px; color: #cc685f;',
+                            },
+                        ],
+                    },
+                }
+            ],
+        }
+        tablet_section = {
+            "id": "hero-834",
+            "name": "Hero",
+            "role": "section",
+            "bounds": {"x": 0, "y": 0, "width": 834, "height": 180},
+            "children": [
+                {
+                    "kind": "text",
+                    "id": "title-834",
+                    "text": {
+                        "id": "title-834",
+                        "name": "Title",
+                        "tag": "h4",
+                        "role": "heading",
+                        "class_name": "text-title",
+                        "bounds": {"x": 90, "y": 32, "width": 210, "height": 37},
+                        "value": "Big\nSmall",
+                        "style": {"lineHeight": 19.55},
+                        "style_css": 'font-size: 14.33px; line-height: 19.55px; color: #ffffff;',
+                        "segments": [
+                            {
+                                "id": "segment-1",
+                                "class_name": "segment-segment-1",
+                                "html": "Big<br>\n",
+                                "style": 'font-size: 7.82px; line-height: 9.77px; color: #cc685f;',
+                            },
+                            {
+                                "id": "segment-2",
+                                "class_name": "segment-segment-2",
+                                "html": "Small",
+                                "style": 'font-size: 7.38px; line-height: 9.56px; color: #cc685f;',
+                            },
+                        ],
+                    },
+                }
+            ],
+        }
+        page_data = {
+            "page": {"id": "page", "slug": "landing-page", "name": "Landing Page", "width": 1200, "height": 220},
+            "sections": [base_section],
+            "responsive": {
+                "base_width": 1200,
+                "variants": [
+                    {
+                        "width": 834,
+                        "page": {
+                            "page": {"id": "page-834", "name": "Landing Page 834", "width": 834, "height": 180},
+                            "sections": [tablet_section],
+                        },
+                    }
+                ],
+            },
+            "tokens": {},
+            "warnings": [],
+            "texts": {},
+            "assets": [],
+        }
+
+        css = CssGenerator().generate(page_data)
+
+        media_block = css[css.index("@media (max-width: 1024px)") :]
+        self.assertIn(".text-title > .segment-segment-1 {", media_block)
+        self.assertIn("font-size: 7.82px !important;", media_block)
+        self.assertIn("line-height: 9.77px !important;", media_block)
+        self.assertIn(".text-title > .segment-segment-2 {", media_block)
+        self.assertIn("font-size: 7.38px !important;", media_block)
+        self.assertIn("line-height: 9.56px !important;", media_block)
+
+    def test_css_generator_responsive_shell_keeps_declared_variant_width(self) -> None:
+        base_section = {
+            "id": "hero",
+            "name": "Hero",
+            "role": "section",
+            "class_name": "section-hero",
+            "bounds": {"x": 0, "y": 0, "width": 1200, "height": 220},
+            "children": [],
+        }
+        mobile_sections = [
+            {
+                "id": "hero-mobile",
+                "name": "Hero",
+                "role": "section",
+                "class_name": "section-hero",
+                "bounds": {"x": 0, "y": 0, "width": 402, "height": 119},
+                "children": [],
+            },
+            {
+                "id": "wide-mobile",
+                "name": "Wide Mobile Section",
+                "role": "section",
+                "class_name": "section-wide-mobile",
+                "bounds": {"x": 0, "y": 119, "width": 432, "height": 180},
+                "children": [],
+            },
+        ]
+        page_data = {
+            "page": {"id": "page", "slug": "landing-page", "name": "Landing Page", "width": 1200, "height": 220},
+            "sections": [base_section],
+            "responsive": {
+                "base_width": 1200,
+                "variants": [
+                    {
+                        "width": 402,
+                        "page": {
+                            "page": {"id": "page-402", "name": "Landing Page 402", "width": 402, "height": 299},
+                            "sections": mobile_sections,
+                        },
+                    }
+                ],
+            },
+            "tokens": {},
+            "warnings": [],
+            "texts": {},
+            "assets": [],
+        }
+
+        css = CssGenerator().generate(page_data)
+
+        mobile_block = css[css.index("@media (max-width: 480px)") :]
+        self.assertIn("--page-max-width: 402px;", mobile_block)
+        self.assertIn(".section-wide-mobile {", mobile_block)
+        self.assertIn("width: 432px;", mobile_block)
 
     def test_css_generator_positions_sections_from_global_canvas_bounds(self) -> None:
         model = {
@@ -416,6 +824,13 @@ class CssGeneratorTests(unittest.TestCase):
         self.assertIn("body {", css)
         self.assertIn("min-width: 0;", css)
         self.assertIn("overflow-x: auto;", css)
+        self.assertIn(".page-shell {", css)
+        self.assertIn('.page-shell[data-page-shell="fixed"] .page {', css)
+        self.assertIn("transform: scale(var(--page-shell-scale, 1));", css)
+        self.assertIn("transform: translateY(var(--page-section-stack-shift, 0px));", css)
+        self.assertIn("transform: translateY(var(--content-node-stack-shift, 0px));", css)
+        self.assertIn("transform: translateY(var(--content-text-stack-shift, 0px));", css)
+        self.assertIn("transform: translateY(var(--content-asset-stack-shift, 0px));", css)
         self.assertIn(".page {", css)
         self.assertIn("width: var(--page-max-width);", css)
         self.assertIn("max-width: none;", css)
@@ -710,6 +1125,56 @@ class CssGeneratorTests(unittest.TestCase):
         self.assertIn("white-space: nowrap;", css)
         self.assertIn("line-height: 65.00px;", css)
         self.assertNotIn("line-height: 24px;", css)
+
+    def test_css_generator_treats_unicode_line_separator_as_hard_break(self) -> None:
+        page_data = {
+            "page": {"id": "page", "name": "Page", "width": 402, "height": 160},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "hero",
+                    "class_name": "section-hero",
+                    "bounds": {"x": 0, "y": 0, "width": 402, "height": 160},
+                    "children": [
+                        {
+                            "kind": "text",
+                            "id": "hero-title",
+                            "text": {
+                                "id": "hero-title",
+                                "name": "Hero Title",
+                                "tag": "h1",
+                                "role": "hero-title",
+                                "class_name": "text-hero-title",
+                                "value": "Ensemble, faisons decoller\u2028vos innovations !",
+                                "bounds": {"x": 32, "y": 12, "width": 338, "height": 74},
+                                "render_bounds": {"x": 34, "y": 18, "width": 300, "height": 45.8},
+                                "style": {
+                                    "fontFamily": "Inter",
+                                    "fontSize": 20,
+                                    "lineHeight": 30,
+                                    "textAlignVertical": "CENTER",
+                                },
+                                "style_css": "font-size: 20px; line-height: 30px; color: #ffffff;",
+                            },
+                        }
+                    ],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        css = CssGenerator().generate(page_data)
+
+        match = re.search(r"\.text-hero-title \{(?P<body>.*?)\n\}", css, re.S)
+        self.assertIsNotNone(match)
+        body = match.group("body")
+        self.assertIn("height: 74.00px;", body)
+        self.assertIn("line-height: 30px;", body)
+        self.assertNotIn("line-height: 74.00px;", body)
 
     def test_css_generator_expands_centered_single_line_heading_line_height_to_its_box_height(self) -> None:
         model = {
@@ -2141,6 +2606,19 @@ class StaticGeneratorTests(unittest.TestCase):
             self.assertIn('data-page-shell="fixed"', html_content)
             self.assertIn('data-page-layout-strategy="absolute"', html_content)
 
+    def test_static_generator_writes_report_and_returns_page_payload(self) -> None:
+        report = {"buildOk": True, "warnings": ["demo"]}
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = StaticGenerator().generate(SAMPLE_MODEL, temp_dir, report=report)
+
+            page_payload = json.loads((Path(temp_dir) / "page.json").read_text(encoding="utf-8"))
+            report_payload = json.loads((Path(temp_dir) / "report.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(page_payload, result.page_data)
+            self.assertEqual(report, report_payload)
+            self.assertIn(Path(temp_dir) / "report.json", result.written_files)
+
     def test_static_generator_avoids_orphan_punctuation_lines_in_heading_html(self) -> None:
         model = {
             "page": {"id": "page", "name": "Page", "width": 1440, "height": 500},
@@ -3208,7 +3686,22 @@ class StaticGeneratorTests(unittest.TestCase):
                                             "bounds": {"x": 200, "y": 180, "width": 760, "height": 60},
                                             "coordinate_space": "section",
                                             "children_coordinate_space": "section",
-                                            "children": ["question-1"],
+                                            "children": [
+                                                "question-1",
+                                                {
+                                                    "id": "accordion-trigger-1-mobile",
+                                                    "name": "accordion-trigger-1-mobile",
+                                                    "bounds": {
+                                                        "x": 200,
+                                                        "y": 180,
+                                                        "width": 360,
+                                                        "height": 44,
+                                                    },
+                                                    "coordinate_space": "section",
+                                                    "children_coordinate_space": "section",
+                                                    "children": ["question-1-mobile"],
+                                                },
+                                            ],
                                         },
                                     ],
                                 },
@@ -3267,6 +3760,14 @@ class StaticGeneratorTests(unittest.TestCase):
                     "bounds": {"x": 232, "y": 408, "width": 520, "height": 24},
                     "style": {"fontFamily": "Inter", "fontSize": 20, "fontWeight": 700},
                 },
+                "question-1-mobile": {
+                    "id": "question-1-mobile",
+                    "name": "Question 1 mobile",
+                    "role": "body",
+                    "value": "Quels services ?",
+                    "bounds": {"x": 216, "y": 190, "width": 220, "height": 20},
+                    "style": {"fontFamily": "Inter", "fontSize": 16, "fontWeight": 700},
+                },
                 "answer-2": {
                     "id": "answer-2",
                     "name": "Answer 2",
@@ -3299,6 +3800,15 @@ class StaticGeneratorTests(unittest.TestCase):
             self.assertIn('aria-controls="accordion-panel-1"', html_content)
             self.assertIn('aria-expanded="true"', html_content)
             self.assertIn('type="button"', html_content)
+            self.assertRegex(
+                html_content,
+                re.compile(
+                    r'<button[^>]*id="accordion-trigger-1"[\s\S]*'
+                    r'<div[^>]*id="accordion-trigger-1-mobile"'
+                    r'(?![^>]*data-accordion-trigger="true")',
+                    re.S,
+                ),
+            )
             self.assertIn('id="accordion-panel-1"', html_content)
             self.assertIn('data-accordion-panel="true"', html_content)
             self.assertIn('role="region"', html_content)
@@ -3325,6 +3835,8 @@ class StaticGeneratorTests(unittest.TestCase):
                 ),
             )
             self.assertIn('button.content-node[data-accordion-trigger="true"] {', css_content)
+            self.assertIn("aspect-ratio: var(--layout-aspect-ratio, auto);", css_content)
+            self.assertIn("min-height: 1px;", css_content)
             self.assertIn('const SECTION_SELECTOR = ".page-section";', js_content)
             self.assertIn('data-accordion-trigger="true"', js_content)
             self.assertIn('item.dataset.accordionOpen = open ? "true" : "false";', js_content)
@@ -3577,6 +4089,8 @@ class StaticGeneratorTests(unittest.TestCase):
             self.assertIn("touch-action: pan-x;", css_content)
             self.assertIn("overflow: hidden;", css_content)
             self.assertIn("pointer-events: none;", css_content)
+            self.assertIn('.page .content-node:has([data-carousel="true"]) {', css_content)
+            self.assertIn("z-index: var(--carousel-layer-z-index, 500);", css_content)
             self.assertIn('button.content-node[data-carousel-thumb] {', css_content)
             self.assertNotIn('button.content-node[data-carousel-thumb] {\n  position: relative;', css_content)
             self.assertIn('button.content-node[data-carousel-thumb]:focus-visible {', css_content)
@@ -3642,6 +4156,7 @@ class HugoGeneratorTests(unittest.TestCase):
             form_css_path = Path(temp_dir) / "assets" / "css" / "components" / "form.css"
             section_block_css_path = Path(temp_dir) / "assets" / "css" / "components" / "section-block.css"
             js_path = Path(temp_dir) / "assets" / "js" / "accordion.js"
+            page_shell_js_path = Path(temp_dir) / "assets" / "js" / "page-shell.js"
             page_data = Path(temp_dir) / "data" / "page.json"
 
             self.assertTrue(config_file.exists())
@@ -3656,6 +4171,7 @@ class HugoGeneratorTests(unittest.TestCase):
             self.assertTrue(form_css_path.exists())
             self.assertTrue(section_block_css_path.exists())
             self.assertTrue(js_path.exists())
+            self.assertTrue(page_shell_js_path.exists())
             self.assertTrue(page_data.exists())
             self.assertTrue((Path(temp_dir) / "static" / "images").exists())
             self.assertGreaterEqual(len(result.written_files), 7)
@@ -3670,19 +4186,60 @@ class HugoGeneratorTests(unittest.TestCase):
             self.assertIn('partial "page_region.html"', template_content)
             self.assertIn('partial "resolve_page_data.html"', template_content)
 
+            resolve_page_data_content = (
+                Path(temp_dir) / "layouts" / "partials" / "resolve_page_data.html"
+            ).read_text(encoding="utf-8")
+            self.assertIn("hugo.Data.page", resolve_page_data_content)
+            self.assertIn("hugo.Data.pages", resolve_page_data_content)
+            self.assertNotIn("site.Data", resolve_page_data_content)
+
             base_template_content = base_template.read_text(encoding="utf-8")
             self.assertIn('data-page-shell="{{ $pageShell }}"', base_template_content)
             self.assertIn('data-page-layout-strategy="{{ $pageLayoutStrategy }}"', base_template_content)
             self.assertIn('data-page-flow="{{ $pageFlow }}"', base_template_content)
+            self.assertIn('class="page-shell"', base_template_content)
+            self.assertIn('class="page-shell__viewport"', base_template_content)
 
             base_template_content = base_template.read_text(encoding="utf-8")
-            self.assertIn('resources.Get "css/site.css"', base_template_content)
-            self.assertIn('resources.Get "css/components/link-grid.css"', base_template_content)
-            self.assertIn('resources.Get "css/components/accordion.css"', base_template_content)
-            self.assertIn('resources.Get "css/components/carousel.css"', base_template_content)
-            self.assertIn('resources.Get "css/components/form.css"', base_template_content)
-            self.assertIn('resources.Get "css/components/section-block.css"', base_template_content)
-            self.assertIn('resources.Get "js/accordion.js"', base_template_content)
+            self.assertIn("$stylesheets := slice", base_template_content)
+            self.assertIn('"css/site.css"', base_template_content)
+            self.assertIn('"css/components/link-grid.css"', base_template_content)
+            self.assertIn('"css/components/component-list.css"', base_template_content)
+            self.assertIn('"css/components/accordion.css"', base_template_content)
+            self.assertIn('"css/components/carousel.css"', base_template_content)
+            self.assertIn('"css/components/form.css"', base_template_content)
+            self.assertIn('"css/components/section-block.css"', base_template_content)
+            self.assertIn("$stylesheets = $stylesheets | append .", base_template_content)
+            self.assertIn("resources.Get .", base_template_content)
+            self.assertIn('"js/accordion.js"', base_template_content)
+            self.assertIn('"js/page-shell.js"', base_template_content)
+
+            page_shell_js_content = page_shell_js_path.read_text(encoding="utf-8")
+            self.assertIn("shell.clientWidth", page_shell_js_content)
+            self.assertIn('querySelectorAll(".page-section")', page_shell_js_content)
+            self.assertNotIn("page.scrollWidth", page_shell_js_content)
+
+    def test_hugo_generator_escapes_front_matter_strings_for_yaml(self) -> None:
+        model = {
+            "page": {
+                "id": "quoted",
+                "name": 'Landing "Quoted"\nBack\\slash',
+                "width": 960,
+                "height": 480,
+            },
+            "sections": [],
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            HugoGenerator().generate(model, temp_dir)
+            front_matter = (Path(temp_dir) / "content" / "_index.md").read_text(
+                encoding="utf-8"
+            )
+
+        self.assertIn('title: "Landing \\"Quoted\\"\\nBack\\\\slash"', front_matter)
 
     @unittest.skipIf(not HUGO_BIN, "Hugo CLI is not available")
     def test_hugo_build_renders_valid_link_card_and_accordion_attributes(self) -> None:
@@ -4242,6 +4799,7 @@ class HugoGeneratorTests(unittest.TestCase):
 
             self.assertTrue((components_root / "accordion.html").exists())
             self.assertTrue((components_root / "accordion-item.html").exists())
+            self.assertTrue((components_root / "component-list.html").exists())
             self.assertTrue((components_root / "field.html").exists())
             self.assertTrue((components_root / "link-grid.html").exists())
             self.assertTrue((components_root / "link-card.html").exists())
@@ -4284,6 +4842,105 @@ class HugoGeneratorTests(unittest.TestCase):
             self.assertNotIn('a.content-node[data-link-card="true"] {', page_css_content)
             self.assertNotIn("--component-card-padding", link_grid_css_content)
             self.assertNotIn("--component-card-shadow", link_grid_css_content)
+
+    def test_hugo_generator_annotates_detected_repeated_component_groups(self) -> None:
+        model = {
+            "page": {"id": "page", "name": "Repeated Components", "width": 1200, "height": 640},
+            "sections": [
+                {
+                    "id": "features",
+                    "name": "Features",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1200, "height": 640},
+                    "children": [
+                        {
+                            "id": "feature-row",
+                            "name": "feature-row",
+                            "bounds": {"x": 80, "y": 120, "width": 1040, "height": 320},
+                            "coordinate_space": "section",
+                            "children_coordinate_space": "section",
+                            "layout": {
+                                "layoutMode": "HORIZONTAL",
+                                "itemSpacing": 32,
+                                "inferredStrategy": "flow",
+                                "inferredFlow": True,
+                            },
+                            "children": [
+                                {
+                                    "id": "feature-a",
+                                    "name": "Feature Example",
+                                    "bounds": {"x": 80, "y": 120, "width": 320, "height": 220},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["feature-a-title", "feature-a-copy"],
+                                },
+                                {
+                                    "id": "feature-b",
+                                    "name": "Feature Example",
+                                    "bounds": {"x": 440, "y": 120, "width": 320, "height": 220},
+                                    "coordinate_space": "section",
+                                    "children_coordinate_space": "section",
+                                    "children": ["feature-b-title", "feature-b-copy"],
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "texts": {
+                "feature-a-title": {
+                    "id": "feature-a-title",
+                    "name": "Specific Example Title",
+                    "role": "heading",
+                    "value": "First",
+                    "bounds": {"x": 104, "y": 144, "width": 240, "height": 36},
+                },
+                "feature-a-copy": {
+                    "id": "feature-a-copy",
+                    "name": "Specific Example Copy",
+                    "role": "body",
+                    "value": "First copy",
+                    "bounds": {"x": 104, "y": 196, "width": 240, "height": 80},
+                },
+                "feature-b-title": {
+                    "id": "feature-b-title",
+                    "name": "Other Example Title",
+                    "role": "heading",
+                    "value": "Second",
+                    "bounds": {"x": 464, "y": 144, "width": 240, "height": 36},
+                },
+                "feature-b-copy": {
+                    "id": "feature-b-copy",
+                    "name": "Other Example Copy",
+                    "role": "body",
+                    "value": "Second copy",
+                    "bounds": {"x": 464, "y": 196, "width": 240, "height": 80},
+                },
+            },
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            HugoGenerator().generate(model, temp_dir)
+            page_data = json.loads((Path(temp_dir) / "data" / "page.json").read_text(encoding="utf-8"))
+            css_content = (Path(temp_dir) / "assets" / "css" / "components" / "component-list.css").read_text(
+                encoding="utf-8"
+            )
+
+        feature_row = page_data["sections"][0]["children"][0]
+        feature_items = feature_row["children"]
+
+        self.assertEqual(feature_row["attributes"]["data-component-list"], "true")
+        self.assertEqual(feature_row["attributes"]["data-repeat-count"], "2")
+        self.assertEqual(feature_row["partial_template"], "components/component-list.html")
+        self.assertTrue(all(item["role"] == "card" for item in feature_items))
+        self.assertTrue(all(item["attributes"]["data-component-item"] == "true" for item in feature_items))
+        self.assertTrue(all(item["attributes"]["data-card"] == "true" for item in feature_items))
+        self.assertTrue(all(item["partial_template"] == "components/card.html" for item in feature_items))
+        self.assertIn('[data-component-list="true"]', css_content)
+        self.assertIn('[data-component-item="true"]', css_content)
 
     def test_hugo_generator_does_not_auto_promote_inferred_flow_sections_to_section_block(self) -> None:
         model = {
@@ -4487,9 +5144,36 @@ class HugoGeneratorTests(unittest.TestCase):
 
             site_manifest = json.loads((Path(temp_dir) / "data" / "site.json").read_text(encoding="utf-8"))
             self.assertEqual(
-                ["about-page", "contact-page"],
-                [page["slug"] for page in site_manifest["pages"]],
+                [
+                    {
+                        "title": "About Page",
+                        "slug": "about-page",
+                        "page_key": "about-page",
+                        "path": "/about-page/",
+                        "output_path": "about-page/index.html",
+                        "stylesheet": "css/pages/about-page.css",
+                        "weight": 1,
+                    },
+                    {
+                        "title": "Contact Page",
+                        "slug": "contact-page",
+                        "page_key": "contact-page",
+                        "path": "/contact-page/",
+                        "output_path": "contact-page/index.html",
+                        "stylesheet": "css/pages/contact-page.css",
+                        "weight": 2,
+                    },
+                ],
+                site_manifest["pages"],
             )
+            self.assertEqual({"pages": site_manifest["pages"]}, result.page_data)
+
+            about_content = (Path(temp_dir) / "content" / "about-page.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn('page_key: "about-page"', about_content)
+            self.assertIn('stylesheet: "css/pages/about-page.css"', about_content)
+            self.assertIn("weight: 1", about_content)
 
     def test_hugo_generator_merges_responsive_page_variants_into_one_page(self) -> None:
         desktop_model = {
@@ -4601,11 +5285,80 @@ class HugoGeneratorTests(unittest.TestCase):
             self.assertEqual([390], page_payload["responsive"]["breakpoints"])
 
             css_content = (Path(temp_dir) / "assets" / "css" / "pages" / "landing-page.css").read_text(encoding="utf-8")
-            self.assertIn("@media (max-width: 390px)", css_content)
+            self.assertIn("@media (max-width: 480px)", css_content)
             self.assertIn(".text-hero-mobile-note {", css_content)
             self.assertIn("display: none;", css_content)
             self.assertIn("display: block !important;", css_content)
             self.assertGreaterEqual(len(result.written_files), 6)
+
+    def test_hugo_generator_removes_stale_multi_page_files_from_previous_generation(self) -> None:
+        old_model = {
+            "page": {"id": "legal-old", "name": "Page Mentions Legales 1920", "width": 1920, "height": 600},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1920, "height": 600},
+                    "texts": [
+                        {
+                            "id": "old-title",
+                            "name": "Old Title",
+                            "role": "heading",
+                            "value": "Old page",
+                            "bounds": {"x": 80, "y": 80, "width": 420, "height": 56},
+                        }
+                    ],
+                    "children": ["old-title"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+        new_model = {
+            "page": {"id": "legal-new", "name": "Page Mentions Legales", "width": 1920, "height": 600},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1920, "height": 600},
+                    "texts": [
+                        {
+                            "id": "new-title",
+                            "name": "New Title",
+                            "role": "heading",
+                            "value": "New page",
+                            "bounds": {"x": 80, "y": 80, "width": 420, "height": 56},
+                        }
+                    ],
+                    "children": ["new-title"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            generator = HugoGenerator()
+            generator.generate_many([old_model], temp_dir)
+            old_slug = "page-mentions-legales-1920"
+            self.assertTrue((Path(temp_dir) / "content" / f"{old_slug}.md").exists())
+            self.assertTrue((Path(temp_dir) / "assets" / "css" / "pages" / f"{old_slug}.css").exists())
+            self.assertTrue((Path(temp_dir) / "data" / "pages" / f"{old_slug}.json").exists())
+
+            generator.generate_many([new_model], temp_dir)
+            new_slug = "page-mentions-legales"
+            self.assertFalse((Path(temp_dir) / "content" / f"{old_slug}.md").exists())
+            self.assertFalse((Path(temp_dir) / "assets" / "css" / "pages" / f"{old_slug}.css").exists())
+            self.assertFalse((Path(temp_dir) / "data" / "pages" / f"{old_slug}.json").exists())
+            self.assertTrue((Path(temp_dir) / "content" / f"{new_slug}.md").exists())
+            self.assertTrue((Path(temp_dir) / "assets" / "css" / "pages" / f"{new_slug}.css").exists())
+            self.assertTrue((Path(temp_dir) / "data" / "pages" / f"{new_slug}.json").exists())
 
     def test_hugo_generator_warns_when_shared_responsive_text_differs(self) -> None:
         desktop_model = {
@@ -4669,6 +5422,807 @@ class HugoGeneratorTests(unittest.TestCase):
                 any("changes text content" in warning for warning in warnings),
                 warnings,
             )
+
+    def test_responsive_merge_rejects_duplicate_widths(self) -> None:
+        desktop_model = {
+            "page": {"id": "landing-a", "slug": "landing-page-1920", "name": "Landing Page 1920", "width": 1920, "height": 600},
+            "sections": [],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+        duplicate_desktop_model = {
+            "page": {"id": "landing-b", "slug": "landing-page-1920", "name": "Landing Page 1920", "width": 1920, "height": 620},
+            "sections": [],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with self.assertRaisesRegex(ValueError, "duplicate width 1920px"):
+            merge_responsive_family([desktop_model, duplicate_desktop_model])
+
+    def test_responsive_merge_rejects_mixed_families(self) -> None:
+        desktop_model = {
+            "page": {"id": "landing-1920", "slug": "landing-page-1920", "name": "Landing Page 1920", "width": 1920, "height": 600},
+            "sections": [],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+        mobile_model = {
+            "page": {"id": "pricing-390", "slug": "pricing-page-390", "name": "Pricing Page 390", "width": 390, "height": 700},
+            "sections": [],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with self.assertRaisesRegex(ValueError, "mixed families"):
+            merge_responsive_family([desktop_model, mobile_model])
+
+    def test_responsive_merge_strict_matching_rejects_duplicate_sibling_tokens(self) -> None:
+        desktop_model = self._responsive_page_with_duplicate_sibling_texts(
+            slug="landing-page-1920",
+            width=1920,
+        )
+        mobile_model = self._responsive_page_with_duplicate_sibling_texts(
+            slug="landing-page-390",
+            width=390,
+        )
+
+        with self.assertRaisesRegex(ValueError, "ambiguous responsive sibling tokens"):
+            merge_responsive_family([desktop_model, mobile_model], strict_matching=True)
+
+    def test_responsive_merge_strict_matching_accepts_repeated_component_tokens(self) -> None:
+        desktop_model = self._responsive_page_with_repeated_cards(
+            slug="landing-page-1920",
+            width=1920,
+        )
+        mobile_model = self._responsive_page_with_repeated_cards(
+            slug="landing-page-390",
+            width=390,
+        )
+
+        merged = merge_responsive_family(
+            [desktop_model, mobile_model],
+            strict_matching=True,
+        )
+
+        warnings = merged["warnings"]
+        self.assertTrue(
+            any("treats repeated sibling token 'node:card:feature-card'" in warning for warning in warnings),
+            warnings,
+        )
+        self.assertFalse(
+            any("reuses sibling token 'node:card:feature-card'" in warning for warning in warnings),
+            warnings,
+        )
+
+    def test_responsive_merge_uniquifies_variant_only_render_identities(self) -> None:
+        desktop_model = {
+            "page": {"id": "landing-1920", "slug": "landing-page-1920", "name": "Landing Page 1920", "width": 1920, "height": 600},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "header",
+                    "bounds": {"x": 0, "y": 0, "width": 1920, "height": 320},
+                    "children": [
+                        {
+                            "id": "hero-main",
+                            "name": "hero-main",
+                            "role": "section",
+                            "bounds": {"x": 0, "y": 0, "width": 1920, "height": 320},
+                            "children": [
+                                {
+                                    "id": "hero-title",
+                                    "kind": "text",
+                                    "name": "titre-h1-hero",
+                                    "role": "hero-title",
+                                    "tag": "h1",
+                                    "value": "Desktop title",
+                                    "bounds": {"x": 120, "y": 120, "width": 640, "height": 72},
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+        tablet_model = {
+            "page": {"id": "landing-834", "slug": "landing-page-834", "name": "Landing Page 834", "width": 834, "height": 480},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "header",
+                    "bounds": {"x": 0, "y": 0, "width": 834, "height": 220},
+                    "children": [
+                        {
+                            "id": "hero-main",
+                            "name": "hero-main",
+                            "role": "section",
+                            "bounds": {"x": 120, "y": 0, "width": 648, "height": 220},
+                            "children": [
+                                {
+                                    "id": "hero-mobile-content",
+                                    "name": "section-hero-content",
+                                    "role": "section",
+                                    "bounds": {"x": 0, "y": 54, "width": 468, "height": 110},
+                                    "children": [
+                                        {
+                                            "id": "hero-title-mobile",
+                                            "kind": "text",
+                                            "name": "titre-h1-hero",
+                                            "role": "hero-title",
+                                            "tag": "h1",
+                                            "value": "Tablet title",
+                                            "bounds": {"x": 0, "y": 0, "width": 468, "height": 110},
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            HugoGenerator().generate_many([desktop_model, tablet_model], temp_dir)
+            css = (Path(temp_dir) / "assets" / "css" / "pages" / "landing-page.css").read_text(encoding="utf-8")
+            page_payload = json.loads((Path(temp_dir) / "data" / "pages" / "landing-page.json").read_text(encoding="utf-8"))
+
+        self.assertIn(".text-titre-h1-hero-w834 {", css)
+        self.assertIn(".node-section-hero-content-w834 {", css)
+        serialized_payload = json.dumps(page_payload)
+        self.assertIn("text-titre-h1-hero-w834", serialized_payload)
+        self.assertIn("node-section-hero-content-w834", serialized_payload)
+
+    def test_responsive_visibility_keeps_absent_backgrounds_and_hides_replaced_text(self) -> None:
+        desktop_model = {
+            "page": {"id": "landing-1920", "slug": "landing-page-1920", "name": "Landing Page 1920", "width": 1920, "height": 600},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "header",
+                    "bounds": {"x": 0, "y": 0, "width": 1920, "height": 320},
+                    "texts": [
+                        {
+                            "id": "hero-title",
+                            "name": "Hero Title",
+                            "role": "hero-title",
+                            "tag": "h1",
+                            "value": "Desktop title",
+                            "bounds": {"x": 120, "y": 120, "width": 640, "height": 72},
+                        }
+                    ],
+                    "assets": [
+                        {
+                            "id": "hero-bg",
+                            "name": "bg-hero",
+                            "nodeId": "hero-bg",
+                            "format": "png",
+                            "purpose": "background",
+                            "local_path": "images/bg-hero.png",
+                            "bounds": {"x": 0, "y": 0, "width": 1920, "height": 320},
+                        }
+                    ],
+                    "children": ["hero-title", "hero-bg"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+        tablet_model = {
+            "page": {"id": "landing-834", "slug": "landing-page-834", "name": "Landing Page 834", "width": 834, "height": 320},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "header",
+                    "bounds": {"x": 0, "y": 0, "width": 834, "height": 220},
+                    "children": [
+                        {
+                            "id": "hero-content",
+                            "name": "Hero Content",
+                            "role": "section",
+                            "bounds": {"x": 120, "y": 60, "width": 420, "height": 80},
+                            "children": [
+                                {
+                                    "id": "hero-title-mobile",
+                                    "kind": "text",
+                                    "name": "Hero Title",
+                                    "role": "hero-title",
+                                    "tag": "h1",
+                                    "value": "Tablet title",
+                                    "bounds": {"x": 0, "y": 0, "width": 420, "height": 80},
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            HugoGenerator().generate_many([desktop_model, tablet_model], temp_dir)
+            css = (Path(temp_dir) / "assets" / "css" / "pages" / "landing-page.css").read_text(encoding="utf-8")
+
+        self.assertIn(".asset-bg-hero {", css)
+        self.assertNotRegex(css, r"\.asset-bg-hero\s*\{\s*display:\s*none\s*!important;")
+        self.assertRegex(css, r"\.text-hero-title\s*\{\s*display:\s*none\s*!important;")
+        self.assertRegex(
+            css,
+            r"\.[a-z0-9-]+\s*>\s*\.asset-bg-hero\s*\{\s*left:\s*0\s*!important;\s*top:\s*0\s*!important;\s*width:\s*100%\s*!important;\s*height:\s*100%\s*!important;",
+        )
+
+    def test_responsive_visibility_keeps_absent_text_when_no_replacement_exists(self) -> None:
+        desktop_model = {
+            "page": {"id": "landing-1920", "slug": "landing-page-1920", "name": "Landing Page 1920", "width": 1920, "height": 600},
+            "sections": [
+                {
+                    "id": "legal",
+                    "name": "Legal",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1920, "height": 320},
+                    "texts": [
+                        {
+                            "id": "legal-body",
+                            "name": "Legal Body",
+                            "role": "body",
+                            "value": "Desktop legal paragraph",
+                            "bounds": {"x": 80, "y": 120, "width": 720, "height": 80},
+                        }
+                    ],
+                    "children": ["legal-body"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+        mobile_model = {
+            "page": {"id": "landing-402", "slug": "landing-page-402", "name": "Landing Page 402", "width": 402, "height": 320},
+            "sections": [
+                {
+                    "id": "legal",
+                    "name": "Legal",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 402, "height": 220},
+                    "children": [],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            HugoGenerator().generate_many([desktop_model, mobile_model], temp_dir)
+            css = (Path(temp_dir) / "assets" / "css" / "pages" / "landing-page.css").read_text(encoding="utf-8")
+
+        mobile_block = css[css.index("@media (max-width: 480px)") :]
+        self.assertNotRegex(mobile_block, r"\.text-legal-body\s*\{\s*display:\s*none\s*!important;")
+
+    def test_responsive_variant_asset_source_creates_breakpoint_specific_asset(self) -> None:
+        desktop_model = {
+            "page": {"id": "landing-1920", "slug": "landing-page-1920", "name": "Landing Page 1920", "width": 1920, "height": 600},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "header",
+                    "class_name": "section-hero",
+                    "bounds": {"x": 0, "y": 0, "width": 1920, "height": 320},
+                    "children": [
+                        {
+                            "id": "hero-image",
+                            "kind": "asset",
+                            "name": "Hero Image",
+                            "role": "content",
+                            "class_name": "node-hero-image",
+                            "asset": {
+                                "id": "hero-image",
+                                "dom_id": "hero-image",
+                                "name": "Hero Image",
+                                "format": "png",
+                                "purpose": "content",
+                                "source_local_path": "variants/desktop/hero-image.png",
+                                "local_path": "images/hero-desktop.png",
+                                "public_path": "images/hero-desktop.png",
+                                "css_public_path": "/images/hero-desktop.png",
+                                "class_name": "asset-hero-image",
+                                "bounds": {"x": 1500, "y": 20, "width": 240, "height": 240},
+                            },
+                            "bounds": {"x": 1500, "y": 20, "width": 240, "height": 240},
+                            "children": [],
+                        }
+                    ],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+        mobile_model = {
+            "page": {"id": "landing-402", "slug": "landing-page-402", "name": "Landing Page 402", "width": 402, "height": 320},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "header",
+                    "class_name": "section-hero",
+                    "bounds": {"x": 0, "y": 0, "width": 402, "height": 105},
+                    "children": [
+                        {
+                            "id": "hero-image-mobile",
+                            "kind": "asset",
+                            "name": "Hero Image",
+                            "role": "content",
+                            "class_name": "node-hero-image",
+                            "asset": {
+                                "id": "hero-image-mobile",
+                                "dom_id": "hero-image",
+                                "name": "Hero Image",
+                                "format": "png",
+                                "purpose": "content",
+                                "source_local_path": "variants/mobile/hero-image.png",
+                                "local_path": "images/hero-mobile.png",
+                                "public_path": "images/hero-mobile.png",
+                                "css_public_path": "/images/hero-mobile.png",
+                                "class_name": "asset-hero-image",
+                                "bounds": {"x": 360, "y": 6, "width": 34, "height": 88},
+                            },
+                            "bounds": {"x": 360, "y": 6, "width": 34, "height": 88},
+                            "children": [],
+                        }
+                    ],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        merged_page = merge_responsive_family([desktop_model, mobile_model])
+        css = CssGenerator().generate(merged_page)
+        serialized_payload = json.dumps(merged_page)
+        self.assertIn("asset-hero-image-w402", serialized_payload)
+        self.assertIn("/images/hero-mobile.png", serialized_payload)
+        self.assertRegex(css, r"\.asset-hero-image\s*\{\s*display:\s*none\s*!important;")
+        self.assertRegex(css, r"\.asset-hero-image-w402\s*\{\s*display:\s*block\s*!important;")
+
+    def test_responsive_compact_footer_applies_section_override_and_hides_absent_container(self) -> None:
+        desktop_model = {
+            "page": {"id": "landing-1920", "slug": "landing-page-1920", "name": "Landing Page 1920", "width": 1920, "height": 900},
+            "sections": [
+                {
+                    "id": "footer",
+                    "name": "Footer",
+                    "role": "footer",
+                    "bounds": {"x": 0, "y": 600, "width": 1920, "height": 300},
+                    "children": [
+                        {
+                            "id": "contact-block",
+                            "name": "Contact Block",
+                            "role": "container",
+                            "bounds": {"x": 0, "y": 0, "width": 1920, "height": 260},
+                            "children": [],
+                        }
+                    ],
+                    "assets": [
+                        {
+                            "id": "footer-bg",
+                            "name": "bg-footer",
+                            "nodeId": "footer-bg",
+                            "format": "png",
+                            "purpose": "background",
+                            "local_path": "images/bg-footer.png",
+                            "bounds": {"x": 0, "y": 260, "width": 1920, "height": 40},
+                        }
+                    ],
+                    "texts": [
+                        {
+                            "id": "footer-copy",
+                            "name": "Footer Copy",
+                            "role": "body",
+                            "value": "Footer",
+                            "bounds": {"x": 0, "y": 270, "width": 640, "height": 20},
+                        }
+                    ],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+        tablet_model = {
+            "page": {"id": "landing-834", "slug": "landing-page-834", "name": "Landing Page 834", "width": 834, "height": 700},
+            "sections": [
+                {
+                    "id": "footer",
+                    "name": "Footer",
+                    "role": "footer",
+                    "bounds": {"x": 0, "y": 560, "width": 834, "height": 48},
+                    "assets": [
+                        {
+                            "id": "footer-bg-compact",
+                            "name": "bg-footer",
+                            "nodeId": "footer-bg-compact",
+                            "format": "png",
+                            "purpose": "background",
+                            "local_path": "images/bg-footer-compact.png",
+                            "bounds": {"x": 0, "y": 0, "width": 834, "height": 48},
+                        }
+                    ],
+                    "texts": [
+                        {
+                            "id": "footer-copy-compact",
+                            "name": "Footer Copy",
+                            "role": "body",
+                            "value": "Footer compact",
+                            "bounds": {"x": 0, "y": 8, "width": 420, "height": 20},
+                        }
+                    ],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            HugoGenerator().generate_many([desktop_model, tablet_model], temp_dir)
+            css = (Path(temp_dir) / "assets" / "css" / "pages" / "landing-page.css").read_text(encoding="utf-8")
+
+        self.assertIn("@media (max-width: 1024px)", css)
+        media_block = css[css.index("@media (max-width: 1024px)") :]
+        self.assertIn("/* Section: Footer */", media_block)
+        self.assertIn(".section-footer {", media_block)
+        self.assertRegex(media_block, r"\.node-contact-block\s*\{\s*display:\s*none\s*!important;")
+        self.assertRegex(media_block, r"\.text-footer-copy-w834\s*\{\s*display:\s*block\s*!important;")
+
+    def test_responsive_visibility_hides_absent_top_level_sections(self) -> None:
+        desktop_model = {
+            "page": {"id": "landing-1920", "slug": "landing-page-1920", "name": "Landing Page 1920", "width": 1920, "height": 900},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "header",
+                    "bounds": {"x": 0, "y": 0, "width": 1920, "height": 320},
+                    "children": [],
+                },
+                {
+                    "id": "desktop-only",
+                    "name": "Desktop Only",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 320, "width": 1920, "height": 320},
+                    "children": [],
+                },
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+        mobile_model = {
+            "page": {"id": "landing-402", "slug": "landing-page-402", "name": "Landing Page 402", "width": 402, "height": 360},
+            "sections": [
+                {
+                    "id": "hero-mobile",
+                    "name": "Hero",
+                    "role": "header",
+                    "bounds": {"x": 0, "y": 0, "width": 402, "height": 180},
+                    "children": [],
+                },
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            HugoGenerator().generate_many([desktop_model, mobile_model], temp_dir)
+            css = (Path(temp_dir) / "assets" / "css" / "pages" / "landing-page.css").read_text(encoding="utf-8")
+
+        mobile_block = css[css.index("@media (max-width: 480px)") :]
+        self.assertRegex(
+            mobile_block,
+            r"\.section-desktop-only\s*\{\s*display:\s*none\s*!important;",
+        )
+
+    def test_hugo_generator_page_shell_accounts_for_visible_content_bleed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            HugoGenerator().generate(SAMPLE_MODEL, temp_dir)
+            page_shell_js = (Path(temp_dir) / "assets" / "js" / "page-shell.js").read_text(encoding="utf-8")
+
+        self.assertIn("var pageWidth = fallbackWidth;", page_shell_js)
+        self.assertIn(
+            'page.querySelectorAll(".content-asset:not(.is-decorative):not(.bg)")',
+            page_shell_js,
+        )
+        self.assertIn('page.querySelectorAll(".content-text")', page_shell_js)
+        self.assertIn("if (item.scrollWidth > item.clientWidth + 1)", page_shell_js)
+        self.assertIn("var effectiveWidth = Math.max(pageWidth, visibleBounds.width);", page_shell_js)
+        self.assertIn("var pageHeight = Math.max(fallbackHeight, visibleBounds.height);", page_shell_js)
+        self.assertIn("var scale = isResponsiveFixedLayout ? rawScale : Math.min(1, rawScale);", page_shell_js)
+        self.assertIn('shell.style.setProperty("--page-shell-width", roundPx(effectiveWidth * scale) + "px");', page_shell_js)
+        self.assertIn("function visualElementRect(element, scale)", page_shell_js)
+        self.assertIn("element.scrollHeight", page_shell_js)
+        self.assertIn("!clipsOverflow(style.overflowY || style.overflow)", page_shell_js)
+        self.assertIn("function repairBreakpointBackgroundLayers(page)", page_shell_js)
+        self.assertIn('page.querySelectorAll(".page-section, .page-section__inner, .content-node")', page_shell_js)
+        self.assertIn('data-page-shell-hidden-breakpoint-bg="true"', page_shell_js)
+        self.assertIn("function breakpointBackgroundClass(element)", page_shell_js)
+        self.assertIn('return /^asset-/.test(className);', page_shell_js)
+        self.assertIn("function breakpointBackgroundVariantScore(element)", page_shell_js)
+        self.assertIn("function repairTinyResponsiveForms(page, scale)", page_shell_js)
+        self.assertIn('form.content-node[data-form="true"]', page_shell_js)
+        self.assertIn("if (width >= 180)", page_shell_js)
+        self.assertIn('form.setAttribute("data-page-shell-tiny-form", "true")', page_shell_js)
+        self.assertIn('control.style.setProperty("visibility", "hidden")', page_shell_js)
+        self.assertIn("function repairPostTextControlSpacing(page, scale)", page_shell_js)
+        self.assertIn("rect.width / scale <= 180 && rect.height / scale <= 120", page_shell_js)
+        self.assertIn("function repairButtonBandSpacing(page, scale)", page_shell_js)
+        self.assertIn('button.content-node:not([data-form-submit])', page_shell_js)
+        self.assertIn(r"/\b(bandeau|banner)\b/i.test(item.className)", page_shell_js)
+        self.assertIn("function repairBandTextContainment(page, scale)", page_shell_js)
+        self.assertIn("var minBottomGap = 20;", page_shell_js)
+        self.assertIn("function isCardLikeBandItem(element)", page_shell_js)
+        self.assertIn("function repairIconLabelCards(page, scale)", page_shell_js)
+        self.assertIn("function addTextShift(text, delta)", page_shell_js)
+        self.assertIn("--content-asset-stack-shift", page_shell_js)
+        self.assertIn('text.style.setProperty("--content-text-stack-shift"', page_shell_js)
+        self.assertIn(
+            'section.querySelectorAll(".content-node, .content-text, .content-asset:not(.is-decorative):not(.bg)")',
+            page_shell_js,
+        )
+        self.assertIn("function repairTextCollisions(page, scale)", page_shell_js)
+        self.assertIn("function repairScopedContentCollisions(page, scale)", page_shell_js)
+        self.assertIn("function repairSectionStack(page, scale)", page_shell_js)
+
+    def test_hugo_generator_warns_when_responsive_matching_relies_on_duplicate_sibling_tokens(self) -> None:
+        desktop_model = {
+            "page": {"id": "landing-1920", "name": "Landing Page 1920", "width": 1920, "height": 600},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 1920, "height": 400},
+                    "texts": [
+                        {
+                            "id": "feature-a",
+                            "name": "Feature Item",
+                            "role": "body",
+                            "value": "First feature",
+                            "bounds": {"x": 120, "y": 120, "width": 320, "height": 40},
+                        },
+                        {
+                            "id": "feature-b",
+                            "name": "Feature Item",
+                            "role": "body",
+                            "value": "Second feature",
+                            "bounds": {"x": 120, "y": 180, "width": 320, "height": 40},
+                        },
+                    ],
+                    "assets": [],
+                    "children": ["feature-a", "feature-b"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+        mobile_model = {
+            "page": {"id": "landing-390", "name": "Landing Page 390", "width": 390, "height": 700},
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "section",
+                    "bounds": {"x": 0, "y": 0, "width": 390, "height": 420},
+                    "texts": [
+                        {
+                            "id": "feature-a",
+                            "name": "Feature Item",
+                            "role": "body",
+                            "value": "First feature mobile",
+                            "bounds": {"x": 24, "y": 80, "width": 240, "height": 48},
+                        },
+                        {
+                            "id": "feature-b",
+                            "name": "Feature Item",
+                            "role": "body",
+                            "value": "Second feature mobile",
+                            "bounds": {"x": 24, "y": 144, "width": 240, "height": 48},
+                        },
+                    ],
+                    "assets": [],
+                    "children": ["feature-a", "feature-b"],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            HugoGenerator().generate_many([desktop_model, mobile_model], temp_dir)
+            page_payload = json.loads((Path(temp_dir) / "data" / "pages" / "landing-page.json").read_text(encoding="utf-8"))
+            warnings = page_payload.get("warnings", [])
+            self.assertTrue(
+                any("reuses sibling token" in warning for warning in warnings),
+                warnings,
+            )
+
+    def _responsive_page_with_duplicate_sibling_texts(
+        self,
+        *,
+        slug: str,
+        width: int,
+    ) -> dict[str, object]:
+        return {
+            "page": {
+                "id": slug,
+                "slug": slug,
+                "name": slug,
+                "width": width,
+                "height": 600,
+            },
+            "sections": [
+                {
+                    "id": "hero",
+                    "name": "Hero",
+                    "role": "section",
+                    "children": [
+                        {
+                            "id": "feature-a",
+                            "kind": "text",
+                            "text": {
+                                "id": "feature-a",
+                                "name": "Feature Item",
+                                "role": "body",
+                                "value": "First feature",
+                            },
+                        },
+                        {
+                            "id": "feature-b",
+                            "kind": "text",
+                            "text": {
+                                "id": "feature-b",
+                                "name": "Feature Item",
+                                "role": "body",
+                                "value": "Second feature",
+                            },
+                        },
+                    ],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
+
+    def _responsive_page_with_repeated_cards(
+        self,
+        *,
+        slug: str,
+        width: int,
+    ) -> dict[str, object]:
+        card_width = 360 if width >= 1000 else 150
+        return {
+            "page": {
+                "id": slug,
+                "slug": slug,
+                "name": slug,
+                "width": width,
+                "height": 720,
+            },
+            "sections": [
+                {
+                    "id": "features",
+                    "name": "Features",
+                    "role": "section",
+                    "children": [
+                        {
+                            "id": "feature-a",
+                            "kind": "container",
+                            "name": "Feature Card",
+                            "role": "card",
+                            "bounds": {"x": 80, "y": 80, "width": card_width, "height": 220},
+                            "children": [
+                                {
+                                    "id": "feature-a-title",
+                                    "kind": "text",
+                                    "text": {
+                                        "id": "feature-a-title",
+                                        "name": "Feature Title",
+                                        "role": "heading",
+                                        "value": "First",
+                                    },
+                                },
+                                {
+                                    "id": "feature-a-copy",
+                                    "kind": "text",
+                                    "text": {
+                                        "id": "feature-a-copy",
+                                        "name": "Feature Copy",
+                                        "role": "body",
+                                        "value": "First copy",
+                                    },
+                                },
+                            ],
+                        },
+                        {
+                            "id": "feature-b",
+                            "kind": "container",
+                            "name": "Feature Card",
+                            "role": "card",
+                            "bounds": {"x": 480, "y": 80, "width": card_width, "height": 220},
+                            "children": [
+                                {
+                                    "id": "feature-b-title",
+                                    "kind": "text",
+                                    "text": {
+                                        "id": "feature-b-title",
+                                        "name": "Feature Title",
+                                        "role": "heading",
+                                        "value": "Second",
+                                    },
+                                },
+                                {
+                                    "id": "feature-b-copy",
+                                    "kind": "text",
+                                    "text": {
+                                        "id": "feature-b-copy",
+                                        "name": "Feature Copy",
+                                        "role": "body",
+                                        "value": "Second copy",
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                }
+            ],
+            "texts": {},
+            "assets": [],
+            "tokens": {},
+            "warnings": [],
+        }
 
     @unittest.skipIf(not HUGO_BIN, "Hugo CLI is not available")
     def test_hugo_build_renders_multi_page_regular_pages(self) -> None:

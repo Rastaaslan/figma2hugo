@@ -8,6 +8,11 @@
   gap: var(--layout-gap, 16px);
 }
 
+.page .content-node[data-carousel="true"],
+.page .content-node:has([data-carousel="true"]) {
+  z-index: var(--carousel-layer-z-index, 500);
+}
+
 [data-carousel-stage="true"] {
   overflow: hidden;
   isolation: isolate;

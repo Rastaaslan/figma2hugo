@@ -191,6 +191,34 @@ def test_generate_validate_and_report_static_site(monkeypatch) -> None:
         assert report_payload["buildOk"] is True
 
 
+def test_report_can_print_responsive_audit_markdown() -> None:
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        site_dir = Path("site")
+        site_dir.mkdir()
+        (site_dir / "responsive-audit.md").write_text(
+            "# Audit responsive\n\n- Familles responsive: 1\n",
+            encoding="utf-8",
+        )
+
+        result = runner.invoke(app, ["report", "site", "--responsive-audit"])
+
+        assert result.exit_code == 0
+        assert result.stdout.startswith("# Audit responsive")
+        assert "Familles responsive: 1" in result.stdout
+
+
+def test_report_responsive_audit_requires_generated_markdown() -> None:
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        Path("site").mkdir()
+
+        result = runner.invoke(app, ["report", "site", "--responsive-audit"])
+
+        assert result.exit_code != 0
+        assert "Missing responsive audit file" in result.output
+
+
 def test_build_generates_hugo_site_with_url_and_destination_only(monkeypatch) -> None:
     runner = CliRunner()
     with runner.isolated_filesystem():
@@ -245,6 +273,93 @@ def test_build_site_generates_multi_page_hugo_output(monkeypatch) -> None:
         assert Path("site/data/pages/contact-page.json").exists()
         assert Path("site/data/site.json").exists()
         assert Path("site/report.json").exists()
+
+
+def test_build_site_accepts_page_file(monkeypatch) -> None:
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        asset_source = Path("hero.png")
+        asset_source.write_bytes(b"png")
+        Path("pages.txt").write_text(
+            "# Production pages\n"
+            "https://www.figma.com/design/AbCdEf1234567890/About?node-id=1-1\n"
+            "https://www.figma.com/design/AbCdEf1234567890/Contact?node-id=1-2\n",
+            encoding="utf-8-sig",
+        )
+        monkeypatch.setattr(
+            cli_module,
+            "_make_extraction_service",
+            lambda: MultiPageExtractionService(str(asset_source.resolve())),
+        )
+
+        result = runner.invoke(app, ["build-site", "site", "--page-file", "pages.txt"])
+
+        assert result.exit_code == 0
+        assert Path("site/assets/css/pages/about-page.css").exists()
+        assert Path("site/assets/css/pages/contact-page.css").exists()
+        site_manifest = json.loads(Path("site/data/site.json").read_text(encoding="utf-8"))
+        assert [page["slug"] for page in site_manifest["pages"]] == [
+            "about-page",
+            "contact-page",
+        ]
+
+
+def test_build_site_passes_strict_responsive_matching_to_workflow(monkeypatch) -> None:
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    def fake_run_generation(options, **kwargs):
+        del kwargs
+        captured["strict"] = options.strict_responsive_matching
+        captured["figma_urls"] = options.figma_urls
+        return {"buildOk": True, "strictResponsiveMatching": options.strict_responsive_matching}
+
+    monkeypatch.setattr(cli_module, "run_generation", fake_run_generation)
+
+    result = runner.invoke(
+        app,
+        [
+            "build-site",
+            "site",
+            "--page",
+            "https://www.figma.com/design/AbCdEf1234567890/About?node-id=1-1",
+            "--strict-responsive-matching",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["strict"] is True
+    assert captured["figma_urls"] == (
+        "https://www.figma.com/design/AbCdEf1234567890/About?node-id=1-1",
+    )
+    assert json.loads(result.stdout)["strictResponsiveMatching"] is True
+
+
+def test_generate_and_build_pass_strict_responsive_matching_to_workflow(monkeypatch) -> None:
+    runner = CliRunner()
+    captured: list[bool] = []
+
+    def fake_run_generation(options, **kwargs):
+        del kwargs
+        captured.append(options.strict_responsive_matching)
+        return {"buildOk": True, "strictResponsiveMatching": options.strict_responsive_matching}
+
+    monkeypatch.setattr(cli_module, "run_generation", fake_run_generation)
+
+    generate_result = runner.invoke(
+        app,
+        ["generate", FIGMA_URL, "dist", "--strict-responsive-matching"],
+    )
+    build_result = runner.invoke(
+        app,
+        ["build", FIGMA_URL, "site", "--strict-responsive-matching"],
+    )
+
+    assert generate_result.exit_code == 0
+    assert build_result.exit_code == 0
+    assert captured == [True, True]
+    assert json.loads(generate_result.stdout)["strictResponsiveMatching"] is True
+    assert json.loads(build_result.stdout)["strictResponsiveMatching"] is True
 
 
 def test_ui_command_launches_desktop_app(monkeypatch) -> None:

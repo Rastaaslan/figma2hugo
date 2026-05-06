@@ -1,25 +1,37 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import hashlib
 import os
+import shutil
+from copy import deepcopy
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .._responsive import detect_responsive_variant, merge_responsive_family
+from .._responsive import merge_responsive_page_groups
 from .._shared import (
     CanonicalModelBuilder,
     GenerationArtifacts,
     copy_assets,
+    ensure_asset_output_directory,
     ensure_directory,
     ensure_text,
     locate_templates_root,
     read_template_text,
     slugify,
+    write_generation_report,
     write_json_file,
     write_text_file,
 )
 from ..css import CssGenerator
+
+
+@dataclass(slots=True)
+class _MultiPageBundle:
+    page_data: dict[str, Any]
+    slug: str
+    weight: int
+    site_entry: dict[str, Any]
 
 
 class HugoGenerator:
@@ -36,6 +48,7 @@ class HugoGenerator:
         "accordion": "accordion",
         "accordion-item": "accordion-item",
         "carousel": "carousel",
+        "component-list": "component-list",
         "field": "field",
         "link-grid": "link-grid",
         "link-card": "link-card",
@@ -46,19 +59,29 @@ class HugoGenerator:
         self._builder = CanonicalModelBuilder(mode="hugo")
         self._css_generator = CssGenerator(include_component_presets=False)
         self._force_managed_overwrite = os.getenv("FIGMA2HUGO_FORCE_MANAGED_OVERWRITE", "0") == "1"
+        self._strict_responsive_matching = (
+            os.getenv("FIGMA2HUGO_STRICT_RESPONSIVE_MATCHING", "0") == "1"
+        )
 
-    def generate(self, model: Any, output_dir: str | Path, report: dict[str, Any] | None = None) -> GenerationArtifacts:
+    def generate(
+        self,
+        model: Any,
+        output_dir: str | Path,
+        report: dict[str, Any] | None = None,
+    ) -> GenerationArtifacts:
         output_path = Path(output_dir)
         managed_hashes, written_files = self._prepare_output_directory(output_path)
         page_data = self._builder.build(model)
         self._annotate_component_partials(page_data, output_path)
         written_files.extend(self._write_single_page_bundle(output_path, page_data))
-        if report is not None:
-            written_files.append(write_json_file(output_path / "report.json", report))
-        if page_data["assets"]:
-            ensure_directory(output_path / "static" / "images")
+        written_files.extend(write_generation_report(output_path, report))
+        ensure_asset_output_directory(output_path, page_data, mode="hugo")
         written_files.extend(self._write_managed_manifest(output_path, managed_hashes))
-        return GenerationArtifacts(output_dir=output_path, written_files=tuple(written_files), page_data=page_data)
+        return GenerationArtifacts(
+            output_dir=output_path,
+            written_files=tuple(written_files),
+            page_data=page_data,
+        )
 
     def generate_many(
         self,
@@ -70,49 +93,42 @@ class HugoGenerator:
         managed_hashes, written_files = self._prepare_output_directory(output_path)
 
         built_pages = [self._builder.build(model) for model in models]
-        merged_pages = self._merge_responsive_pages(built_pages)
+        merged_pages = merge_responsive_page_groups(
+            built_pages,
+            strict_matching=self._strict_responsive_matching,
+        )
+        page_bundles, used_slugs = self._prepare_multi_page_bundles(
+            merged_pages,
+            output_path,
+        )
 
-        site_pages: list[dict[str, Any]] = []
-        used_slugs: set[str] = set()
-        scoped_pages: list[dict[str, Any]] = []
-
-        for index, page_data in enumerate(merged_pages):
-            page_slug = self._unique_slug(str(page_data["page"]["slug"]), used_slugs)
-            scoped_page = self._scope_page_data(page_data, page_slug)
-            stylesheet_path = f"css/pages/{page_slug}.css"
-            self._annotate_component_partials(scoped_page, output_path)
-            scoped_pages.append(scoped_page)
+        for bundle in page_bundles:
             written_files.extend(
                 self._write_multi_page_bundle(
                     output_path,
-                    scoped_page,
-                    page_slug=page_slug,
-                    weight=index + 1,
+                    bundle.page_data,
+                    page_slug=bundle.slug,
+                    weight=bundle.weight,
                 )
             )
-            site_pages.append(
-                {
-                    "title": scoped_page["page"]["title"],
-                    "slug": page_slug,
-                    "page_key": page_slug,
-                    "path": f"/{page_slug}/",
-                    "output_path": f"{page_slug}/index.html",
-                    "stylesheet": stylesheet_path,
-                    "weight": index + 1,
-                }
-            )
 
+        site_pages = [bundle.site_entry for bundle in page_bundles]
+        written_files.extend(self._cleanup_stale_multi_page_outputs(output_path, used_slugs))
         written_files.append(
             write_text_file(
                 output_path / "content" / "_index.md",
                 self._home_front_matter(title="Pages"),
             )
         )
-        written_files.append(write_json_file(output_path / "data" / "site.json", {"pages": site_pages}))
-        if report is not None:
-            written_files.append(write_json_file(output_path / "report.json", report))
-        if any(page_data["assets"] for page_data in scoped_pages):
-            ensure_directory(output_path / "static" / "images")
+        written_files.append(
+            write_json_file(output_path / "data" / "site.json", {"pages": site_pages})
+        )
+        written_files.extend(write_generation_report(output_path, report))
+        ensure_asset_output_directory(
+            output_path,
+            (bundle.page_data for bundle in page_bundles),
+            mode="hugo",
+        )
         written_files.extend(self._write_managed_manifest(output_path, managed_hashes))
         return GenerationArtifacts(
             output_dir=output_path,
@@ -120,33 +136,101 @@ class HugoGenerator:
             page_data={"pages": site_pages},
         )
 
-    def _merge_responsive_pages(self, page_datas: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        grouped: list[tuple[str, list[dict[str, Any]], str | None]] = []
-        grouped_index: dict[str, int] = {}
+    def _prepare_multi_page_bundles(
+        self,
+        pages: list[dict[str, Any]],
+        output_path: Path,
+    ) -> tuple[list[_MultiPageBundle], set[str]]:
+        used_slugs: set[str] = set()
+        bundles: list[_MultiPageBundle] = []
 
-        for page_data in page_datas:
-            detected = detect_responsive_variant(page_data)
-            if detected is None:
-                group_key = f"single::{len(grouped)}"
-                grouped_index[group_key] = len(grouped)
-                grouped.append((group_key, [page_data], None))
+        for weight, page_data in enumerate(pages, start=1):
+            page_slug = self._unique_slug(str(page_data["page"]["slug"]), used_slugs)
+            scoped_page = self._scope_page_data(page_data, page_slug)
+            self._annotate_component_partials(scoped_page, output_path)
+            bundles.append(
+                _MultiPageBundle(
+                    page_data=scoped_page,
+                    slug=page_slug,
+                    weight=weight,
+                    site_entry=self._site_page_entry(
+                        scoped_page,
+                        page_slug=page_slug,
+                        weight=weight,
+                    ),
+                )
+            )
+
+        return bundles, used_slugs
+
+    def _site_page_entry(
+        self,
+        page_data: dict[str, Any],
+        *,
+        page_slug: str,
+        weight: int,
+    ) -> dict[str, Any]:
+        return {
+            "title": page_data["page"]["title"],
+            "slug": page_slug,
+            "page_key": page_slug,
+            "path": f"/{page_slug}/",
+            "output_path": f"{page_slug}/index.html",
+            "stylesheet": self._page_stylesheet_path(page_slug),
+            "weight": weight,
+        }
+
+    def _cleanup_stale_multi_page_outputs(
+        self,
+        output_path: Path,
+        active_slugs: set[str],
+    ) -> list[Path]:
+        removed: list[Path] = []
+        active = {slug.strip() for slug in active_slugs if slug and slug.strip()}
+
+        content_dir = output_path / "content"
+        for markdown_path in sorted(content_dir.glob("*.md")):
+            if markdown_path.name == "_index.md":
                 continue
-
-            family_slug, _ = detected
-            group_key = f"responsive::{family_slug}"
-            if group_key not in grouped_index:
-                grouped_index[group_key] = len(grouped)
-                grouped.append((group_key, [page_data], family_slug))
+            if markdown_path.stem in active:
                 continue
-            grouped[grouped_index[group_key]][1].append(page_data)
+            if not self._looks_like_managed_page_markdown(markdown_path):
+                continue
+            markdown_path.unlink(missing_ok=True)
+            removed.append(markdown_path)
 
-        merged_pages: list[dict[str, Any]] = []
-        for _, pages, family_slug in grouped:
-            if family_slug and len(pages) > 1:
-                merged_pages.append(merge_responsive_family(pages))
-            else:
-                merged_pages.extend(pages)
-        return merged_pages
+        css_pages_dir = output_path / "assets" / "css" / "pages"
+        for css_path in sorted(css_pages_dir.glob("*.css")):
+            if css_path.stem in active:
+                continue
+            css_path.unlink(missing_ok=True)
+            removed.append(css_path)
+
+        data_pages_dir = output_path / "data" / "pages"
+        for json_path in sorted(data_pages_dir.glob("*.json")):
+            if json_path.stem in active:
+                continue
+            json_path.unlink(missing_ok=True)
+            removed.append(json_path)
+
+        static_images_dir = output_path / "static" / "images"
+        if static_images_dir.exists():
+            for image_dir in sorted(static_images_dir.iterdir()):
+                if not image_dir.is_dir():
+                    continue
+                if image_dir.name in active:
+                    continue
+                shutil.rmtree(image_dir, ignore_errors=True)
+                removed.append(image_dir)
+
+        return removed
+
+    def _looks_like_managed_page_markdown(self, path: Path) -> bool:
+        try:
+            content = path.read_text(encoding="utf-8")
+        except OSError:
+            return False
+        return 'page_key: "' in content and 'stylesheet: "css/pages/' in content
 
     def _prepare_output_directory(self, output_path: Path) -> tuple[dict[str, str], list[Path]]:
         ensure_directory(output_path)
@@ -156,12 +240,24 @@ class HugoGenerator:
         return managed_hashes, written_files
 
     def _sync_shared_runtime(self, output_path: Path, managed_hashes: dict[str, str]) -> list[Path]:
-        return self._sync_managed_text(
-            output_path,
-            Path("assets") / "js" / "accordion.js",
-            self._accordion_script(),
-            managed_hashes,
+        written_files: list[Path] = []
+        written_files.extend(
+            self._sync_managed_text(
+                output_path,
+                Path("assets") / "js" / "accordion.js",
+                self._accordion_script(),
+                managed_hashes,
+            )
         )
+        written_files.extend(
+            self._sync_managed_text(
+                output_path,
+                Path("assets") / "js" / "page-shell.js",
+                self._page_shell_script(),
+                managed_hashes,
+            )
+        )
+        return written_files
 
     def _write_single_page_bundle(self, output_path: Path, page_data: dict[str, Any]) -> list[Path]:
         return [
@@ -173,7 +269,10 @@ class HugoGenerator:
                     stylesheet="css/main.css",
                 ),
             ),
-            write_text_file(output_path / "assets" / "css" / "main.css", self._css_generator.generate(page_data)),
+            write_text_file(
+                output_path / "assets" / "css" / "main.css",
+                self._css_generator.generate(page_data),
+            ),
             write_json_file(output_path / "data" / "page.json", page_data),
             *copy_assets(page_data, output_path, mode="hugo"),
         ]
@@ -186,7 +285,7 @@ class HugoGenerator:
         page_slug: str,
         weight: int,
     ) -> list[Path]:
-        stylesheet_path = f"css/pages/{page_slug}.css"
+        stylesheet_path = self._page_stylesheet_path(page_slug)
         return [
             write_text_file(
                 output_path / "content" / f"{page_slug}.md",
@@ -205,6 +304,9 @@ class HugoGenerator:
             write_json_file(output_path / "data" / "pages" / f"{page_slug}.json", page_data),
             *copy_assets(page_data, output_path, mode="hugo"),
         ]
+
+    def _page_stylesheet_path(self, page_slug: str) -> str:
+        return f"css/pages/{page_slug}.css"
 
     def _page_front_matter(
         self,
@@ -229,7 +331,14 @@ class HugoGenerator:
         return "---\n" f'title: "{self._escape_front_matter_string(title)}"\n' "---\n"
 
     def _escape_front_matter_string(self, value: Any) -> str:
-        return str(value).replace("\\", "\\\\").replace('"', '\\"')
+        return (
+            str(value)
+            .replace("\\", "\\\\")
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+            .replace("\n", "\\n")
+            .replace('"', '\\"')
+        )
 
     def _unique_slug(self, slug: str, used_slugs: set[str]) -> str:
         candidate = slug or "page"
@@ -288,7 +397,11 @@ class HugoGenerator:
                     scoped_public_path = public_path
                     scoped_css_public_path = css_public_path
                 if asset_id:
-                    updates[asset_id] = (scoped_relative_path, scoped_public_path, scoped_css_public_path)
+                    updates[asset_id] = (
+                        scoped_relative_path,
+                        scoped_public_path,
+                        scoped_css_public_path,
+                    )
 
             asset["local_path"] = scoped_relative_path
             asset["public_path"] = scoped_public_path
@@ -316,6 +429,9 @@ class HugoGenerator:
 
     def _accordion_script(self) -> str:
         return read_template_text("shared", "accordion.js")
+
+    def _page_shell_script(self) -> str:
+        return read_template_text("shared", "page-shell.js")
 
     def _sync_hugo_scaffold(self, output_path: Path, managed_hashes: dict[str, str]) -> list[Path]:
         templates_root = locate_templates_root() / "hugo"
@@ -391,6 +507,9 @@ class HugoGenerator:
         role = ensure_text(node.get("role")).strip().lower()
         if role in self._COMPONENT_TEMPLATE_BY_ROLE:
             return self._COMPONENT_TEMPLATE_BY_ROLE[role]
+        attributes = node.get("attributes", {}) or {}
+        if str(attributes.get("data-component-list", "")).strip().lower() == "true":
+            return "component-list"
         if role == "section" and self._is_component_like_nested_section(node):
             return "section-block"
         return ""
@@ -403,7 +522,10 @@ class HugoGenerator:
         return bool(layout.get("use_flow_shell")) and len(node.get("children", [])) >= 2
 
     def _component_slug(self, node: dict[str, Any]) -> str:
-        return slugify(node.get("name") or node.get("dom_id") or node.get("id") or "component", "component")
+        return slugify(
+            node.get("name") or node.get("dom_id") or node.get("id") or "component",
+            "component",
+        )
 
     def _resolve_custom_component_partial(
         self,
@@ -441,7 +563,11 @@ class HugoGenerator:
             return {}
         return {str(path): str(file_hash) for path, file_hash in managed.items() if file_hash}
 
-    def _write_managed_manifest(self, output_path: Path, managed_hashes: dict[str, str]) -> list[Path]:
+    def _write_managed_manifest(
+        self,
+        output_path: Path,
+        managed_hashes: dict[str, str],
+    ) -> list[Path]:
         import json
 
         manifest_path = output_path / self._MANIFEST_RELATIVE_PATH

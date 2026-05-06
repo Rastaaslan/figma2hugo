@@ -1,5 +1,8 @@
 # Cahier Des Charges Responsive
 
+Suivi detaille du chantier :
+- `docs/responsive-memory-and-progress.md`
+
 ## Objectif
 
 Permettre a `figma2hugo` de fusionner plusieurs pages Figma d'une meme famille en une seule page web responsive, sans resize automatique cote moteur.
@@ -16,10 +19,23 @@ Le systeme vise :
 - des overrides CSS par breakpoint
 - des items additionnels autorises sur les petites largeurs
 - aucune transformation geometrique automatique des maquettes
+- une sortie finale strictement dans l'idiome Hugo
 
 Le systeme ne vise pas :
 - un resize ou une adaptation intelligente des positions
 - une reinterpretation automatique d'une seule maquette desktop en responsive complet
+- un runtime JS charge de reconstruire le layout responsive cote navigateur
+
+## Idiome Hugo
+
+Le responsive complet doit rester dans le pipeline Hugo standard :
+
+- une famille responsive donne une route Hugo finale normale
+- le front matter reste dans `content/`
+- les donnees fusionnees restent dans `data/`
+- le rendu reste porte par `layouts/` et `partials/`
+- le CSS responsive reste genere dans `assets/css/`
+- le JavaScript reste reserve aux interactions de composants
 
 ## Convention De Nom Des Pages
 
@@ -32,18 +48,33 @@ page-<slug>-<width>
 Exemples :
 - `page-accueil-1920`
 - `page-accueil-1280`
-- `page-accueil-768`
-- `page-accueil-390`
+- `page-accueil-834`
+- `page-accueil-402`
 
 La page finale fusionnee est :
 - `page-accueil`
+
+## Board Unique Supporte
+
+Le workflow supporte aussi un parent unique contenant plusieurs frames top-level nommees :
+
+- `page-accueil-1920`
+- `page-accueil-1280`
+- `page-accueil-834`
+- `page-accueil-402`
+
+Dans ce cas :
+
+- on peut fournir l'URL du parent unique
+- le moteur splitte automatiquement les frames top-level `page-*`
+- puis il relance le merge responsive normal
 
 ## Breakpoints Recommandes
 
 - `1920`
 - `1280`
-- `768`
-- `390`
+- `834`
+- `402`
 
 ## Regle De Fusion
 
@@ -68,7 +99,7 @@ section-hero
   image-hero
 ```
 
-Le moteur considere qu'il s'agit du meme bloc entre `1920`, `1280`, `768`, `390`.
+Le moteur considere qu'il s'agit du meme bloc entre `1920`, `1280`, `834`, `402`.
 
 ## Items Specifiques A Une Largeur
 
@@ -175,7 +206,7 @@ Le responsive est considere conforme si :
 ## Workflow Recommande
 
 1. construire la page desktop `1920`
-2. dupliquer en `1280`, `768`, `390`
+2. dupliquer en `1280`, `834`, `402`
 3. adapter la mise en page a la main dans Figma
 4. garder les noms stables pour les items communs
 5. nommer distinctement les items specifiques a une largeur

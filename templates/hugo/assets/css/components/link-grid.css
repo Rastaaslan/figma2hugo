@@ -1,6 +1,7 @@
 /* Style de base pour la matrice de cards cliquables.
    Sur desktop, on laisse le CSS de page issu de Figma conserver le dessin exact.
-   Les overrides ci-dessous prennent le relai uniquement sur tablette/mobile. */
+   Les overrides responsive restent volontairement a faible specificite afin
+   que les geometries Figma fixes gagnent quand elles existent. */
 
 a.content-node[data-link-card="true"] {
   display: block;
@@ -18,7 +19,7 @@ a.content-node[data-link-card="true"] {
 }
 
 @media (max-width: 1024px) {
-  .page .content-node[data-link-grid="true"] {
+  .page :where(.content-node[data-link-grid="true"]) {
     left: auto;
     top: auto;
     width: 100%;
@@ -29,7 +30,7 @@ a.content-node[data-link-card="true"] {
     gap: min(var(--layout-gap, var(--component-grid-gap, 48px)), 32px);
   }
 
-  .page .content-node[data-link-grid="true"] > .content-node {
+  .page :where(.content-node[data-link-grid="true"] > .content-node) {
     position: relative;
     left: auto;
     top: auto;
@@ -43,21 +44,21 @@ a.content-node[data-link-card="true"] {
     gap: min(var(--layout-gap, var(--component-grid-gap, 48px)), 32px);
   }
 
-  .page .content-node[data-link-grid="true"][data-layout-direction="row"] {
+  .page :where(.content-node[data-link-grid="true"][data-layout-direction="row"]) {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
     align-items: stretch;
     justify-items: center;
   }
 
-  .page .content-node[data-link-grid="true"][data-layout-direction="row"] > .content-node {
+  .page :where(.content-node[data-link-grid="true"][data-layout-direction="row"] > .content-node) {
     display: contents;
   }
 
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"],
-  .page .content-node[data-link-grid="true"] > [data-card="true"],
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"],
-  .page .content-node[data-link-grid="true"] > .content-node > [data-card="true"] {
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"]),
+  .page :where(.content-node[data-link-grid="true"] > [data-card="true"]),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"]),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-card="true"]) {
     position: relative;
     left: auto;
     top: auto;
@@ -76,44 +77,44 @@ a.content-node[data-link-card="true"] {
     overflow: hidden;
   }
 
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] img,
-  .page .content-node[data-link-grid="true"] > [data-card="true"] img,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] img,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-card="true"] img {
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] img),
+  .page :where(.content-node[data-link-grid="true"] > [data-card="true"] img),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] img),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-card="true"] img) {
     max-width: 100%;
   }
 
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > .content-text,
-  .page .content-node[data-link-grid="true"] > [data-card="true"] > .content-text,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > .content-text,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-card="true"] > .content-text,
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > .content-node,
-  .page .content-node[data-link-grid="true"] > [data-card="true"] > .content-node,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > .content-node,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-card="true"] > .content-node,
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > .content-asset,
-  .page .content-node[data-link-grid="true"] > [data-card="true"] > .content-asset,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > .content-asset,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-card="true"] > .content-asset {
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > .content-text),
+  .page :where(.content-node[data-link-grid="true"] > [data-card="true"] > .content-text),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > .content-text),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-card="true"] > .content-text),
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > .content-node),
+  .page :where(.content-node[data-link-grid="true"] > [data-card="true"] > .content-node),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > .content-node),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-card="true"] > .content-node),
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > .content-asset),
+  .page :where(.content-node[data-link-grid="true"] > [data-card="true"] > .content-asset),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > .content-asset),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-card="true"] > .content-asset) {
     position: relative;
     left: auto;
     top: auto;
     max-width: 100%;
   }
 
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > .content-text,
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > .content-node,
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > .content-asset,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > .content-text,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > .content-node,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > .content-asset {
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > .content-text),
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > .content-node),
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > .content-asset),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > .content-text),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > .content-node),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > .content-asset) {
     pointer-events: none;
   }
 
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > [data-purpose="background"],
-  .page .content-node[data-link-grid="true"] > [data-card="true"] > [data-purpose="background"],
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > [data-purpose="background"],
-  .page .content-node[data-link-grid="true"] > .content-node > [data-card="true"] > [data-purpose="background"] {
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > [data-purpose="background"]),
+  .page :where(.content-node[data-link-grid="true"] > [data-card="true"] > [data-purpose="background"]),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > [data-purpose="background"]),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-card="true"] > [data-purpose="background"]) {
     position: absolute;
     inset: 0;
     order: 0;
@@ -127,17 +128,17 @@ a.content-node[data-link-card="true"] {
     z-index: 0;
   }
 
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > :not([data-purpose="background"]),
-  .page .content-node[data-link-grid="true"] > [data-card="true"] > :not([data-purpose="background"]),
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > :not([data-purpose="background"]),
-  .page .content-node[data-link-grid="true"] > .content-node > [data-card="true"] > :not([data-purpose="background"]) {
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > :not([data-purpose="background"])),
+  .page :where(.content-node[data-link-grid="true"] > [data-card="true"] > :not([data-purpose="background"])),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > :not([data-purpose="background"])),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-card="true"] > :not([data-purpose="background"])) {
     z-index: 1;
   }
 
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > figure.content-asset,
-  .page .content-node[data-link-grid="true"] > [data-card="true"] > figure.content-asset,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > figure.content-asset,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-card="true"] > figure.content-asset {
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > figure.content-asset),
+  .page :where(.content-node[data-link-grid="true"] > [data-card="true"] > figure.content-asset),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > figure.content-asset),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-card="true"] > figure.content-asset) {
     order: 1;
     grid-column: 1;
     grid-row: 1;
@@ -146,39 +147,39 @@ a.content-node[data-link-card="true"] {
     margin: 0 auto;
   }
 
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > figure.content-asset img,
-  .page .content-node[data-link-grid="true"] > [data-card="true"] > figure.content-asset img,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > figure.content-asset img,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-card="true"] > figure.content-asset img {
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > figure.content-asset img),
+  .page :where(.content-node[data-link-grid="true"] > [data-card="true"] > figure.content-asset img),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > figure.content-asset img),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-card="true"] > figure.content-asset img) {
     width: 100%;
     height: auto;
     object-fit: contain;
   }
 
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > h1.content-text,
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > h2.content-text,
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > h3.content-text,
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > h4.content-text,
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > h5.content-text,
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > h6.content-text,
-  .page .content-node[data-link-grid="true"] > [data-card="true"] > h1.content-text,
-  .page .content-node[data-link-grid="true"] > [data-card="true"] > h2.content-text,
-  .page .content-node[data-link-grid="true"] > [data-card="true"] > h3.content-text,
-  .page .content-node[data-link-grid="true"] > [data-card="true"] > h4.content-text,
-  .page .content-node[data-link-grid="true"] > [data-card="true"] > h5.content-text,
-  .page .content-node[data-link-grid="true"] > [data-card="true"] > h6.content-text,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > h1.content-text,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > h2.content-text,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > h3.content-text,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > h4.content-text,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > h5.content-text,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > h6.content-text,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-card="true"] > h1.content-text,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-card="true"] > h2.content-text,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-card="true"] > h3.content-text,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-card="true"] > h4.content-text,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-card="true"] > h5.content-text,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-card="true"] > h6.content-text {
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > h1.content-text),
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > h2.content-text),
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > h3.content-text),
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > h4.content-text),
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > h5.content-text),
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > h6.content-text),
+  .page :where(.content-node[data-link-grid="true"] > [data-card="true"] > h1.content-text),
+  .page :where(.content-node[data-link-grid="true"] > [data-card="true"] > h2.content-text),
+  .page :where(.content-node[data-link-grid="true"] > [data-card="true"] > h3.content-text),
+  .page :where(.content-node[data-link-grid="true"] > [data-card="true"] > h4.content-text),
+  .page :where(.content-node[data-link-grid="true"] > [data-card="true"] > h5.content-text),
+  .page :where(.content-node[data-link-grid="true"] > [data-card="true"] > h6.content-text),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > h1.content-text),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > h2.content-text),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > h3.content-text),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > h4.content-text),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > h5.content-text),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > h6.content-text),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-card="true"] > h1.content-text),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-card="true"] > h2.content-text),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-card="true"] > h3.content-text),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-card="true"] > h4.content-text),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-card="true"] > h5.content-text),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-card="true"] > h6.content-text) {
     order: 2;
     width: 100%;
     height: auto;
@@ -188,10 +189,10 @@ a.content-node[data-link-card="true"] {
     text-align: center;
   }
 
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > p.content-text,
-  .page .content-node[data-link-grid="true"] > [data-card="true"] > p.content-text,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > p.content-text,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-card="true"] > p.content-text {
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > p.content-text),
+  .page :where(.content-node[data-link-grid="true"] > [data-card="true"] > p.content-text),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > p.content-text),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-card="true"] > p.content-text) {
     order: 3;
     width: 100%;
     height: auto;
@@ -201,8 +202,8 @@ a.content-node[data-link-card="true"] {
     text-align: center;
   }
 
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > p.content-text:first-of-type,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > p.content-text:first-of-type {
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > p.content-text:first-of-type),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > p.content-text:first-of-type) {
     font-size: clamp(0.72rem, 1.9vw, 0.92rem);
     font-weight: 700;
     font-style: italic;
@@ -210,8 +211,8 @@ a.content-node[data-link-card="true"] {
     color: #001c59;
   }
 
-  .page .content-node[data-link-grid="true"] > [data-link-card="true"] > p.content-text:last-of-type,
-  .page .content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > p.content-text:last-of-type {
+  .page :where(.content-node[data-link-grid="true"] > [data-link-card="true"] > p.content-text:last-of-type),
+  .page :where(.content-node[data-link-grid="true"] > .content-node > [data-link-card="true"] > p.content-text:last-of-type) {
     font-size: clamp(0.95rem, 2.1vw, 1.2rem);
     font-weight: 300;
     font-style: italic;
@@ -223,13 +224,13 @@ a.content-node[data-link-card="true"] {
 }
 
 @media (max-width: 900px) {
-  .page .content-node[data-link-grid="true"],
-  .page .content-node[data-link-grid="true"] > .content-node,
-  .page .content-node[data-link-grid="true"][data-layout-direction="row"] {
+  .page :where(.content-node[data-link-grid="true"]),
+  .page :where(.content-node[data-link-grid="true"] > .content-node),
+  .page :where(.content-node[data-link-grid="true"][data-layout-direction="row"]) {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .page .content-node[data-link-grid="true"] {
+  .page :where(.content-node[data-link-grid="true"]) {
     gap: min(var(--layout-gap, var(--component-grid-gap, 48px)), 24px);
   }
 }

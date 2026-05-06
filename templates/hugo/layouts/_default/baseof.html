@@ -11,34 +11,21 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ $pageTitle }}</title>
-    {{- $siteStylesheet := resources.Get "css/site.css" -}}
-    {{- with $siteStylesheet -}}
-    {{- $compiled := . | minify | fingerprint -}}
-    <link rel="stylesheet" href="{{ $compiled.RelPermalink }}">
-    {{- end -}}
-    {{- with resources.Get "css/components/link-grid.css" -}}
-      {{- $compiled := . | minify | fingerprint -}}
-    <link rel="stylesheet" href="{{ $compiled.RelPermalink }}">
-    {{- end -}}
-    {{- with resources.Get "css/components/accordion.css" -}}
-      {{- $compiled := . | minify | fingerprint -}}
-    <link rel="stylesheet" href="{{ $compiled.RelPermalink }}">
-    {{- end -}}
-    {{- with resources.Get "css/components/carousel.css" -}}
-      {{- $compiled := . | minify | fingerprint -}}
-    <link rel="stylesheet" href="{{ $compiled.RelPermalink }}">
-    {{- end -}}
-    {{- with resources.Get "css/components/form.css" -}}
-      {{- $compiled := . | minify | fingerprint -}}
-    <link rel="stylesheet" href="{{ $compiled.RelPermalink }}">
-    {{- end -}}
-    {{- with resources.Get "css/components/section-block.css" -}}
-      {{- $compiled := . | minify | fingerprint -}}
-    <link rel="stylesheet" href="{{ $compiled.RelPermalink }}">
-    {{- end -}}
+    {{- $stylesheets := slice
+      "css/site.css"
+      "css/components/link-grid.css"
+      "css/components/component-list.css"
+      "css/components/accordion.css"
+      "css/components/carousel.css"
+      "css/components/form.css"
+      "css/components/section-block.css"
+    -}}
     {{- with .Params.stylesheet -}}
+      {{- $stylesheets = $stylesheets | append . -}}
+    {{- end -}}
+    {{- range $stylesheets -}}
       {{- with resources.Get . -}}
-      {{- $compiled := . | minify | fingerprint -}}
+        {{- $compiled := . | minify | fingerprint -}}
     <link rel="stylesheet" href="{{ $compiled.RelPermalink }}">
       {{- end -}}
     {{- end -}}
@@ -59,20 +46,28 @@
       {{- end -}}
     {{- end -}}
   {{- end -}}
-  <body
-    class="page{{ with $pageSlug }} page--{{ . }}{{ else }} page--site-home{{ end }}"
-    data-page-shell="{{ $pageShell }}"
-    data-page-layout-strategy="{{ $pageLayoutStrategy }}"
-    data-page-flow="{{ $pageFlow }}"
-  >
-    {{- block "site-header" . }}{{- end }}
-    <main class="page-main">
-      {{- block "main" . }}{{- end }}
-    </main>
-    {{- block "site-footer" . }}{{- end }}
-    {{- with resources.Get "js/accordion.js" -}}
-      {{- $compiled := . | minify | fingerprint -}}
+  <body>
+    <div class="page-shell" data-page-shell="{{ $pageShell }}">
+      <div class="page-shell__viewport">
+        <div
+          class="page{{ with $pageSlug }} page--{{ . }}{{ else }} page--site-home{{ end }}"
+          data-page-shell="{{ $pageShell }}"
+          data-page-layout-strategy="{{ $pageLayoutStrategy }}"
+          data-page-flow="{{ $pageFlow }}"
+        >
+          {{- block "site-header" . }}{{- end }}
+          <main class="page-main">
+            {{- block "main" . }}{{- end }}
+          </main>
+          {{- block "site-footer" . }}{{- end }}
+        </div>
+      </div>
+    </div>
+    {{- range slice "js/accordion.js" "js/page-shell.js" -}}
+      {{- with resources.Get . -}}
+        {{- $compiled := . | minify | fingerprint -}}
     <script src="{{ $compiled.RelPermalink }}" defer></script>
+      {{- end -}}
     {{- end -}}
   </body>
 </html>

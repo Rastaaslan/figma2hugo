@@ -4,7 +4,7 @@
   position: relative;
 }
 
-[data-accordion="true"][data-layout-flow="true"] {
+:where([data-accordion="true"][data-layout-flow="true"]) {
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -17,7 +17,7 @@
   border-bottom: 1px solid rgba(23, 23, 23, 0.12);
 }
 
-[data-accordion-item="true"][data-layout-flow="true"] {
+:where([data-accordion-item="true"][data-layout-flow="true"]) {
   position: relative;
   left: auto;
   top: auto;
@@ -32,10 +32,10 @@ button.content-node[data-accordion-trigger="true"] {
   cursor: pointer;
 }
 
-[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"],
-[data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"],
-button.content-node[data-accordion-trigger="true"][data-layout-flow="true"],
-[data-accordion-panel="true"][data-layout-flow="true"] {
+:where([data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"]),
+:where([data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"]),
+:where(button.content-node[data-accordion-trigger="true"][data-layout-flow="true"]),
+:where([data-accordion-panel="true"][data-layout-flow="true"]) {
   position: relative;
   left: auto;
   top: auto;
@@ -43,18 +43,24 @@ button.content-node[data-accordion-trigger="true"][data-layout-flow="true"],
   height: auto;
 }
 
-[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"] > .content-node,
-[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"] > .content-text,
-[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"] > .content-asset,
-[data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"] > .content-node,
-[data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"] > .content-text,
-[data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"] > .content-asset,
-button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > .content-node,
-button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > .content-text,
-button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > .content-asset,
-[data-accordion-panel="true"][data-layout-flow="true"] > .content-node,
-[data-accordion-panel="true"][data-layout-flow="true"] > .content-text,
-[data-accordion-panel="true"][data-layout-flow="true"] > .content-asset {
+:where([data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"]),
+:where(button.content-node[data-accordion-trigger="true"][data-layout-flow="true"]) {
+  aspect-ratio: var(--layout-aspect-ratio, auto);
+  min-height: 1px;
+}
+
+:where([data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"] > .content-node),
+:where([data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"] > .content-text),
+:where([data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"] > .content-asset),
+:where([data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"] > .content-node),
+:where([data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"] > .content-text),
+:where([data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"] > .content-asset),
+:where(button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > .content-node),
+:where(button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > .content-text),
+:where(button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > .content-asset),
+:where([data-accordion-panel="true"][data-layout-flow="true"] > .content-node),
+:where([data-accordion-panel="true"][data-layout-flow="true"] > .content-text),
+:where([data-accordion-panel="true"][data-layout-flow="true"] > .content-asset) {
   position: relative;
   left: auto;
   top: auto;
@@ -63,15 +69,15 @@ button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > .c
   height: auto;
 }
 
-[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"],
-[data-accordion-panel="true"][data-layout-flow="true"] {
+:where([data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"]),
+:where([data-accordion-panel="true"][data-layout-flow="true"]) {
   min-width: 0;
 }
 
-[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"] > [data-purpose="background"],
-[data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"] > [data-purpose="background"],
-button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > [data-purpose="background"],
-[data-accordion-panel="true"][data-layout-flow="true"] > [data-purpose="background"] {
+:where([data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"] > [data-purpose="background"]),
+:where([data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"] > [data-purpose="background"]),
+:where(button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > [data-purpose="background"]),
+:where([data-accordion-panel="true"][data-layout-flow="true"] > [data-purpose="background"]) {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -80,31 +86,31 @@ button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > [d
   z-index: 0;
 }
 
-[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"] > :not([data-purpose="background"]),
-[data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"] > :not([data-purpose="background"]),
-button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > :not([data-purpose="background"]),
-[data-accordion-panel="true"][data-layout-flow="true"] > :not([data-purpose="background"]) {
+:where([data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"] > :not([data-purpose="background"])),
+:where([data-accordion-item="true"][data-layout-flow="true"] > [data-accordion-panel="true"] > :not([data-purpose="background"])),
+:where(button.content-node[data-accordion-trigger="true"][data-layout-flow="true"] > :not([data-purpose="background"])),
+:where([data-accordion-panel="true"][data-layout-flow="true"] > :not([data-purpose="background"])) {
   z-index: 1;
 }
 
 /* Quand un trigger contient une icone, on lui redonne une vraie ligne
    texte + icone au lieu de laisser la source HTML absolue s'empiler. */
-[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"]:has(> .content-asset[data-purpose="icon"]),
-button.content-node[data-accordion-trigger="true"][data-layout-flow="true"]:has(> .content-asset[data-purpose="icon"]) {
+:where([data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"]:has(> .content-asset[data-purpose="icon"])),
+:where(button.content-node[data-accordion-trigger="true"][data-layout-flow="true"]:has(> .content-asset[data-purpose="icon"])) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   column-gap: 24px;
 }
 
-[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"]:has(> .content-asset[data-purpose="icon"]) > .content-text,
-button.content-node[data-accordion-trigger="true"][data-layout-flow="true"]:has(> .content-asset[data-purpose="icon"]) > .content-text {
+:where([data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"]:has(> .content-asset[data-purpose="icon"]) > .content-text),
+:where(button.content-node[data-accordion-trigger="true"][data-layout-flow="true"]:has(> .content-asset[data-purpose="icon"]) > .content-text) {
   grid-column: 1;
   min-width: 0;
 }
 
-[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"]:has(> .content-asset[data-purpose="icon"]) > .content-asset[data-purpose="icon"],
-button.content-node[data-accordion-trigger="true"][data-layout-flow="true"]:has(> .content-asset[data-purpose="icon"]) > .content-asset[data-purpose="icon"] {
+:where([data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"]:has(> .content-asset[data-purpose="icon"]) > .content-asset[data-purpose="icon"]),
+:where(button.content-node[data-accordion-trigger="true"][data-layout-flow="true"]:has(> .content-asset[data-purpose="icon"]) > .content-asset[data-purpose="icon"]) {
   grid-column: 2;
   justify-self: end;
   align-self: center;
@@ -113,8 +119,8 @@ button.content-node[data-accordion-trigger="true"][data-layout-flow="true"]:has(
   height: auto;
 }
 
-[data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"]:has(> .content-asset[data-purpose="icon"]) > .content-asset[data-purpose="icon"] img,
-button.content-node[data-accordion-trigger="true"][data-layout-flow="true"]:has(> .content-asset[data-purpose="icon"]) > .content-asset[data-purpose="icon"] img {
+:where([data-accordion-item="true"][data-layout-flow="true"] > button.content-node[data-accordion-trigger="true"]:has(> .content-asset[data-purpose="icon"]) > .content-asset[data-purpose="icon"] img),
+:where(button.content-node[data-accordion-trigger="true"][data-layout-flow="true"]:has(> .content-asset[data-purpose="icon"]) > .content-asset[data-purpose="icon"] img) {
   width: auto;
   height: auto;
   max-width: 100%;

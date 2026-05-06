@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-
 SECTION_LIKE_TYPES = {"FRAME", "SECTION", "GROUP", "INSTANCE", "COMPONENT", "COMPONENT_SET"}
 SECTION_NAME_HINTS = ("hero", "header", "footer", "section", "feature", "contact", "nav", "menu")
 
@@ -29,7 +28,6 @@ class SectionCandidate:
 class LayoutAnalyzer:
     def identify_sections(self, root_node: dict[str, Any]) -> list[SectionCandidate]:
         analysis_root = self._unwrap_single_section_wrapper(root_node)
-        wrapper_chain_ids = self._wrapper_chain_ids(root_node, analysis_root)
         visible_children = [
             child
             for child in analysis_root.get("children", [])

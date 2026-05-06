@@ -14,6 +14,8 @@ figma2hugo.local.json
 .figma2hugo-debug/
 .figma2hugo-tmp/
 figma-extract/
-/tmp-*/
-/tmp-*.png
-/tmp-*.webp
+/repro*/
+/tmp*/
+/tmp*.png
+/tmp*.txt
+/tmp*.webp

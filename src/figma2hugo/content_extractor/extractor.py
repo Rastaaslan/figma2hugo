@@ -6,7 +6,6 @@ from typing import Any
 
 from figma2hugo.layout_analyzer.analyzer import SectionCandidate
 
-
 TEXT_TYPES = {"TEXT"}
 VECTOR_TYPES = {"VECTOR", "LINE", "STAR", "ELLIPSE", "POLYGON", "BOOLEAN_OPERATION"}
 IMAGE_HOST_TYPES = {"RECTANGLE", "FRAME", "INSTANCE", "COMPONENT"}
@@ -96,6 +95,7 @@ class ContentExtractor:
         image_fill_urls: dict[str, str],
         unsupported_types: set[str],
         inherited_function: str | None = None,
+        parent_node: dict[str, Any] | None = None,
     ) -> None:
         if not node.get("visible", True):
             return
@@ -107,7 +107,7 @@ class ContentExtractor:
                 assets.append(composite_section_asset)
                 return
         if node_type in TEXT_TYPES:
-            text_payload = self._text_payload(section, node)
+            text_payload = self._text_payload(section, node, parent_node=parent_node)
             texts[text_payload["id"]] = text_payload
             return
 
@@ -132,24 +132,38 @@ class ContentExtractor:
                 image_fill_urls,
                 unsupported_types,
                 inherited_function=child_function,
+                parent_node=node,
             )
 
         if self._should_warn_unsupported_node(node):
             unsupported_types.add(str(node.get("type") or "<unknown>"))
 
-    def _text_payload(self, section: SectionCandidate, node: dict[str, Any]) -> dict[str, Any]:
+    def _text_payload(
+        self,
+        section: SectionCandidate,
+        node: dict[str, Any],
+        *,
+        parent_node: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         text_id = node.get("id", "")
         characters = node.get("characters") or ""
         style = node.get("style") or {}
         bounds = self._relative_bounds(section, node)
         render_bounds = self._relative_render_bounds(section, node)
         tag = self._guess_text_tag(node)
+        parent_id = ""
+        parent_name = ""
+        if isinstance(parent_node, dict):
+            parent_id = str(parent_node.get("id") or "")
+            parent_name = str(parent_node.get("name") or parent_id)
         return {
             "id": text_id,
             "name": node.get("name") or text_id,
             "value": characters,
             "rawValue": characters,
             "sectionId": section.id,
+            "parentId": parent_id,
+            "parentName": parent_name,
             "bounds": bounds,
             "renderBounds": render_bounds,
             "styleRuns": self._style_runs(node),
@@ -346,23 +360,6 @@ class ContentExtractor:
                 elif "font" in lower_key or "type" in lower_key or "text" in lower_key:
                     tokens["typography"][key] = value
 
-        for text in texts:
-            font_size = text.get("style", {}).get("fontSize")
-            font_family = text.get("style", {}).get("fontFamily")
-            if font_size is not None or font_family:
-                token_key = f"{font_family or 'font'}-{font_size or 'default'}"
-                tokens["typography"][token_key] = {
-                    "fontFamily": font_family,
-                    "fontSize": font_size,
-                    "lineHeight": text.get("style", {}).get("lineHeight"),
-                }
-
-        for asset in assets:
-            bounds = asset.get("bounds", {})
-            width = bounds.get("width", 0)
-            if width:
-                tokens["spacing"].setdefault(f"asset-width-{int(width)}", width)
-
         return tokens
 
     def _guess_text_tag(self, node: dict[str, Any]) -> str:
@@ -453,14 +450,15 @@ class ContentExtractor:
         )
 
     def _merge_paragraph_line_clusters(self, texts: dict[str, dict[str, Any]]) -> None:
-        texts_by_section: dict[str, list[dict[str, Any]]] = {}
+        texts_by_scope: dict[tuple[str, str], list[dict[str, Any]]] = {}
         for text in texts.values():
             section_id = str(text.get("sectionId") or "")
-            texts_by_section.setdefault(section_id, []).append(text)
+            parent_id = str(text.get("parentId") or "")
+            texts_by_scope.setdefault((section_id, parent_id), []).append(text)
 
-        for section_texts in texts_by_section.values():
+        for scoped_texts in texts_by_scope.values():
             buckets: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
-            for text in section_texts:
+            for text in scoped_texts:
                 if not self._is_paragraph_line_candidate(text):
                     continue
                 buckets.setdefault(self._paragraph_line_bucket_key(text), []).append(text)

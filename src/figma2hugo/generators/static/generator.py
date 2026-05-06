@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -15,42 +16,99 @@ from .._shared import (
     CanonicalModelBuilder,
     GenerationArtifacts,
     copy_assets,
+    ensure_asset_output_directory,
     ensure_directory,
     ensure_text,
     locate_templates_root,
     read_template_text,
+    write_generation_report,
     write_json_file,
     write_text_file,
 )
 from ..css import CssGenerator
 
 
+@dataclass(slots=True)
+class _StaticPageBundle:
+    page_data: dict[str, Any]
+    html_output: str
+    css_output: str
+
+
 class StaticGenerator:
+    _HEADER_TAGS = {"header", "nav"}
+    _BODY_EXCLUDED_TAGS = {"header", "nav", "footer"}
+
     def __init__(self) -> None:
         self._builder = CanonicalModelBuilder(mode="static")
         self._css_generator = CssGenerator()
 
-    def generate(self, model: Any, output_dir: str | Path, report: dict[str, Any] | None = None) -> GenerationArtifacts:
+    def generate(
+        self,
+        model: Any,
+        output_dir: str | Path,
+        report: dict[str, Any] | None = None,
+    ) -> GenerationArtifacts:
         output_path = Path(output_dir)
         ensure_directory(output_path)
+        bundle = self._prepare_static_page_bundle(model)
+        written_files = self._write_static_bundle(
+            output_path=output_path,
+            page_data=bundle.page_data,
+            html_output=bundle.html_output,
+            css_output=bundle.css_output,
+            report=report,
+        )
+        return GenerationArtifacts(
+            output_dir=output_path,
+            written_files=tuple(written_files),
+            page_data=bundle.page_data,
+        )
+
+    def _prepare_static_page_bundle(self, model: Any) -> _StaticPageBundle:
         page_data = self._builder.build(model)
+        context = self._build_context(page_data)
+        return _StaticPageBundle(
+            page_data=page_data,
+            html_output=self._render_page(context),
+            css_output=self._css_generator.generate(page_data),
+        )
+
+    def _build_context(self, page_data: dict[str, Any]) -> dict[str, Any]:
+        sections = page_data["sections"]
         context = {
             "page": page_data["page"],
-            "sections": page_data["sections"],
-            "header_sections": [section for section in page_data["sections"] if section["tag"] in {"header", "nav"}],
-            "body_sections": [
-                section for section in page_data["sections"] if section["tag"] not in {"header", "nav", "footer"}
+            "sections": sections,
+            "header_sections": [
+                section for section in sections if section["tag"] in self._HEADER_TAGS
             ],
-            "footer_sections": [section for section in page_data["sections"] if section["tag"] == "footer"],
+            "body_sections": [
+                section for section in sections if section["tag"] not in self._BODY_EXCLUDED_TAGS
+            ],
+            "footer_sections": [
+                section for section in sections if section["tag"] == "footer"
+            ],
             "warnings": page_data["warnings"],
         }
+        return context
+
+    def _render_page(self, context: dict[str, Any]) -> str:
         environment = self._environment()
-        html_output = (
+        return (
             environment.get_template("index.html.j2").render(**context)
             if environment is not None
             else self._render_without_jinja(context)
         )
-        css_output = self._css_generator.generate(page_data)
+
+    def _write_static_bundle(
+        self,
+        *,
+        output_path: Path,
+        page_data: dict[str, Any],
+        html_output: str,
+        css_output: str,
+        report: dict[str, Any] | None,
+    ) -> list[Path]:
         written_files = [
             write_text_file(output_path / "index.html", html_output),
             write_text_file(output_path / "styles.css", css_output),
@@ -58,11 +116,9 @@ class StaticGenerator:
             write_json_file(output_path / "page.json", page_data),
         ]
         written_files.extend(copy_assets(page_data, output_path, mode="static"))
-        if report is not None:
-            written_files.append(write_json_file(output_path / "report.json", report))
-        if page_data["assets"]:
-            ensure_directory(output_path / "images")
-        return GenerationArtifacts(output_dir=output_path, written_files=tuple(written_files), page_data=page_data)
+        written_files.extend(write_generation_report(output_path, report))
+        ensure_asset_output_directory(output_path, page_data, mode="static")
+        return written_files
 
     def _environment(self) -> Environment | None:
         if Environment is None or FileSystemLoader is None or select_autoescape is None:
@@ -70,7 +126,10 @@ class StaticGenerator:
         templates_dir = locate_templates_root() / "static"
         return Environment(
             loader=FileSystemLoader(str(templates_dir)),
-            autoescape=select_autoescape(enabled_extensions=("html", "htm", "xml", "j2"), default=True),
+            autoescape=select_autoescape(
+                enabled_extensions=("html", "htm", "xml", "j2"),
+                default=True,
+            ),
             trim_blocks=True,
             lstrip_blocks=True,
         )
@@ -101,8 +160,14 @@ class StaticGenerator:
 
     def _render_section(self, section: dict[str, Any], *, indent: str) -> list[str]:
         section_attrs = self._render_attributes(section.get("attributes", {}))
+        escaped_anchor = html.escape(section["anchor"])
+        escaped_class_name = html.escape(section["class_name"])
+        opening_tag = (
+            f'{indent}<{section["tag"]} id="{escaped_anchor}" '
+            f'class="page-section {escaped_class_name}"{section_attrs}>'
+        )
         lines = [
-            f'{indent}<{section["tag"]} id="{html.escape(section["anchor"])}" class="page-section {html.escape(section["class_name"])}"{section_attrs}>',
+            opening_tag,
             f'{indent}  <div class="page-section__inner">',
         ]
         for node in section["children"]:
@@ -116,15 +181,16 @@ class StaticGenerator:
             return self._render_text(node["text"], indent=indent)
         if kind == "asset":
             return self._render_asset(node["asset"], indent=indent)
-        if ensure_text(node.get("role")).strip().lower() == "field" and node.get("form_control"):
+        if self._node_role(node) == "field" and node.get("form_control"):
             return self._render_field_node(node, indent=indent)
         attrs = self._render_attributes(node.get("attributes", {}))
         wrapper_attrs = self._render_attributes(
-            self._node_wrapper_attributes(node, class_name=f'content-node {node["class_name"]}')
+            self._node_wrapper_attributes(
+                node,
+                class_name=f'content-node {node["class_name"]}',
+            )
         )
-        lines = [
-            f'{indent}<{node["tag"]}{wrapper_attrs}{attrs}>'
-        ]
+        lines = [f'{indent}<{node["tag"]}{wrapper_attrs}{attrs}>']
         for child in self._ordered_markup_children(node):
             lines.extend(self._render_node(child, indent=f"{indent}  "))
         lines.append(f"{indent}</{node['tag']}>")
@@ -133,7 +199,10 @@ class StaticGenerator:
     def _render_field_node(self, node: dict[str, Any], *, indent: str) -> list[str]:
         attrs = self._render_attributes(node.get("attributes", {}))
         wrapper_attrs = self._render_attributes(
-            self._node_wrapper_attributes(node, class_name=f'content-node {node["class_name"]}')
+            self._node_wrapper_attributes(
+                node,
+                class_name=f'content-node {node["class_name"]}',
+            )
         )
         lines = [f'{indent}<{node["tag"]}{wrapper_attrs}{attrs}>']
         for child in self._ordered_markup_children(node):
@@ -146,18 +215,18 @@ class StaticGenerator:
 
     def _ordered_markup_children(self, node: dict[str, Any]) -> list[dict[str, Any]]:
         children = list(node.get("children", []))
-        if ensure_text(node.get("role")).strip().lower() != "accordion-item":
+        if self._node_role(node) != "accordion-item":
             return children
         trigger_children = [
-            child for child in children if ensure_text(child.get("role")).strip().lower() == "accordion-trigger"
+            child for child in children if self._node_role(child) == "accordion-trigger"
         ]
         panel_children = [
-            child for child in children if ensure_text(child.get("role")).strip().lower() == "accordion-panel"
+            child for child in children if self._node_role(child) == "accordion-panel"
         ]
         other_children = [
             child
             for child in children
-            if ensure_text(child.get("role")).strip().lower() not in {"accordion-trigger", "accordion-panel"}
+            if self._node_role(child) not in {"accordion-trigger", "accordion-panel"}
         ]
         return [*trigger_children, *panel_children, *other_children]
 
@@ -170,7 +239,10 @@ class StaticGenerator:
         else:
             content = text_item["html"]
         wrapper_attrs = self._render_attributes(
-            self._node_wrapper_attributes(text_item, class_name=f'content-text {text_item["class_name"]}')
+            self._node_wrapper_attributes(
+                text_item,
+                class_name=f'content-text {text_item["class_name"]}',
+            )
         )
         return [
             f'{indent}<{text_item["tag"]}{wrapper_attrs}{attrs}>{content}</{text_item["tag"]}>'
@@ -197,7 +269,8 @@ class StaticGenerator:
                 else ""
             )
             rendered_segments.append(
-                f'<span class="{html.escape(segment["class_name"])}"{style_attr}>{segment["html"]}</span>'
+                f'<span class="{html.escape(segment["class_name"])}"{style_attr}>'
+                f'{segment["html"]}</span>'
             )
         return "".join(rendered_segments)
 
@@ -217,7 +290,11 @@ class StaticGenerator:
         if asset.get("aria_hidden"):
             wrapper_attributes["aria-hidden"] = "true"
             wrapper_attributes["role"] = "presentation"
-        if purpose == "background" and asset.get("render_mode") != "shape" and asset.get("format") != "shape":
+        if (
+            purpose == "background"
+            and asset.get("render_mode") != "shape"
+            and asset.get("format") != "shape"
+        ):
             wrapper_attributes["style"] = f"background-image: url('{asset['public_path']}');"
         wrapper_attrs = self._render_attributes(
             {
@@ -266,29 +343,46 @@ class StaticGenerator:
             )
         if control.get("tag") == "select":
             options = "".join(
-                f'<option value="{html.escape(str(option.get("value", "")), quote=True)}"'
-                f'{" selected=\"selected\"" if option.get("selected") else ""}>'
-                f'{html.escape(str(option.get("label", "")))}</option>'
+                self._render_select_option(option)
                 for option in control.get("options", [])
             )
             return f'<select{self._render_attributes(attrs)}>{options}</select>'
         return f'<input{self._render_attributes(attrs)}>'
+
+    def _render_select_option(self, option: dict[str, Any]) -> str:
+        value = html.escape(str(option.get("value", "")), quote=True)
+        label = html.escape(str(option.get("label", "")))
+        selected = ' selected="selected"' if option.get("selected") else ""
+        return f'<option value="{value}"{selected}>{label}</option>'
 
     def _render_attributes(self, attributes: dict[str, Any]) -> str:
         rendered = []
         for name, value in attributes.items():
             if value in (None, ""):
                 continue
-            rendered.append(f' {html.escape(str(name))}="{html.escape(str(value), quote=True)}"')
+            rendered.append(
+                f' {html.escape(str(name))}="{html.escape(str(value), quote=True)}"'
+            )
         return "".join(rendered)
 
-    def _node_wrapper_attributes(self, item: dict[str, Any], *, class_name: str) -> dict[str, Any]:
-        attributes: dict[str, Any] = {"id": item.get("dom_id") or item.get("id"), "class": class_name}
+    def _node_wrapper_attributes(
+        self,
+        item: dict[str, Any],
+        *,
+        class_name: str,
+    ) -> dict[str, Any]:
+        attributes: dict[str, Any] = {
+            "id": item.get("dom_id") or item.get("id"),
+            "class": class_name,
+        }
         source_id = item.get("id")
         dom_id = item.get("dom_id")
         if source_id and dom_id and source_id != dom_id:
             attributes["data-node-id"] = source_id
         return attributes
+
+    def _node_role(self, node: dict[str, Any]) -> str:
+        return ensure_text(node.get("role")).strip().lower()
 
     def _accordion_script(self) -> str:
         return read_template_text("shared", "accordion.js")

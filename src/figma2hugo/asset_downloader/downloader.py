@@ -9,7 +9,6 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from figma2hugo.figma_reader.rest_client import FigmaRestClient, FigmaRestError
 
-
 SAFE_NAME_RE = re.compile(r"[^a-zA-Z0-9._-]+")
 
 

@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from figma2hugo.content_extractor import ContentExtractor
@@ -1610,3 +1609,149 @@ def test_extract_normalizes_segment_line_height_overrides() -> None:
     assert runs[1]["style"]["lineHeight"] == 18.75
     assert runs[0]["style"]["fontFamily"] == "Roboto"
     assert runs[1]["style"]["fontWeight"] == 500
+
+
+def test_extract_tokens_keeps_only_explicit_meta_tokens() -> None:
+    tokens = ContentExtractor()._extract_tokens(
+        {
+            "meta": {
+                "Brand Color": {"value": "#1434cb"},
+                "Section Gap": {"value": "96px"},
+                "Body Font": {
+                    "fontFamily": "Inter",
+                    "fontSize": 16.1151065826416,
+                    "lineHeight": 24.037559509277344,
+                },
+            }
+        },
+        texts=[
+            {
+                "style": {
+                    "fontFamily": "Inter",
+                    "fontSize": 16.1151065826416,
+                    "lineHeight": 24.037559509277344,
+                }
+            }
+        ],
+        assets=[{"bounds": {"width": 320}}],
+    )
+
+    assert tokens["colors"] == {"Brand Color": {"value": "#1434cb"}}
+    assert tokens["spacing"] == {"Section Gap": {"value": "96px"}}
+    assert tokens["typography"] == {
+        "Body Font": {
+            "fontFamily": "Inter",
+            "fontSize": 16.1151065826416,
+            "lineHeight": 24.037559509277344,
+        }
+    }
+
+
+def test_extract_merges_paragraph_lines_within_the_same_card_only() -> None:
+    section_node = {
+        "id": "mentions",
+        "name": "Mentions",
+        "type": "FRAME",
+        "visible": True,
+        "absoluteBoundingBox": {"x": 0, "y": 0, "width": 402, "height": 420},
+        "children": [
+            {
+                "id": "card-1",
+                "name": "card-v-infos-1",
+                "type": "FRAME",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 40, "y": 40, "width": 320, "height": 110},
+                "children": [
+                    {
+                        "id": "card-1-title",
+                        "name": "titre-h4-infos",
+                        "type": "TEXT",
+                        "visible": True,
+                        "characters": "H3 - Informations générales",
+                        "style": {"fontFamily": "Inter", "fontSize": 16, "fontWeight": 700, "lineHeightPx": 18},
+                        "absoluteBoundingBox": {"x": 40, "y": 40, "width": 300, "height": 18},
+                    },
+                    {
+                        "id": "card-1-copy-1",
+                        "name": "texte-infos",
+                        "type": "TEXT",
+                        "visible": True,
+                        "characters": "Le site internet est la propriété exclusive,",
+                        "style": {"fontFamily": "Inter", "fontSize": 10, "fontWeight": 400, "lineHeightPx": 12},
+                        "absoluteBoundingBox": {"x": 40, "y": 72, "width": 300, "height": 12},
+                    },
+                    {
+                        "id": "card-1-copy-2",
+                        "name": "texte-infos",
+                        "type": "TEXT",
+                        "visible": True,
+                        "characters": "coordonnées du propriétaire disponibles ici.",
+                        "style": {"fontFamily": "Inter", "fontSize": 10, "fontWeight": 400, "lineHeightPx": 12},
+                        "absoluteBoundingBox": {"x": 40, "y": 88, "width": 300, "height": 12},
+                    },
+                ],
+            },
+            {
+                "id": "card-2",
+                "name": "card-v-infos-2",
+                "type": "FRAME",
+                "visible": True,
+                "absoluteBoundingBox": {"x": 40, "y": 180, "width": 320, "height": 110},
+                "children": [
+                    {
+                        "id": "card-2-title",
+                        "name": "titre-h4-infos",
+                        "type": "TEXT",
+                        "visible": True,
+                        "characters": "H3 - Contenu du site",
+                        "style": {"fontFamily": "Inter", "fontSize": 16, "fontWeight": 700, "lineHeightPx": 18},
+                        "absoluteBoundingBox": {"x": 40, "y": 180, "width": 300, "height": 18},
+                    },
+                    {
+                        "id": "card-2-copy-1",
+                        "name": "texte-infos",
+                        "type": "TEXT",
+                        "visible": True,
+                        "characters": "Le site internet est édité par la société,",
+                        "style": {"fontFamily": "Inter", "fontSize": 10, "fontWeight": 400, "lineHeightPx": 12},
+                        "absoluteBoundingBox": {"x": 40, "y": 212, "width": 300, "height": 12},
+                    },
+                    {
+                        "id": "card-2-copy-2",
+                        "name": "texte-infos",
+                        "type": "TEXT",
+                        "visible": True,
+                        "characters": "consultation du site soumise aux conditions.",
+                        "style": {"fontFamily": "Inter", "fontSize": 10, "fontWeight": 400, "lineHeightPx": 12},
+                        "absoluteBoundingBox": {"x": 40, "y": 228, "width": 300, "height": 12},
+                    },
+                ],
+            },
+        ],
+    }
+    section = SectionCandidate(
+        id="mentions",
+        name="Mentions",
+        role="section",
+        node=section_node,
+        bounds={"x": 0.0, "y": 0.0, "width": 402.0, "height": 420.0},
+    )
+
+    result = ContentExtractor().extract([section], image_fill_urls={})
+
+    body_texts = sorted(
+        [text for text in result.texts.values() if text.get("role") == "body"],
+        key=lambda text: float((text.get("bounds") or {}).get("y", 0.0)),
+    )
+    assert len(body_texts) == 2
+    assert body_texts[0]["parentId"] == "card-1"
+    assert body_texts[0]["value"] == (
+        "Le site internet est la propriété exclusive,\n"
+        "coordonnées du propriétaire disponibles ici."
+    )
+    assert "édité par la société" not in body_texts[0]["value"]
+    assert body_texts[1]["parentId"] == "card-2"
+    assert body_texts[1]["value"] == (
+        "Le site internet est édité par la société,\n"
+        "consultation du site soumise aux conditions."
+    )

@@ -18,6 +18,11 @@ from figma2hugo.model import (
     SectionNode,
     TextNode,
     TextStyleRun,
+    intermediate_document_name,
+    intermediate_document_names,
+    intermediate_document_width,
+    serialize_intermediate_payload,
+    validate_intermediate_payload,
 )
 
 
@@ -28,7 +33,11 @@ def test_intermediate_document_serializes_with_aliases() -> None:
             name="Landing Page",
             width=1920,
             height=7422,
-            layout=LayoutMetadata(layout_mode="VERTICAL", item_spacing=48, inferred_strategy="flow"),
+            layout=LayoutMetadata(
+                layout_mode="VERTICAL",
+                item_spacing=48,
+                inferred_strategy="flow",
+            ),
             meta={"figmaUrl": "https://www.figma.com/design/FILE/Page?node-id=3-964"},
         ),
         sections=[
@@ -46,7 +55,13 @@ def test_intermediate_document_serializes_with_aliases() -> None:
                 id="text-1",
                 value="Hello world",
                 section_id="section-hero",
-                style_runs=[TextStyleRun(start=0, end=5, style={"fontFamily": "Inter", "fontSize": 16})],
+                style_runs=[
+                    TextStyleRun(
+                        start=0,
+                        end=5,
+                        style={"fontFamily": "Inter", "fontSize": 16},
+                    )
+                ],
                 layout=LayoutMetadata(text_auto_resize="HEIGHT", inferred_strategy="text"),
             )
         },
@@ -167,6 +182,42 @@ def test_intermediate_document_accepts_service_payload_shape() -> None:
     assert document.texts["text-1"].layout.text_auto_resize == "HEIGHT"
     assert document.assets[0].function.value == "content"
     assert document.assets[0].layout.layout_sizing_horizontal == "FILL"
+
+
+def test_intermediate_payload_helpers_validate_serialize_and_summarize_payloads() -> None:
+    payload = {
+        "page": {
+            "id": "3:964",
+            "name": "Landing Page",
+            "width": 1920.5,
+            "height": 7422,
+            "meta": {},
+        },
+        "sections": [],
+        "texts": {},
+        "assets": [],
+        "tokens": {},
+        "warnings": [],
+    }
+
+    document = validate_intermediate_payload(payload)
+    serialized = serialize_intermediate_payload(document)
+
+    assert document.page.name == "Landing Page"
+    assert serialized["page"]["name"] == "Landing Page"
+    assert intermediate_document_name(payload) == "Landing Page"
+    assert intermediate_document_name(document) == "Landing Page"
+    assert intermediate_document_width(payload) == 1920
+    assert intermediate_document_width(document) == 1920
+    assert intermediate_document_names([payload, document, {"page": {"name": ""}}]) == [
+        "Landing Page",
+        "Landing Page",
+    ]
+
+
+def test_intermediate_payload_validation_raises_stable_value_error() -> None:
+    with pytest.raises(ValueError, match="Invalid intermediate model"):
+        validate_intermediate_payload({"sections": []})
 
 
 def test_intermediate_document_accepts_nested_children_payloads() -> None:

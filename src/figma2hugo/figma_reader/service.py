@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +17,8 @@ from figma2hugo.figma_reader.rest_client import FigmaRestClient, FigmaRestError
 from figma2hugo.figma_reader.storage import ExtractionStore
 from figma2hugo.figma_reader.url_tools import ParsedFigmaUrl, parse_figma_url
 from figma2hugo.layout_analyzer import LayoutAnalyzer
-from figma2hugo.model import IntermediateDocument
+from figma2hugo.model import serialize_intermediate_payload
+from figma2hugo.reporting import dedupe_warnings
 
 SECTION_LIKE_TYPES = {"FRAME", "SECTION", "GROUP", "INSTANCE", "COMPONENT", "COMPONENT_SET"}
 NON_CONTENT_ASSET_FUNCTIONS = {"background", "decorative", "foreground", "icon", "mask"}
@@ -57,6 +59,8 @@ SEMANTIC_CONTAINER_ROLES = {
     "nav",
     "section",
 }
+RESPONSIVE_VARIANT_NAME_RE = re.compile(r"^(?P<family>page-[a-z0-9-]+)-(?P<width>\d{3,4})$")
+SLUG_TOKEN_RE = re.compile(r"[^a-z0-9]+")
 
 
 class FigmaExtractionService:
@@ -76,14 +80,36 @@ class FigmaExtractionService:
         self.asset_downloader = asset_downloader or AssetDownloader(self.rest_client)
 
     def inspect(self, figma_url: str, out_dir: str | Path) -> dict[str, Any]:
-        model = self.extract(figma_url, out_dir)
-        summary = {
-            "page": model["page"],
-            "sectionCount": len(model.get("sections", [])),
-            "textCount": len(model.get("texts", {})),
-            "assetCount": len(model.get("assets", [])),
-            "warnings": model.get("warnings", []),
-        }
+        models = self.extract_documents(figma_url, out_dir)
+        if len(models) == 1:
+            model = models[0]
+            summary = {
+                "page": model["page"],
+                "sectionCount": len(model.get("sections", [])),
+                "textCount": len(model.get("texts", {})),
+                "assetCount": len(model.get("assets", [])),
+                "warnings": model.get("warnings", []),
+            }
+        else:
+            summary = {
+                "responsiveBoard": True,
+                "variantCount": len(models),
+                "variants": [
+                    {
+                        "page": model["page"],
+                        "sectionCount": len(model.get("sections", [])),
+                        "textCount": len(model.get("texts", {})),
+                        "assetCount": len(model.get("assets", [])),
+                        "warnings": model.get("warnings", []),
+                    }
+                    for model in models
+                ],
+                "warnings": dedupe_warnings(
+                    warning
+                    for model in models
+                    for warning in model.get("warnings", [])
+                ),
+            }
         store = ExtractionStore(Path(out_dir))
         store.write_json("inspect.json", summary)
         return summary
@@ -93,12 +119,104 @@ class FigmaExtractionService:
         figma_url: str,
         out_dir: str | Path,
     ) -> dict[str, Any]:
+        documents = self.extract_documents(figma_url, out_dir)
+        if len(documents) != 1:
+            raise RuntimeError(
+                "Selected Figma node expands to multiple responsive page variants. "
+                "Use generation with the parent board URL or pass the variant frame URLs "
+                "individually."
+            )
+        return documents[0]
+
+    def extract_documents(
+        self,
+        figma_url: str,
+        out_dir: str | Path,
+    ) -> list[dict[str, Any]]:
         store = ExtractionStore(Path(out_dir))
 
         parsed_url = parse_figma_url(figma_url)
-        warnings: list[str] = []
-        raw_payload = self._collect_raw_payload(parsed_url, store, warnings)
+        collection_warnings: list[str] = []
+        raw_payload = self._collect_raw_payload(parsed_url, store, collection_warnings)
         root_node = self._select_root_node(raw_payload, parsed_url)
+        variant_roots = self._responsive_variant_roots(root_node)
+        if not variant_roots:
+            return [
+                self._extract_document_from_root(
+                    figma_url,
+                    parsed_url,
+                    raw_payload,
+                    root_node,
+                    store=store,
+                    collection_warnings=collection_warnings,
+                )
+            ]
+
+        variants_summary: list[dict[str, Any]] = []
+        documents: list[dict[str, Any]] = []
+        board_root_id = root_node.get("id")
+        for index, variant in enumerate(variant_roots, start=1):
+            variant_family = str(variant["family"])
+            variant_width = int(variant["width"])
+            variant_root = variant["node"]
+            variant_slug = f"{variant_family}-{variant_width}"
+            variant_store = ExtractionStore(Path(out_dir) / "variants" / variant_slug)
+            documents.append(
+                self._extract_document_from_root(
+                    figma_url,
+                    parsed_url,
+                    raw_payload,
+                    variant_root,
+                    store=variant_store,
+                    collection_warnings=collection_warnings,
+                    additional_warnings=[
+                        f"Responsive board split from selected node into variant {variant_slug}.",
+                    ],
+                    meta_overrides={
+                        "selectedNodeId": parsed_url.node_id,
+                        "selectedNodeName": root_node.get("name") or parsed_url.page_hint or "Page",
+                        "sourceNodeId": variant_root.get("id"),
+                        "responsiveBoardRootId": board_root_id,
+                        "responsiveBoardSplit": True,
+                        "responsiveVariantFamily": variant_family,
+                        "responsiveVariantWidth": variant_width,
+                    },
+                )
+            )
+            variants_summary.append(
+                {
+                    "index": index,
+                    "slug": variant_slug,
+                    "width": variant_width,
+                    "nodeId": variant_root.get("id"),
+                    "name": variant_root.get("name") or variant_slug,
+                }
+            )
+
+        store.write_json(
+            "responsive-board.json",
+            {
+                "selectedNodeId": parsed_url.node_id,
+                "selectedNodeName": root_node.get("name") or parsed_url.page_hint or "Page",
+                "variantCount": len(variants_summary),
+                "variants": variants_summary,
+            },
+        )
+        return documents
+
+    def _extract_document_from_root(
+        self,
+        figma_url: str,
+        parsed_url: ParsedFigmaUrl,
+        raw_payload: dict[str, Any],
+        root_node: dict[str, Any],
+        *,
+        store: ExtractionStore,
+        collection_warnings: list[str],
+        additional_warnings: list[str] | None = None,
+        meta_overrides: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        warnings = list(collection_warnings)
         self._validate_root_structure(root_node)
         sections = self.layout_analyzer.identify_sections(root_node)
         extracted = self.content_extractor.extract(
@@ -114,88 +232,168 @@ class FigmaExtractionService:
         )
         warnings.extend(raw_payload.get("warnings", []))
         warnings.extend(extracted.warnings)
+        warnings.extend(additional_warnings or [])
 
-        page_model = {
-            "page": {
-                "id": parsed_url.node_id or root_node.get("id"),
-                "name": root_node.get("name") or parsed_url.page_hint or "Page",
-                "width": (root_node.get("absoluteBoundingBox") or {}).get("width", 0),
-                "height": (root_node.get("absoluteBoundingBox") or {}).get("height", 0),
-                "layout": self._layout_metadata(root_node, fallback_strategy="absolute"),
-                "meta": {
-                    "figmaUrl": figma_url,
-                    "fileKey": parsed_url.file_key,
-                    "nodeId": parsed_url.node_id,
-                    "pageHint": parsed_url.page_hint,
-                    "sourceModes": raw_payload.get("source_modes", []),
-                },
-            },
+        page_model = self._build_intermediate_payload(
+            figma_url=figma_url,
+            parsed_url=parsed_url,
+            raw_payload=raw_payload,
+            root_node=root_node,
+            sections=sections,
+            extracted=extracted,
+            assets=assets,
+            warnings=warnings,
+            meta_overrides=meta_overrides,
+        )
+
+        serialized = serialize_intermediate_payload(page_model)
+        store.write_json("page.json", serialized)
+        return serialized
+
+    def _build_intermediate_payload(
+        self,
+        *,
+        figma_url: str,
+        parsed_url: ParsedFigmaUrl,
+        raw_payload: dict[str, Any],
+        root_node: dict[str, Any],
+        sections: list[Any],
+        extracted: Any,
+        assets: list[dict[str, Any]],
+        warnings: list[str],
+        meta_overrides: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        page_meta = self._page_meta(
+            figma_url=figma_url,
+            parsed_url=parsed_url,
+            raw_payload=raw_payload,
+            meta_overrides=meta_overrides,
+        )
+        return {
+            "page": self._page_payload(root_node, parsed_url=parsed_url, meta=page_meta),
             "sections": [
-                {
-                    **{
-                        **section.to_dict(),
-                        "bounds": self._rebase_section_bounds(
-                            section.bounds,
-                            root_bounds=(root_node.get("absoluteBoundingBox") or root_node.get("absoluteRenderBounds") or {}),
-                        ),
-                    },
-                    "children": self._build_section_children(
-                        section.node,
-                        text_ids={
-                            text_id
-                            for text_id, text in extracted.texts.items()
-                            if text.get("sectionId") == section.id
-                        },
-                        asset_ids={
-                            asset.get("nodeId")
-                            for asset in assets
-                            if asset.get("sectionId") == section.id and asset.get("nodeId")
-                        },
-                        extra_nodes=section.extra_nodes,
-                    ),
-                    "texts": [
-                        text_id
-                        for text_id, text in extracted.texts.items()
-                        if text.get("sectionId") == section.id
-                    ],
-                    "assets": [
-                        asset.get("nodeId")
-                        for asset in assets
-                        if asset.get("sectionId") == section.id and asset.get("function") not in NON_CONTENT_ASSET_FUNCTIONS
-                    ],
-                    "decorative_assets": [
-                        asset.get("nodeId")
-                        for asset in assets
-                        if asset.get("sectionId") == section.id and asset.get("function") in NON_CONTENT_ASSET_FUNCTIONS
-                    ],
-                    "layout": self._layout_metadata(section.node, fallback_strategy="absolute"),
-                    "metadata": {
-                        "sourceNodeType": section.node.get("type"),
-                        "clipsContent": bool(section.node.get("clipsContent", False)),
-                        "rawChildIds": [
-                            child.get("id")
-                            for child in section.node.get("children", [])
-                            if child.get("visible", True)
-                        ]
-                        + [
-                            child.get("id")
-                            for child in section.extra_nodes
-                            if child.get("visible", True)
-                        ],
-                    },
-                }
+                self._section_payload(
+                    section,
+                    root_node=root_node,
+                    texts=extracted.texts,
+                    assets=assets,
+                )
                 for section in sections
             ],
             "texts": extracted.texts,
             "assets": assets,
             "tokens": extracted.tokens,
-            "warnings": self._dedupe_warnings(warnings),
+            "warnings": dedupe_warnings(warnings),
         }
 
-        validated_model = IntermediateDocument.model_validate(page_model)
-        serialized = validated_model.model_dump(by_alias=True, mode="json")
-        store.write_json("page.json", serialized)
-        return serialized
+    def _page_meta(
+        self,
+        *,
+        figma_url: str,
+        parsed_url: ParsedFigmaUrl,
+        raw_payload: dict[str, Any],
+        meta_overrides: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        meta = {
+            "figmaUrl": figma_url,
+            "fileKey": parsed_url.file_key,
+            "nodeId": parsed_url.node_id,
+            "pageHint": parsed_url.page_hint,
+            "sourceModes": raw_payload.get("source_modes", []),
+        }
+        meta.update(meta_overrides or {})
+        return meta
+
+    def _page_payload(
+        self,
+        root_node: dict[str, Any],
+        *,
+        parsed_url: ParsedFigmaUrl,
+        meta: dict[str, Any],
+    ) -> dict[str, Any]:
+        root_bounds = self._node_bounds(root_node)
+        return {
+            "id": root_node.get("id") or parsed_url.node_id or "page",
+            "name": root_node.get("name") or parsed_url.page_hint or "Page",
+            "width": root_bounds.get("width", 0),
+            "height": root_bounds.get("height", 0),
+            "layout": self._layout_metadata(root_node, fallback_strategy="absolute"),
+            "meta": meta,
+        }
+
+    def _section_payload(
+        self,
+        section: Any,
+        *,
+        root_node: dict[str, Any],
+        texts: dict[str, dict[str, Any]],
+        assets: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        text_ids = self._section_text_ids(section.id, texts)
+        content_asset_ids = self._section_asset_ids(section.id, assets, decorative=False)
+        decorative_asset_ids = self._section_asset_ids(section.id, assets, decorative=True)
+        return {
+            **section.to_dict(),
+            "bounds": self._rebase_section_bounds(
+                section.bounds,
+                root_bounds=self._node_bounds(root_node),
+            ),
+            "children": self._build_section_children(
+                section.node,
+                text_ids=set(text_ids),
+                asset_ids=set(content_asset_ids + decorative_asset_ids),
+                extra_nodes=section.extra_nodes,
+            ),
+            "texts": text_ids,
+            "assets": content_asset_ids,
+            "decorative_assets": decorative_asset_ids,
+            "layout": self._layout_metadata(section.node, fallback_strategy="absolute"),
+            "metadata": self._section_metadata(section),
+        }
+
+    def _section_text_ids(
+        self,
+        section_id: str,
+        texts: dict[str, dict[str, Any]],
+    ) -> list[str]:
+        return [
+            text_id
+            for text_id, text in texts.items()
+            if text.get("sectionId") == section_id
+        ]
+
+    def _section_asset_ids(
+        self,
+        section_id: str,
+        assets: list[dict[str, Any]],
+        *,
+        decorative: bool,
+    ) -> list[str]:
+        asset_ids: list[str] = []
+        for asset in assets:
+            if asset.get("sectionId") != section_id:
+                continue
+            is_decorative = asset.get("function") in NON_CONTENT_ASSET_FUNCTIONS
+            if is_decorative != decorative:
+                continue
+            if node_id := asset.get("nodeId"):
+                asset_ids.append(node_id)
+        return asset_ids
+
+    def _section_metadata(self, section: Any) -> dict[str, Any]:
+        return {
+            "sourceNodeType": section.node.get("type"),
+            "clipsContent": bool(section.node.get("clipsContent", False)),
+            "rawChildIds": self._visible_child_ids(section.node)
+            + self._visible_child_ids({"children": section.extra_nodes}),
+        }
+
+    def _visible_child_ids(self, node: dict[str, Any]) -> list[Any]:
+        return [
+            child.get("id")
+            for child in node.get("children", [])
+            if child.get("visible", True)
+        ]
 
     def _collect_raw_payload(
         self,
@@ -267,12 +465,17 @@ class FigmaExtractionService:
 
         if "rest_tree" not in payload:
             raise RuntimeError(
-                "Unable to extract Figma data. Configure FIGMA_ACCESS_TOKEN or a FIGMA_MCP_* bridge."
+                "Unable to extract Figma data. Configure FIGMA_ACCESS_TOKEN or a "
+                "FIGMA_MCP_* bridge."
             )
 
         return payload
 
-    def _select_root_node(self, raw_payload: dict[str, Any], parsed_url: ParsedFigmaUrl) -> dict[str, Any]:
+    def _select_root_node(
+        self,
+        raw_payload: dict[str, Any],
+        parsed_url: ParsedFigmaUrl,
+    ) -> dict[str, Any]:
         rest_tree = raw_payload["rest_tree"]
         if "nodes" in rest_tree:
             if parsed_url.node_id and parsed_url.node_id in rest_tree["nodes"]:
@@ -280,6 +483,49 @@ class FigmaExtractionService:
             first_node = next(iter(rest_tree["nodes"].values()))
             return first_node["document"]
         return rest_tree.get("document", rest_tree)
+
+    def _responsive_variant_roots(self, root_node: dict[str, Any]) -> list[dict[str, Any]]:
+        candidates: list[dict[str, Any]] = []
+        for child in root_node.get("children", []):
+            if not isinstance(child, dict) or not child.get("visible", True):
+                continue
+            if child.get("type") not in SECTION_LIKE_TYPES:
+                continue
+            signature = self._responsive_variant_signature(child.get("name"))
+            if signature is None:
+                continue
+            family, width = signature
+            candidates.append({"family": family, "width": width, "node": child})
+
+        if len(candidates) < 2:
+            return []
+
+        families = {candidate["family"] for candidate in candidates}
+        if len(families) != 1:
+            return []
+
+        return sorted(candidates, key=lambda item: int(item["width"]), reverse=True)
+
+    def _responsive_variant_signature(self, value: Any) -> tuple[str, int] | None:
+        normalized = self._normalize_name_token(value)
+        if not normalized:
+            return None
+        match = RESPONSIVE_VARIANT_NAME_RE.match(normalized)
+        if not match:
+            return None
+        family = str(match.group("family")).strip("-")
+        width_text = str(match.group("width"))
+        if not family or not width_text:
+            return None
+        try:
+            width = int(width_text)
+        except ValueError:
+            return None
+        return family, width
+
+    def _normalize_name_token(self, value: Any) -> str:
+        normalized = SLUG_TOKEN_RE.sub("-", str(value or "").strip().lower()).strip("-")
+        return normalized
 
     def _metadata_xml_to_tree(self, metadata_payload: dict[str, Any]) -> dict[str, Any]:
         contents = metadata_payload.get("content", [])
@@ -310,7 +556,11 @@ class FigmaExtractionService:
         if len(visible_children) < 250:
             return
 
-        container_children = [child for child in visible_children if child.get("type") in SECTION_LIKE_TYPES]
+        container_children = [
+            child
+            for child in visible_children
+            if child.get("type") in SECTION_LIKE_TYPES
+        ]
         if container_children:
             return
 
@@ -320,8 +570,10 @@ class FigmaExtractionService:
 
         raise RuntimeError(
             "Selected Figma node is too flat for structured extraction: "
-            f"{len(visible_children)} visible children are placed at the same level with no grouping frames or sections. "
-            "Please restructure the file so the page is grouped into frames/sections instead of keeping everything at one level."
+            f"{len(visible_children)} visible children are placed at the same level "
+            "with no grouping frames or sections. Please restructure the file so "
+            "the page is grouped into frames/sections instead of keeping everything "
+            "at one level."
         )
 
     def _xml_node_to_tree(self, element: Any) -> dict[str, Any]:
@@ -346,16 +598,8 @@ class FigmaExtractionService:
         response.raise_for_status()
         return response.content
 
-    def _dedupe_warnings(self, warnings: list[str]) -> list[str]:
-        seen: set[str] = set()
-        ordered: list[str] = []
-        for warning in warnings:
-            normalized = warning.strip()
-            if not normalized or normalized in seen:
-                continue
-            seen.add(normalized)
-            ordered.append(normalized)
-        return ordered
+    def _node_bounds(self, node: dict[str, Any]) -> dict[str, Any]:
+        return node.get("absoluteBoundingBox") or node.get("absoluteRenderBounds") or {}
 
     def _build_section_children(
         self,
@@ -366,7 +610,7 @@ class FigmaExtractionService:
         extra_nodes: list[dict[str, Any]] | None = None,
     ) -> list[Any]:
         ordered: list[Any] = []
-        section_bounds = root_node.get("absoluteBoundingBox") or root_node.get("absoluteRenderBounds") or {}
+        section_bounds = self._node_bounds(root_node)
 
         root_node_id = root_node.get("id")
         if root_node_id in asset_ids:
@@ -484,13 +728,17 @@ class FigmaExtractionService:
         bounds = node.get("absoluteBoundingBox") or node.get("absoluteRenderBounds") or {}
         if parent_bounds:
             bounds = self._relative_bounds(bounds, parent_bounds)
+        layout = self._layout_metadata(
+            node,
+            fallback_strategy=self._container_layout_fallback(role),
+        )
         return {
             "id": node.get("id"),
             "name": node.get("name") or node.get("id") or "container",
             "kind": "container",
             "role": role,
             "bounds": bounds,
-            "layout": self._layout_metadata(node, fallback_strategy=self._container_layout_fallback(role)),
+            "layout": layout,
             "coordinate_space": coordinate_space,
             "children_coordinate_space": "parent",
             "children": children,
@@ -556,9 +804,17 @@ class FigmaExtractionService:
             return "accordion-panel"
         if self._name_matches(normalized_name, prefixes=("accordion",), tokens=()):
             return "accordion"
-        if self._name_matches(normalized_name, prefixes=("carousel-stage", "carousel-main"), tokens=()):
+        if self._name_matches(
+            normalized_name,
+            prefixes=("carousel-stage", "carousel-main"),
+            tokens=(),
+        ):
             return "carousel-stage"
-        if self._name_matches(normalized_name, prefixes=("carousel-thumbs", "carousel-nav", "carousel-track"), tokens=()):
+        if self._name_matches(
+            normalized_name,
+            prefixes=("carousel-thumbs", "carousel-nav", "carousel-track"),
+            tokens=(),
+        ):
             return "carousel-nav"
         if self._name_matches(normalized_name, prefixes=("carousel-slide",), tokens=()):
             return "carousel-slide"
@@ -570,9 +826,17 @@ class FigmaExtractionService:
             return "form"
         if self._name_matches(normalized_name, prefixes=("button", "btn"), tokens=()):
             return "button"
-        if self._name_matches(normalized_name, prefixes=("input", "champ", "zone", "field"), tokens=()):
+        if self._name_matches(
+            normalized_name,
+            prefixes=("input", "champ", "zone", "field"),
+            tokens=(),
+        ):
             return "field"
-        if self._name_matches(normalized_name, prefixes=("card-v", "card-h", "card", "article"), tokens=()):
+        if self._name_matches(
+            normalized_name,
+            prefixes=("card-v", "card-h", "card", "article"),
+            tokens=(),
+        ):
             return "card"
         if self._name_matches(normalized_name, prefixes=("nav",), tokens=()):
             return "nav"
@@ -611,7 +875,10 @@ class FigmaExtractionService:
     ) -> bool:
         if not normalized_name:
             return False
-        if any(normalized_name == prefix or normalized_name.startswith(f"{prefix}-") for prefix in prefixes):
+        if any(
+            normalized_name == prefix or normalized_name.startswith(f"{prefix}-")
+            for prefix in prefixes
+        ):
             return True
         if not tokens:
             return False
@@ -703,10 +970,7 @@ class FigmaExtractionService:
         }
 
     def _container_layout_fallback(self, role: str) -> str:
-        if role in {"accordion", "accordion-item", "accordion-panel", "accordion-trigger", "link-grid", "card", "link-card"}:
-            return "absolute"
-        if role in {"carousel", "carousel-stage", "carousel-nav", "carousel-slide", "carousel-thumb"}:
-            return "absolute"
+        del role
         return "absolute"
 
     def _constraints_payload(self, node: dict[str, Any]) -> dict[str, Any]:

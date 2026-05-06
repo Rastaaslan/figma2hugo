@@ -13,7 +13,13 @@ from figma2hugo.figma_reader import FigmaExtractionService
 from figma2hugo.model import GenerationReport
 from figma2hugo.reporting import ReportWriter
 from figma2hugo.validator import SiteValidator
-from figma2hugo.workflow import GenerationOptions, inspect_figma, run_generation, validate_document, validate_site
+from figma2hugo.workflow import (
+    GenerationOptions,
+    inspect_figma,
+    run_generation,
+    validate_document,
+    validate_site,
+)
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, help="Figma to Hugo CLI.")
 
@@ -49,12 +55,37 @@ def _parse_or_bad_parameter(figma_url: str) -> FigmaUrl:
 
 
 def _parse_many_or_bad_parameter(figma_urls: list[str]) -> list[FigmaUrl]:
-    if not figma_urls:
-        raise typer.BadParameter("Provide at least one Figma URL with --page.")
+    cleaned_urls = [
+        figma_url.strip().lstrip("\ufeff")
+        for figma_url in figma_urls
+        if figma_url.strip().lstrip("\ufeff")
+    ]
+    if not cleaned_urls:
+        raise typer.BadParameter("Provide at least one Figma URL with --page or --page-file.")
     parsed_urls: list[FigmaUrl] = []
-    for figma_url in figma_urls:
+    for figma_url in cleaned_urls:
         parsed_urls.append(_parse_or_bad_parameter(figma_url))
     return parsed_urls
+
+
+def _read_page_file_urls(page_file: Path | None) -> list[str]:
+    if page_file is None:
+        return []
+    try:
+        return _split_page_url_text(page_file.read_text(encoding="utf-8-sig"))
+    except OSError as exc:
+        raise typer.BadParameter(f"Unable to read --page-file: {page_file} ({exc})") from exc
+
+
+def _split_page_url_text(content: str) -> list[str]:
+    normalized = content.replace(";", "\n").replace(",", "\n")
+    urls: list[str] = []
+    for line in normalized.splitlines():
+        candidate = line.strip().lstrip("\ufeff")
+        if not candidate or candidate.startswith("#"):
+            continue
+        urls.append(candidate)
+    return urls
 
 
 def _make_extraction_service() -> FigmaExtractionService:
@@ -86,7 +117,10 @@ def inspect(
 @app.command()
 def extract(
     figma_url: Annotated[str, typer.Argument(help="Figma file/design URL with node-id.")],
-    out: Annotated[Path, typer.Option("--out", help="Directory for extracted artifacts.")] = Path("./figma-extract"),
+    out: Annotated[
+        Path,
+        typer.Option("--out", help="Directory for extracted artifacts."),
+    ] = Path("./figma-extract"),
 ) -> None:
     figma = _parse_or_bad_parameter(figma_url)
     out.mkdir(parents=True, exist_ok=True)
@@ -124,6 +158,13 @@ def generate(
     content_mode: Annotated[
         ContentMode, typer.Option("--content-mode", help="Content placement strategy.")
     ] = ContentMode.DATA_FILE,
+    strict_responsive_matching: Annotated[
+        bool,
+        typer.Option(
+            "--strict-responsive-matching",
+            help="Fail when responsive sibling matching is ambiguous.",
+        ),
+    ] = False,
 ) -> None:
     _parse_or_bad_parameter(figma_url)
     _emit_json(
@@ -134,6 +175,7 @@ def generate(
                 mode=mode,
                 fidelity_mode=fidelity_mode,
                 content_mode=content_mode,
+                strict_responsive_matching=strict_responsive_matching,
             ),
             extraction_service=_make_extraction_service(),
             validator=_make_site_validator(),
@@ -146,11 +188,22 @@ def generate(
 def build(
     figma_url: Annotated[str, typer.Argument(help="Figma file/design URL with node-id.")],
     out: Annotated[Path, typer.Argument(help="Directory for generated output.")],
+    strict_responsive_matching: Annotated[
+        bool,
+        typer.Option(
+            "--strict-responsive-matching",
+            help="Fail when responsive sibling matching is ambiguous.",
+        ),
+    ] = False,
 ) -> None:
     _parse_or_bad_parameter(figma_url)
     _emit_json(
         run_generation(
-            GenerationOptions(figma_url=figma_url, out=out),
+            GenerationOptions(
+                figma_url=figma_url,
+                out=out,
+                strict_responsive_matching=strict_responsive_matching,
+            ),
             extraction_service=_make_extraction_service(),
             validator=_make_site_validator(),
             report_writer=_make_report_writer(),
@@ -162,17 +215,31 @@ def build(
 def build_site(
     out: Annotated[Path, typer.Argument(help="Directory for generated Hugo output.")],
     page: Annotated[
-        list[str],
+        list[str] | None,
         typer.Option("--page", help="Repeat this option for each Figma page URL."),
-    ],
+    ] = None,
+    page_file: Annotated[
+        Path | None,
+        typer.Option(
+            "--page-file",
+            help="Text file containing one or more Figma page URLs.",
+        ),
+    ] = None,
     fidelity_mode: Annotated[
         FidelityMode, typer.Option("--fidelity-mode", help="Rendering fidelity strategy.")
     ] = FidelityMode.BALANCED,
     content_mode: Annotated[
         ContentMode, typer.Option("--content-mode", help="Content placement strategy.")
     ] = ContentMode.DATA_FILE,
+    strict_responsive_matching: Annotated[
+        bool,
+        typer.Option(
+            "--strict-responsive-matching",
+            help="Fail when responsive sibling matching is ambiguous.",
+        ),
+    ] = False,
 ) -> None:
-    parsed_pages = _parse_many_or_bad_parameter(page)
+    parsed_pages = _parse_many_or_bad_parameter([*(page or []), *_read_page_file_urls(page_file)])
     figma_urls = tuple(parsed.source_url for parsed in parsed_pages)
     _emit_json(
         run_generation(
@@ -183,6 +250,7 @@ def build_site(
                 mode=OutputMode.HUGO,
                 fidelity_mode=fidelity_mode,
                 content_mode=content_mode,
+                strict_responsive_matching=strict_responsive_matching,
             ),
             extraction_service=_make_extraction_service(),
             validator=_make_site_validator(),
@@ -219,13 +287,28 @@ def validate(
 @app.command()
 def report(
     target_dir: Annotated[Path, typer.Argument(help="Generated site directory.")],
+    responsive_audit: Annotated[
+        bool,
+        typer.Option(
+            "--responsive-audit",
+            help="Print responsive-audit.md instead of report.json.",
+        ),
+    ] = False,
 ) -> None:
+    if responsive_audit:
+        audit_path = target_dir / "responsive-audit.md"
+        if not audit_path.exists():
+            raise typer.BadParameter(f"Missing responsive audit file: {audit_path}")
+        typer.echo(audit_path.read_text(encoding="utf-8"), nl=False)
+        return
+
     report_path = target_dir / "report.json"
     if not report_path.exists():
         raise typer.BadParameter(f"Missing report file: {report_path}")
 
     try:
-        parsed_report = GenerationReport.model_validate_json(report_path.read_text(encoding="utf-8"))
+        report_text = report_path.read_text(encoding="utf-8")
+        parsed_report = GenerationReport.model_validate_json(report_text)
     except ValidationError as exc:
         raise typer.BadParameter(f"Invalid report file: {exc}") from exc
 

@@ -7,25 +7,44 @@ import http.server
 import json
 import math
 import re
-import threading
 import subprocess
+import threading
 from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageChops
 
+from figma2hugo.reporting import dedupe_warnings
+
 
 class SiteValidator:
+    RESPONSIVE_DUPLICATE_SIBLING_RE = re.compile(
+        r"^Responsive variant (?P<width>\d+)px reuses sibling token "
+        r"'(?P<token>[^']+)' under '(?P<parent>[^']+)'\."
+    )
+    RESPONSIVE_REPEATED_COMPONENT_RE = re.compile(
+        r"^Responsive variant (?P<width>\d+)px treats repeated sibling token "
+        r"'(?P<token>[^']+)' under '(?P<parent>[^']+)' as a repeated component "
+        r"group with (?P<count>\d+) items\."
+    )
+    RESPONSIVE_TEXT_CHANGE_RE = re.compile(
+        r"^Responsive variant (?P<width>\d+)px changes text content for "
+        r"(?P<path>.+?)\. Duplicate the item"
+    )
+    RESPONSIVE_BOARD_SPLIT_RE = re.compile(
+        r"^Responsive board split from selected node into variant (?P<variant>.+)\.$"
+    )
     RESPONSIVE_VIEWPORTS: tuple[dict[str, int | str], ...] = (
+        {"label": "desktop-2xl", "width": 1920, "height": 2400},
         {"label": "desktop-xl", "width": 1440, "height": 2200},
         {"label": "desktop", "width": 1280, "height": 2200},
         {"label": "tablet-landscape", "width": 1024, "height": 1600},
-        {"label": "tablet", "width": 768, "height": 1600},
-        {"label": "mobile", "width": 390, "height": 1200},
+        {"label": "tablet", "width": 834, "height": 1600},
+        {"label": "mobile", "width": 402, "height": 1200},
     )
     INTERACTION_VIEWPORTS: tuple[dict[str, int | str], ...] = (
         {"label": "desktop", "width": 1280, "height": 1800},
-        {"label": "mobile", "width": 390, "height": 1200},
+        {"label": "mobile", "width": 402, "height": 1200},
     )
 
     def validate(
@@ -40,16 +59,46 @@ class SiteValidator:
         site_manifest = self._load_site_manifest(target_dir, mode, report_warnings)
         page_models = self._load_page_models(target_dir, mode, site_manifest, report_warnings)
         report_warnings.extend(self._collect_page_warnings(page_models))
-        report = {
+        report = self._new_validation_report(report_warnings)
+
+        if mode == "hugo":
+            report["buildOk"] = self._validate_hugo_build(target_dir, report["warnings"])
+
+        self._populate_content_validation(
+            report=report,
+            target_dir=target_dir,
+            mode=mode,
+            page_models=page_models,
+            site_manifest=site_manifest,
+        )
+
+        page_targets = self._page_html_targets(target_dir, mode, page_models, site_manifest)
+        report["responsive"] = self._responsive_report(page_targets, page_models)
+        report["interactions"] = self._interaction_report(page_targets)
+        report["warnings"].extend(report["responsive"].get("warnings", []))
+        report["warnings"].extend(report["interactions"].get("warnings", []))
+
+        self._populate_visual_validation(
+            report=report,
+            target_dir=target_dir,
+            mode=mode,
+            page_models=page_models,
+            against_reference=against_reference,
+        )
+        return self._finalize_report(report)
+
+    def _new_validation_report(self, warnings: list[str]) -> dict[str, Any]:
+        return {
             "buildOk": True,
             "visualScore": None,
             "missingAssets": [],
             "missingTexts": [],
-            "warnings": report_warnings,
+            "warnings": list(warnings),
             "supportedScope": self._supported_scope_payload(),
             "responsive": {
                 "checked": False,
                 "available": False,
+                "families": [],
                 "viewports": [],
                 "summary": {},
                 "warnings": [],
@@ -63,46 +112,97 @@ class SiteValidator:
             },
         }
 
-        if mode == "hugo":
-            report["buildOk"] = self._validate_hugo_build(target_dir, report["warnings"])
-
+    def _populate_content_validation(
+        self,
+        *,
+        report: dict[str, Any],
+        target_dir: Path,
+        mode: str,
+        page_models: list[dict[str, Any]],
+        site_manifest: dict[str, Any] | None,
+    ) -> None:
         if not page_models:
             report["warnings"].append("No generated page model is available for validation.")
-        elif len(page_models) == 1:
+            return
+
+        if mode == "hugo" and site_manifest:
+            report["missingAssets"] = self._missing_site_assets(target_dir, page_models, mode)
+            report["missingTexts"] = self._missing_site_texts(
+                target_dir,
+                page_models,
+                mode,
+                site_manifest,
+            )
+            self._extend_page_model_warnings(report, page_models)
+            return
+
+        if len(page_models) == 1:
             html_path = self._html_path(target_dir, mode)
-            report["missingAssets"] = self._missing_assets(target_dir, page_models[0], mode)
+            page_model = page_models[0]
+            report["missingAssets"] = self._missing_assets(target_dir, page_model, mode)
             if html_path.exists():
                 html_content = html_path.read_text(encoding="utf-8")
-                report["missingTexts"] = self._missing_texts(html_content, page_models[0])
+                report["missingTexts"] = self._missing_texts(html_content, page_model)
             else:
                 report["missingTexts"] = ["html-missing"]
                 report["warnings"].append(f"Generated HTML file is missing: {html_path}")
-            report["warnings"].extend(self._validate_page_model(page_models[0]))
-        else:
-            report["missingAssets"] = self._missing_site_assets(target_dir, page_models, mode)
-            report["missingTexts"] = self._missing_site_texts(target_dir, page_models, mode, site_manifest or {})
-            for page_model in page_models:
-                report["warnings"].extend(self._validate_page_model(page_model))
+            self._extend_page_model_warnings(report, page_models)
+            return
 
-        page_targets = self._page_html_targets(target_dir, mode, page_models, site_manifest)
-        report["responsive"] = self._responsive_report(page_targets)
-        report["interactions"] = self._interaction_report(page_targets)
-        report["warnings"].extend(report["responsive"].get("warnings", []))
-        report["warnings"].extend(report["interactions"].get("warnings", []))
+        report["missingAssets"] = self._missing_site_assets(target_dir, page_models, mode)
+        report["missingTexts"] = self._missing_site_texts(
+            target_dir,
+            page_models,
+            mode,
+            site_manifest or {},
+        )
+        self._extend_page_model_warnings(report, page_models)
 
-        if len(page_models) > 1 and against_reference and against_reference.exists():
+    def _extend_page_model_warnings(
+        self,
+        report: dict[str, Any],
+        page_models: list[dict[str, Any]],
+    ) -> None:
+        for page_model in page_models:
+            report["warnings"].extend(self._validate_page_model(page_model))
+
+    def _populate_visual_validation(
+        self,
+        *,
+        report: dict[str, Any],
+        target_dir: Path,
+        mode: str,
+        page_models: list[dict[str, Any]],
+        against_reference: Path | None,
+    ) -> None:
+        if not against_reference or not against_reference.exists():
+            return
+        if len(page_models) > 1:
             report["warnings"].append("Visual validation is skipped for multi-page sites.")
-        elif against_reference and against_reference.exists():
-            html_path = self._html_path(target_dir, mode)
-            if html_path.exists():
-                visual_score = self._visual_compare(target_dir, html_path, against_reference, mode, report["warnings"])
-                report["visualScore"] = visual_score
-            else:
-                report["warnings"].append(f"Visual validation skipped: generated HTML file is missing: {html_path}")
+            return
 
-        report["warnings"] = self._dedupe_warnings(report["warnings"])
-        report["responsive"]["warnings"] = self._dedupe_warnings(report["responsive"].get("warnings", []))
-        report["interactions"]["warnings"] = self._dedupe_warnings(report["interactions"].get("warnings", []))
+        html_path = self._html_path(target_dir, mode)
+        if html_path.exists():
+            report["visualScore"] = self._visual_compare(
+                target_dir,
+                html_path,
+                against_reference,
+                mode,
+                report["warnings"],
+            )
+            return
+        report["warnings"].append(
+            f"Visual validation skipped: generated HTML file is missing: {html_path}"
+        )
+
+    def _finalize_report(self, report: dict[str, Any]) -> dict[str, Any]:
+        report["warnings"] = dedupe_warnings(report["warnings"])
+        report["responsive"]["warnings"] = dedupe_warnings(
+            report["responsive"].get("warnings", [])
+        )
+        report["interactions"]["warnings"] = dedupe_warnings(
+            report["interactions"].get("warnings", [])
+        )
         return report
 
     def detect_mode(self, target_dir: Path) -> str:
@@ -119,6 +219,7 @@ class SiteValidator:
             ],
             "responsiveOptInComponents": [
                 "accordion",
+                "component-list",
                 "link-grid",
                 "link-card",
                 "carousel",
@@ -128,24 +229,41 @@ class SiteValidator:
             "guarantees": [
                 "generated HTML, CSS and Hugo build are validated",
                 "missing texts and missing assets are reported",
+                (
+                    "responsive multi-variant Hugo pages are merged when variants follow "
+                    "`page-<slug>-<width>` and keep stable shared structure"
+                ),
                 "responsive probes run on multiple viewport widths when Playwright is available",
                 "interactive probes cover accordion, cards, carousel and forms when present",
             ],
             "notGuaranteedYet": [
                 "fully fluid page shells for every Figma page",
                 "automatic responsive inference for arbitrary absolute layouts",
-                "breakpoint merging from multiple Figma page variants",
+                (
+                    "responsive merge reliability when naming conventions or shared layer "
+                    "structure drift across variants"
+                ),
             ],
         }
 
-    def _load_page_model(self, target_dir: Path, mode: str, warnings: list[str]) -> dict[str, Any] | None:
+    def _load_page_model(
+        self,
+        target_dir: Path,
+        mode: str,
+        warnings: list[str],
+    ) -> dict[str, Any] | None:
         if mode == "hugo":
             path = target_dir / "data" / "page.json"
         else:
             path = target_dir / "page.json"
         return self._load_json_payload(path, warnings, context="generated page model")
 
-    def _load_site_manifest(self, target_dir: Path, mode: str, warnings: list[str]) -> dict[str, Any] | None:
+    def _load_site_manifest(
+        self,
+        target_dir: Path,
+        mode: str,
+        warnings: list[str],
+    ) -> dict[str, Any] | None:
         if mode != "hugo":
             return None
         path = target_dir / "data" / "site.json"
@@ -223,7 +341,7 @@ class SiteValidator:
             return [(page_key, target_dir / "index.html")]
 
         public_dir = target_dir / "public"
-        if site_manifest and len(page_models) > 1:
+        if site_manifest:
             targets: list[tuple[str, Path]] = []
             seen_paths: set[Path] = set()
             for page in site_manifest.get("pages", []):
@@ -241,39 +359,88 @@ class SiteValidator:
         page_key = str(page.get("slug") or page.get("id") or "page")
         return [(page_key, self._html_path(target_dir, mode))]
 
-    def _missing_assets(self, target_dir: Path, page_model: dict[str, Any], mode: str) -> list[str]:
+    def _missing_assets(
+        self,
+        target_dir: Path,
+        page_model: dict[str, Any],
+        mode: str,
+    ) -> list[str]:
         missing: list[str] = []
         for asset in page_model.get("assets", []):
-            if asset.get("renderMode") == "shape" or asset.get("render_mode") == "shape" or asset.get("format") == "shape":
+            if (
+                asset.get("renderMode") == "shape"
+                or asset.get("render_mode") == "shape"
+                or asset.get("format") == "shape"
+            ):
                 continue
             local_path = asset.get("localPath") or asset.get("local_path")
             if not local_path:
-                missing.append(asset.get("nodeId") or asset.get("node_id") or asset.get("name") or "unknown-asset")
+                missing.append(
+                    asset.get("nodeId")
+                    or asset.get("node_id")
+                    or asset.get("name")
+                    or "unknown-asset"
+                )
                 continue
             resolved = Path(local_path)
             if not resolved.is_absolute():
-                resolved = target_dir / local_path if mode == "static" else target_dir / "static" / local_path
+                asset_root = target_dir if mode == "static" else target_dir / "static"
+                resolved = asset_root / local_path
             if not resolved.exists():
-                missing.append(asset.get("nodeId") or asset.get("node_id") or asset.get("name") or resolved.as_posix())
+                missing.append(
+                    asset.get("nodeId")
+                    or asset.get("node_id")
+                    or asset.get("name")
+                    or resolved.as_posix()
+                )
         return missing
 
-    def _missing_site_assets(self, target_dir: Path, page_models: list[dict[str, Any]], mode: str) -> list[str]:
+    def _missing_site_assets(
+        self,
+        target_dir: Path,
+        page_models: list[dict[str, Any]],
+        mode: str,
+    ) -> list[str]:
         missing: list[str] = []
         for page_model in page_models:
-            page_slug = str((page_model.get("page") or {}).get("slug") or (page_model.get("page") or {}).get("id") or "page")
-            missing.extend(f"{page_slug}:{item}" for item in self._missing_assets(target_dir, page_model, mode))
+            page = page_model.get("page") or {}
+            page_slug = str(page.get("slug") or page.get("id") or "page")
+            missing.extend(
+                f"{page_slug}:{item}"
+                for item in self._missing_assets(target_dir, page_model, mode)
+            )
         return missing
 
     def _missing_texts(self, html_content: str, page_model: dict[str, Any]) -> list[str]:
         missing: list[str] = []
         normalized_html = self._normalize_visible_text(html_content)
+        normalized_markup = self._normalize_text(html.unescape(html_content))
         for text in page_model.get("texts", {}).values():
             value = (text.get("plain_text") or text.get("value") or "").strip()
             if not value:
                 continue
-            if self._normalize_text(value) not in normalized_html:
+            candidates = self._text_presence_candidates(text, value)
+            if not candidates:
+                continue
+            if not any(
+                self._normalize_text(candidate)
+                in (normalized_markup if allow_markup else normalized_html)
+                for candidate, allow_markup in candidates
+                if candidate.strip()
+            ):
                 missing.append(text.get("id") or value[:32])
         return missing
+
+    def _text_presence_candidates(self, text: dict[str, Any], value: str) -> list[tuple[str, bool]]:
+        name = str(text.get("name") or "").strip().casefold()
+        if name.startswith("href-"):
+            return [(value, True)]
+        if name.startswith("option-") and "|" in value:
+            option_label = value.split("|", 1)[1].strip()
+            return [(option_label, False)]
+        if name.startswith("placeholder-"):
+            return [(value, True)]
+        return [(value, False)]
 
     def _missing_site_texts(
         self,
@@ -299,13 +466,23 @@ class SiteValidator:
                 missing.append(f"{page_key}:html-missing")
                 continue
             html_content = html_path.read_text(encoding="utf-8")
-            missing.extend(f"{page_key}:{item}" for item in self._missing_texts(html_content, page_model))
+            missing.extend(
+                f"{page_key}:{item}"
+                for item in self._missing_texts(html_content, page_model)
+            )
         return missing
 
     def _validate_hugo_build(self, target_dir: Path, warnings: list[str]) -> bool:
         source_dir = target_dir.resolve()
         public_dir = (source_dir / "public").resolve()
-        command = ["hugo", "--source", str(source_dir), "--destination", str(public_dir)]
+        command = [
+            "hugo",
+            "--source",
+            str(source_dir),
+            "--destination",
+            str(public_dir),
+            "--cleanDestinationDir",
+        ]
         result = subprocess.run(command, capture_output=True, text=True, check=False)
         if result.returncode != 0:
             warnings.append(result.stderr.strip() or result.stdout.strip() or "Hugo build failed.")
@@ -330,38 +507,55 @@ class SiteValidator:
             warnings.extend(list(page_model.get("warnings", [])))
         return warnings
 
-    def _responsive_report(self, page_targets: list[tuple[str, Path]]) -> dict[str, Any]:
+    def _responsive_report(
+        self,
+        page_targets: list[tuple[str, Path]],
+        page_models: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        families = self._responsive_families(page_models)
         report = {
             "checked": False,
             "available": False,
+            "families": families,
             "viewports": [],
             "summary": {},
-            "warnings": [],
+            "warnings": [
+                warning
+                for family in families
+                for warning in family.get("warnings", [])
+                if isinstance(warning, str) and warning.strip()
+            ],
         }
         if not page_targets:
-            report["warnings"].append("Responsive validation skipped: no generated HTML target was found.")
-            report["summary"] = self._responsive_summary([])
+            report["warnings"].append(
+                "Responsive validation skipped: no generated HTML target was found."
+            )
+            report["summary"] = self._responsive_summary([], families)
             return report
         playwright_available = self._playwright_is_available()
         report["available"] = playwright_available
         if not playwright_available:
             report["warnings"].append(
-                "Responsive validation skipped: Playwright is not installed in the current environment."
+                "Responsive validation skipped: Playwright is not installed in the "
+                "current environment."
             )
-            report["summary"] = self._responsive_summary([])
+            report["summary"] = self._responsive_summary([], families)
             return report
 
         checked_any = False
         for page_key, html_path in page_targets:
             if not html_path.exists():
-                report["warnings"].append(f"Responsive validation skipped for {page_key}: missing HTML file.")
+                report["warnings"].append(
+                    f"Responsive validation skipped for {page_key}: missing HTML file."
+                )
                 continue
             for viewport in self.RESPONSIVE_VIEWPORTS:
                 try:
                     probe = self._probe_responsive_page(html_path, viewport)
                 except Exception as exc:  # pragma: no cover - browser/runtime dependent
                     report["warnings"].append(
-                        f"Responsive validation failed for {page_key} at {viewport['width']}px: {exc}"
+                        "Responsive validation failed for "
+                        f"{page_key} at {viewport['width']}px: {exc}"
                     )
                     continue
                 checked_any = True
@@ -385,8 +579,117 @@ class SiteValidator:
                     }
                 )
         report["checked"] = checked_any
-        report["summary"] = self._responsive_summary(report["viewports"])
+        report["summary"] = self._responsive_summary(report["viewports"], families)
         return report
+
+    def _responsive_families(
+        self,
+        page_models: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        families: list[dict[str, Any]] = []
+        for page_model in page_models:
+            responsive = page_model.get("responsive")
+            if not isinstance(responsive, dict):
+                continue
+            page = page_model.get("page") or {}
+            page_slug = str(page.get("slug") or page.get("id") or "page").strip() or "page"
+            family_name = str(responsive.get("family") or page_slug).strip() or page_slug
+            base_width = int(responsive.get("base_width") or 0)
+            breakpoints = [
+                int(value)
+                for value in responsive.get("breakpoints", [])
+                if str(value).strip().isdigit()
+            ]
+            variant_widths = [
+                int(variant.get("width") or 0)
+                for variant in responsive.get("variants", [])
+                if isinstance(variant, dict) and str(variant.get("width") or "").strip().isdigit()
+            ]
+            source_widths = [base_width, *variant_widths]
+            source_widths = [width for width in source_widths if width > 0]
+            if not source_widths and base_width > 0:
+                source_widths = [base_width]
+            warnings = [
+                str(warning).strip()
+                for warning in page_model.get("warnings", [])
+                if str(warning).strip().lower().startswith("responsive ")
+            ]
+            issues = self._responsive_warning_issues(warnings)
+            families.append(
+                {
+                    "page": page_slug,
+                    "family": family_name,
+                    "baseWidth": base_width,
+                    "breakpoints": breakpoints,
+                    "sourceWidths": source_widths,
+                    "variantCount": len(variant_widths),
+                    "warnings": warnings,
+                    "issues": issues,
+                    "strictReady": not any(
+                        issue.get("severity") == "strict-blocker" for issue in issues
+                    ),
+                }
+            )
+        return families
+
+    def _responsive_warning_issues(self, warnings: list[str]) -> list[dict[str, Any]]:
+        issues: list[dict[str, Any]] = []
+        for warning in warnings:
+            issue = self._responsive_warning_issue(warning)
+            if issue:
+                issues.append(issue)
+        return issues
+
+    def _responsive_warning_issue(self, warning: str) -> dict[str, Any] | None:
+        duplicate_match = self.RESPONSIVE_DUPLICATE_SIBLING_RE.search(warning)
+        if duplicate_match:
+            return {
+                "type": "duplicate-sibling-token",
+                "severity": "strict-blocker",
+                "width": int(duplicate_match.group("width")),
+                "token": duplicate_match.group("token"),
+                "parent": duplicate_match.group("parent"),
+                "message": warning,
+            }
+
+        repeated_component_match = self.RESPONSIVE_REPEATED_COMPONENT_RE.search(warning)
+        if repeated_component_match:
+            return {
+                "type": "repeated-component-token",
+                "severity": "info",
+                "width": int(repeated_component_match.group("width")),
+                "token": repeated_component_match.group("token"),
+                "parent": repeated_component_match.group("parent"),
+                "count": int(repeated_component_match.group("count")),
+                "message": warning,
+            }
+
+        text_change_match = self.RESPONSIVE_TEXT_CHANGE_RE.search(warning)
+        if text_change_match:
+            return {
+                "type": "text-content-change",
+                "severity": "review",
+                "width": int(text_change_match.group("width")),
+                "path": text_change_match.group("path"),
+                "message": warning,
+            }
+
+        board_split_match = self.RESPONSIVE_BOARD_SPLIT_RE.search(warning)
+        if board_split_match:
+            return {
+                "type": "board-split",
+                "severity": "info",
+                "variant": board_split_match.group("variant"),
+                "message": warning,
+            }
+
+        if warning.strip():
+            return {
+                "type": "responsive-warning",
+                "severity": "review",
+                "message": warning,
+            }
+        return None
 
     def _interaction_report(self, page_targets: list[tuple[str, Path]]) -> dict[str, Any]:
         report = {
@@ -397,14 +700,17 @@ class SiteValidator:
             "warnings": [],
         }
         if not page_targets:
-            report["warnings"].append("Interaction validation skipped: no generated HTML target was found.")
+            report["warnings"].append(
+                "Interaction validation skipped: no generated HTML target was found."
+            )
             report["summary"] = self._interaction_summary([])
             return report
         playwright_available = self._playwright_is_available()
         report["available"] = playwright_available
         if not playwright_available:
             report["warnings"].append(
-                "Interaction validation skipped: Playwright is not installed in the current environment."
+                "Interaction validation skipped: Playwright is not installed in the "
+                "current environment."
             )
             report["summary"] = self._interaction_summary([])
             return report
@@ -412,7 +718,9 @@ class SiteValidator:
         checked_any = False
         for page_key, html_path in page_targets:
             if not html_path.exists():
-                report["warnings"].append(f"Interaction validation skipped for {page_key}: missing HTML file.")
+                report["warnings"].append(
+                    f"Interaction validation skipped for {page_key}: missing HTML file."
+                )
                 continue
             page_result = {
                 "page": page_key,
@@ -423,7 +731,8 @@ class SiteValidator:
                     probe = self._probe_interactions_page(html_path, viewport)
                 except Exception as exc:  # pragma: no cover - browser/runtime dependent
                     report["warnings"].append(
-                        f"Interaction validation failed for {page_key} at {viewport['width']}px: {exc}"
+                        "Interaction validation failed for "
+                        f"{page_key} at {viewport['width']}px: {exc}"
                     )
                     continue
                 checked_any = True
@@ -440,7 +749,18 @@ class SiteValidator:
         report["summary"] = self._interaction_summary(report["pages"])
         return report
 
-    def _responsive_summary(self, viewport_rows: list[dict[str, Any]]) -> dict[str, int]:
+    def _responsive_summary(
+        self,
+        viewport_rows: list[dict[str, Any]],
+        families: list[dict[str, Any]] | None = None,
+    ) -> dict[str, int]:
+        responsive_families = list(families or [])
+        responsive_issues = [
+            issue
+            for family in responsive_families
+            for issue in family.get("issues", [])
+            if isinstance(issue, dict)
+        ]
         return {
             "totalViewports": len(viewport_rows),
             "viewportsWithIssues": sum(1 for row in viewport_rows if row.get("issues")),
@@ -449,6 +769,42 @@ class SiteValidator:
             ),
             "brokenImageCount": sum(
                 1 for row in viewport_rows if "broken-images" in set(row.get("issues", []))
+            ),
+            "familyCount": len(responsive_families),
+            "familiesWithWarnings": sum(
+                1 for family in responsive_families if family.get("warnings")
+            ),
+            "issueCount": len(responsive_issues),
+            "strictBlockingIssueCount": sum(
+                1 for issue in responsive_issues if issue.get("severity") == "strict-blocker"
+            ),
+            "strictBlockingFamilyCount": sum(
+                1
+                for family in responsive_families
+                if any(
+                    issue.get("severity") == "strict-blocker"
+                    for issue in family.get("issues", [])
+                    if isinstance(issue, dict)
+                )
+            ),
+            "strictReadyFamilyCount": sum(
+                1 for family in responsive_families if family.get("strictReady") is True
+            ),
+            "duplicateSiblingTokenCount": sum(
+                1
+                for issue in responsive_issues
+                if issue.get("type") == "duplicate-sibling-token"
+            ),
+            "repeatedComponentTokenCount": sum(
+                1
+                for issue in responsive_issues
+                if issue.get("type") == "repeated-component-token"
+            ),
+            "textContentChangeCount": sum(
+                1 for issue in responsive_issues if issue.get("type") == "text-content-change"
+            ),
+            "boardSplitCount": sum(
+                1 for issue in responsive_issues if issue.get("type") == "board-split"
             ),
         }
 
@@ -467,17 +823,6 @@ class SiteValidator:
             "skippedChecks": sum(1 for check in checks if check.get("status") == "skipped"),
         }
 
-    def _dedupe_warnings(self, warnings: list[str]) -> list[str]:
-        ordered: list[str] = []
-        seen: set[str] = set()
-        for warning in warnings:
-            normalized = str(warning).strip()
-            if not normalized or normalized in seen:
-                continue
-            seen.add(normalized)
-            ordered.append(normalized)
-        return ordered
-
     def _playwright_is_available(self) -> bool:
         try:
             from playwright.sync_api import sync_playwright  # noqa: F401
@@ -485,7 +830,11 @@ class SiteValidator:
             return False
         return True
 
-    def _probe_responsive_page(self, html_path: Path, viewport: dict[str, int | str]) -> dict[str, Any]:
+    def _probe_responsive_page(
+        self,
+        html_path: Path,
+        viewport: dict[str, int | str],
+    ) -> dict[str, Any]:
         with self._served_page_url(html_path) as url:
             return self._probe_responsive_url(url, viewport)
 
@@ -502,20 +851,52 @@ class SiteValidator:
                 device_scale_factor=1,
             )
             page.goto(url, wait_until="networkidle")
+            page.evaluate(
+                """
+                async () => {
+                  const images = Array.from(document.images);
+                  images.forEach((img) => {
+                    img.loading = "eager";
+                  });
+                  await Promise.all(images.map((img) => {
+                    if (img.complete) {
+                      return null;
+                    }
+                    return new Promise((resolve) => {
+                      img.addEventListener("load", resolve, { once: true });
+                      img.addEventListener("error", resolve, { once: true });
+                    });
+                  }));
+                }
+                """
+            )
             metrics = page.evaluate(
                 """
                 () => {
                   const doc = document.documentElement;
                   const body = document.body;
                   const pageRoot = document.querySelector('.page');
+                  const pageShell = document.querySelector('.page-shell');
+                  const fixedShell =
+                    pageRoot?.dataset.pageShell === "fixed"
+                    || pageShell?.dataset.pageShell === "fixed";
                   const scrollWidth = Math.max(
                     doc ? doc.scrollWidth : 0,
                     body ? body.scrollWidth : 0,
-                    pageRoot ? pageRoot.scrollWidth : 0,
+                    fixedShell || !pageRoot ? 0 : pageRoot.scrollWidth,
                   );
                   const clientWidth = doc ? doc.clientWidth : window.innerWidth;
                   const horizontalOverflow = scrollWidth > clientWidth + 1;
-                  const brokenImages = Array.from(document.images).filter((img) => !img.complete || img.naturalWidth === 0).length;
+                  const brokenImages = Array.from(document.images).filter((img) => {
+                    const rect = img.getBoundingClientRect();
+                    const style = getComputedStyle(img);
+                    const visible =
+                      rect.width > 0
+                      && rect.height > 0
+                      && style.display !== "none"
+                      && style.visibility !== "hidden";
+                    return visible && (!img.complete || img.naturalWidth === 0);
+                  }).length;
                   return {
                     scrollWidth,
                     clientWidth,
@@ -530,7 +911,11 @@ class SiteValidator:
             browser.close()
         return metrics
 
-    def _probe_interactions_page(self, html_path: Path, viewport: dict[str, int | str]) -> dict[str, Any]:
+    def _probe_interactions_page(
+        self,
+        html_path: Path,
+        viewport: dict[str, int | str],
+    ) -> dict[str, Any]:
         with self._served_page_url(html_path) as url:
             return self._probe_interactions_url(url, viewport)
 
@@ -547,7 +932,11 @@ class SiteValidator:
             trigger = triggers.nth(0)
             panel_id = trigger.get_attribute("aria-controls") or ""
             if not panel_id:
-                return {"component": "accordion", "status": "fail", "issues": ["missing-aria-controls"]}
+                return {
+                    "component": "accordion",
+                    "status": "fail",
+                    "issues": ["missing-aria-controls"],
+                }
             panel = page.locator(f"#{panel_id}")
             before_expanded = trigger.get_attribute("aria-expanded") or ""
             before_hidden = panel.get_attribute("hidden") or ""
@@ -589,14 +978,22 @@ class SiteValidator:
             root = roots.nth(0)
             thumbs = root.locator("[data-carousel-thumb]")
             if thumbs.count() < 2:
-                return {"component": "carousel", "status": "skipped", "issues": ["not-enough-thumbs"]}
+                return {
+                    "component": "carousel",
+                    "status": "skipped",
+                    "issues": ["not-enough-thumbs"],
+                }
             before_active = root.get_attribute("data-carousel-active") or ""
             thumb = thumbs.nth(1)
             expected_active = thumb.get_attribute("data-carousel-thumb") or ""
             thumb.click()
             page.wait_for_timeout(75)
             after_active = root.get_attribute("data-carousel-active") or ""
-            success = bool(expected_active) and after_active == expected_active and after_active != before_active
+            success = (
+                bool(expected_active)
+                and after_active == expected_active
+                and after_active != before_active
+            )
             return {
                 "component": "carousel",
                 "status": "pass" if success else "fail",
@@ -604,16 +1001,32 @@ class SiteValidator:
             }
 
         def form_check(page: Page) -> dict[str, Any]:
-            controls = page.locator(".content-form-control")
-            if controls.count() == 0:
+            controls = page.evaluate(
+                """
+                () => Array.from(document.querySelectorAll(".content-form-control"))
+                  .map((control) => {
+                    const rect = control.getBoundingClientRect();
+                    const style = getComputedStyle(control);
+                    const visible =
+                      rect.width > 0
+                      && rect.height > 0
+                      && style.display !== "none"
+                      && style.visibility !== "hidden";
+                    return {
+                      visible,
+                      disabled: control.hasAttribute("disabled"),
+                    };
+                  })
+                """
+            )
+            if not controls:
                 return {"component": "form", "status": "skipped", "issues": ["not-present"]}
-            control = controls.nth(0)
-            visible = control.is_visible()
-            disabled = control.get_attribute("disabled") is not None
-            success = visible and not disabled
+            visible_controls = [control for control in controls if control.get("visible")]
+            if not visible_controls:
+                return {"component": "form", "status": "skipped", "issues": ["not-visible"]}
+            disabled = bool(visible_controls[0].get("disabled"))
+            success = not disabled
             issues: list[str] = []
-            if not visible:
-                issues.append("not-visible")
             if disabled:
                 issues.append("disabled")
             return {
@@ -661,7 +1074,10 @@ class SiteValidator:
             with Image.open(reference_path) as reference, Image.open(screenshot_path) as generated:
                 reference_image = reference.convert("RGBA")
                 generated_image = generated.convert("RGBA")
-                reference_image, generated_image = self._align_images(reference_image, generated_image)
+                reference_image, generated_image = self._align_images(
+                    reference_image,
+                    generated_image,
+                )
                 diff = ImageChops.difference(reference_image, generated_image)
                 histogram = diff.histogram()
                 squares = sum(value * ((idx % 256) ** 2) for idx, value in enumerate(histogram))
@@ -719,7 +1135,11 @@ class SiteValidator:
             thread.join(timeout=2)
             server.server_close()
 
-    def _align_images(self, reference: Image.Image, generated: Image.Image) -> tuple[Image.Image, Image.Image]:
+    def _align_images(
+        self,
+        reference: Image.Image,
+        generated: Image.Image,
+    ) -> tuple[Image.Image, Image.Image]:
         width = max(reference.width, generated.width)
         height = max(reference.height, generated.height)
         background = (255, 255, 255, 0)
@@ -737,10 +1157,21 @@ class SiteValidator:
         return collapsed.casefold()
 
     def _normalize_visible_text(self, html_content: str) -> str:
-        without_tags = re.sub(r"<[^>]+>", " ", html_content)
+        content = re.sub(r"<\s*br\b[^>]*>", " ", html_content, flags=re.I)
+        content = re.sub(
+            r"</?\s*(span|strong|em|b|i|small|mark|sub|sup)\b[^>]*>",
+            "",
+            content,
+            flags=re.I,
+        )
+        without_tags = re.sub(r"<[^>]+>", " ", content)
         return self._normalize_text(html.unescape(without_tags))
 
 
 class _QuietSimpleHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
-    def log_message(self, format: str, *args: Any) -> None:  # pragma: no cover - noise reduction
+    def log_message(
+        self,
+        format: str,
+        *args: Any,
+    ) -> None:  # pragma: no cover - noise reduction
         return

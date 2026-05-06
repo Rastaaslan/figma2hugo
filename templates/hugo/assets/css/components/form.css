@@ -1,19 +1,19 @@
 /* Style de base pour les vrais contrôles HTML injectés dans les fields Figma. */
 
-[data-form="true"] {
+:where([data-form="true"]) {
   position: relative;
 }
 
-[data-form="true"][data-layout-flow="true"] {
+:where([data-form="true"][data-layout-flow="true"]) {
   width: 100%;
   max-width: 100%;
 }
 
-[data-form-field="true"] {
+:where([data-form-field="true"]) {
   position: relative;
 }
 
-[data-form-field="true"][data-layout-flow="true"] {
+:where([data-form-field="true"][data-layout-flow="true"]) {
   width: 100%;
   max-width: 100%;
 }
@@ -70,7 +70,7 @@ textarea.content-form-control {
 }
 
 @media (max-width: 900px) {
-  [data-form-field="true"][data-layout-flow="true"] .content-form-control {
+  :where([data-form-field="true"][data-layout-flow="true"]) .content-form-control {
     max-width: 100%;
   }
 }

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from typing import Any
 
-from pydantic import AliasChoices, AnyHttpUrl, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, AnyHttpUrl, ConfigDict, Field, ValidationError, model_validator
 
 from figma2hugo.model.base import FigmaBaseModel
 from figma2hugo.model.enums import AssetRole, SectionRole
@@ -147,3 +148,60 @@ class IntermediateDocument(FigmaBaseModel):
     assets: list[AssetRef] = Field(default_factory=list)
     tokens: TokenBag = Field(default_factory=TokenBag)
     warnings: list[str] = Field(default_factory=list)
+
+
+IntermediateDocumentInput = IntermediateDocument | Mapping[str, Any]
+
+
+def validate_intermediate_payload(payload: IntermediateDocumentInput) -> IntermediateDocument:
+    if isinstance(payload, IntermediateDocument):
+        return payload
+    try:
+        return IntermediateDocument.model_validate(payload)
+    except ValidationError as exc:
+        raise ValueError(f"Invalid intermediate model: {exc}") from exc
+
+
+def serialize_intermediate_payload(payload: IntermediateDocumentInput) -> dict[str, Any]:
+    document = validate_intermediate_payload(payload)
+    return document.model_dump(by_alias=True, mode="json")
+
+
+def intermediate_document_name(payload: Any) -> str | None:
+    page = _intermediate_page(payload)
+    name = _page_field(page, "name")
+    return str(name) if name else None
+
+
+def intermediate_document_width(payload: Any) -> int | None:
+    page = _intermediate_page(payload)
+    width = _page_field(page, "width")
+    if width is None:
+        return None
+    try:
+        return int(width)
+    except (TypeError, ValueError):
+        return None
+
+
+def intermediate_document_names(payloads: Iterable[Any]) -> list[str]:
+    names: list[str] = []
+    for payload in payloads:
+        name = intermediate_document_name(payload)
+        if name:
+            names.append(name)
+    return names
+
+
+def _intermediate_page(payload: Any) -> Any | None:
+    if isinstance(payload, IntermediateDocument):
+        return payload.page
+    if isinstance(payload, Mapping):
+        return payload.get("page")
+    return getattr(payload, "page", None)
+
+
+def _page_field(page: Any, field_name: str) -> Any:
+    if isinstance(page, Mapping):
+        return page.get(field_name)
+    return getattr(page, field_name, None)
