@@ -5031,6 +5031,13 @@ class HugoGeneratorTests(unittest.TestCase):
         self.assertIn("--layout-gap: 40.00px", feature_row["attributes"]["style"])
         self.assertEqual(feature_items[0]["attributes"]["data-position-x"], "start")
         self.assertEqual(feature_items[1]["attributes"]["data-position-x"], "center")
+        self.assertEqual(feature_items[0]["layout"]["margin_right"], 720.0)
+        self.assertEqual(feature_items[0]["layout"]["width_ratio"], 0.307692)
+        self.assertEqual(feature_items[1]["layout"]["center_offset_x"], 0.0)
+        self.assertEqual(feature_items[1]["layout"]["center_offset_y_ratio"], -0.15625)
+        self.assertEqual(feature_items[1]["attributes"]["data-size-x"], "fixed")
+        self.assertIn("--geometry-width-ratio: 0.307692", feature_items[0]["attributes"]["style"])
+        self.assertIn("--geometry-center-x: 0.00px", feature_items[1]["attributes"]["style"])
 
     def test_hugo_generator_does_not_auto_promote_inferred_flow_sections_to_section_block(self) -> None:
         model = {

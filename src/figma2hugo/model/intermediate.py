@@ -51,6 +51,16 @@ class LayoutMetadata(FigmaBaseModel):
     margin_right: float | None = None
     margin_top: float | None = None
     margin_bottom: float | None = None
+    margin_left_ratio: float | None = None
+    margin_right_ratio: float | None = None
+    margin_top_ratio: float | None = None
+    margin_bottom_ratio: float | None = None
+    width_ratio: float | None = None
+    height_ratio: float | None = None
+    center_offset_x: float | None = None
+    center_offset_y: float | None = None
+    center_offset_x_ratio: float | None = None
+    center_offset_y_ratio: float | None = None
 
 
 class PageNode(FigmaBaseModel):

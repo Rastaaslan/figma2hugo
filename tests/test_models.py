@@ -37,6 +37,9 @@ def test_intermediate_document_serializes_with_aliases() -> None:
                 layout_mode="VERTICAL",
                 item_spacing=48,
                 inferred_strategy="flow",
+                geometry_source="bounds",
+                geometry_axis="column",
+                geometry_confidence=0.94,
             ),
             meta={"figmaUrl": "https://www.figma.com/design/FILE/Page?node-id=3-964"},
         ),
@@ -45,7 +48,14 @@ def test_intermediate_document_serializes_with_aliases() -> None:
                 id="section-hero",
                 name="Hero",
                 bounds=Bounds(x=0, y=0, width=1920, height=900),
-                layout=LayoutMetadata(layout_mode="VERTICAL", inferred_strategy="flow"),
+                layout=LayoutMetadata(
+                    layout_mode="VERTICAL",
+                    inferred_strategy="flow",
+                    position_anchor_horizontal="stretch",
+                    size_policy_horizontal="fill",
+                    width_ratio=1.0,
+                    center_offset_x=0.0,
+                ),
                 texts=["text-1"],
                 assets=["asset-1"],
             )
@@ -82,6 +92,11 @@ def test_intermediate_document_serializes_with_aliases() -> None:
     assert payload["page"]["meta"]["figmaUrl"].endswith("3-964")
     assert payload["page"]["layout"]["layoutMode"] == "VERTICAL"
     assert payload["page"]["layout"]["itemSpacing"] == 48.0
+    assert payload["page"]["layout"]["geometrySource"] == "bounds"
+    assert payload["page"]["layout"]["geometryAxis"] == "column"
+    assert payload["sections"][0]["layout"]["positionAnchorHorizontal"] == "stretch"
+    assert payload["sections"][0]["layout"]["sizePolicyHorizontal"] == "fill"
+    assert payload["sections"][0]["layout"]["widthRatio"] == 1.0
     assert payload["assets"][0]["nodeId"] == "asset-1"
     assert payload["assets"][0]["layout"]["layoutSizingHorizontal"] == "FILL"
     assert payload["texts"]["text-1"]["styleRuns"][0]["style"]["fontFamily"] == "Inter"

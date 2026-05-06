@@ -22,7 +22,7 @@ Ce document fige le perimetre actuellement supporte par `figma2hugo`.
 - FAQ / accordions
 - Matrices de `href-card` / `link-grid`
 - Collections de composants repetitifs detectees (`component-list`)
-- Inference geometrique prudente pour les collections repetitives : axe, gap, padding et ancres deduits des bounds Figma exportes
+- Inference geometrique prudente pour les collections repetitives : axe, gap, padding, ancres, ratios et offsets par dimension deduits des bounds Figma exportes
 - Carrousels
 - Formulaires HTML basiques enrichis
 - Sous-sections `section-block` en flux opt-in

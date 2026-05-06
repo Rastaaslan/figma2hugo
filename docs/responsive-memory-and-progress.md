@@ -1844,6 +1844,47 @@ Ordre recommande pour la suite :
   - `PYTHONPATH=src python -m figma2hugo.cli validate site`
   - resultat : `buildOk=true`, `0 / 6` viewports avec issues, `strictReady=true` sur la famille locale
 
+### 2026-05-07 - Passe 49 : calcul dimensionnel par axe
+
+- declencheur :
+  - demande de peaufiner le calcul pour chaque dimension
+  - objectif : ne plus se limiter a une ancre globale, mais conserver un diagnostic exploitable pour `x`, `y`, `width`, `height`
+- implementation dans `src/figma2hugo/generators/_shared.py` :
+  - ajout de `GeometryDimensionInference`
+  - calcul separe horizontal / vertical :
+    - start / end
+    - size
+    - ratio start / end / size
+    - offset au centre en pixels et en ratio
+    - ancre : `start`, `center`, `end`, `stretch`
+    - politique de taille : `fixed`, `fluid`, `fill`
+  - injection des resultats dans le layout canonique :
+    - `margin_left`, `margin_right`, `margin_top`, `margin_bottom`
+    - ratios de marges
+    - `width_ratio`, `height_ratio`
+    - `center_offset_x`, `center_offset_y`
+    - ratios des offsets centre
+  - injection de variables CSS de diagnostic :
+    - `--geometry-x`
+    - `--geometry-y`
+    - `--geometry-width`
+    - `--geometry-height`
+    - ratios et offsets associes
+  - confidence flow affine par variation des gaps :
+    - les gaps irreguliers baissent la confiance
+    - les grilles prennent en compte les gaps colonnes et lignes
+- schema :
+  - `LayoutMetadata` expose les nouveaux champs dimensionnels
+- validation :
+  - `PYTHONPATH=src python -m pytest tests/test_generators.py -k "geometry_flow or repeated_component_groups" -q`
+  - `PYTHONPATH=src python -m pytest tests/test_models.py -q`
+  - `PYTHONPATH=src python -m pytest tests/test_generators.py -q`
+  - `PYTHONPATH=src python -m pytest -p no:cacheprovider`
+  - resultat suite complete : `237 passed, 1 skipped`
+  - `PYTHONPATH=src python -m ruff check --select I,F src tests` OK
+  - `PYTHONPATH=src python -m figma2hugo.cli validate site`
+  - resultat : `buildOk=true`, `0 / 6` viewports avec issues, `strictReady=true`
+
 ## Points Ouverts
 
 - la couverture "responsive complet" n'est pas encore synonyme de "toute page absolue Figma devient automatiquement fluide"

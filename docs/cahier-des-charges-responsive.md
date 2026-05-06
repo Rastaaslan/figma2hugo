@@ -193,7 +193,7 @@ footer-bandeau-contact
 - aucune conversion automatique globale d'une page absolue arbitraire en layout fluide
 - les familles supportees peuvent recevoir une aide amont :
   - collections repetitives detectees
-  - axe, gap, padding et ancres deduits des bounds Figma exportes
+  - axe, gap, padding, ancres, ratios et offsets par dimension deduits des bounds Figma exportes
   - activation responsive du flow uniquement si la structure est coherente
 - le travail de mise en page responsive principal reste fait dans Figma
 - le moteur se contente de fusionner des variantes coherentes

@@ -77,6 +77,21 @@ class GeometryFlowInference:
     confidence: float
 
 
+@dataclass(slots=True)
+class GeometryDimensionInference:
+    anchor: str
+    size_policy: str
+    start: float
+    end: float
+    size: float
+    parent_size: float
+    start_ratio: float
+    end_ratio: float
+    size_ratio: float
+    center_offset: float
+    center_offset_ratio: float
+
+
 def ensure_directory(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -1255,7 +1270,8 @@ class CanonicalModelBuilder:
 
         usable_gaps = [max(0.0, gap) for gap in primary_gaps]
         spacing = self._median(usable_gaps)
-        confidence = max(0.0, 1.0 - overlap_penalty - cross_penalty)
+        gap_penalty = self._spacing_variation_penalty(usable_gaps)
+        confidence = max(0.0, 1.0 - overlap_penalty - cross_penalty - gap_penalty)
         return self._geometry_inference(
             parent_bounds,
             ordered,
@@ -1326,6 +1342,9 @@ class CanonicalModelBuilder:
         if overlap_penalty >= 0.35:
             return None
 
+        gap_penalty = self._spacing_variation_penalty(
+            column_gaps
+        ) + self._spacing_variation_penalty(row_gaps)
         return self._geometry_inference(
             parent_bounds,
             boxes,
@@ -1333,7 +1352,7 @@ class CanonicalModelBuilder:
             direction="row",
             item_spacing=self._median(column_gaps),
             counter_axis_spacing=self._median(row_gaps),
-            confidence=max(0.0, 0.86 - overlap_penalty),
+            confidence=max(0.0, 0.86 - overlap_penalty - min(0.24, gap_penalty)),
         )
 
     def _geometry_inference(
@@ -1426,7 +1445,10 @@ class CanonicalModelBuilder:
         if not is_section and (is_component_list or self._is_geometry_flow_shell_candidate(node)):
             layout["use_flow_shell"] = True
 
-        attrs = self._merge_attributes(attrs, self._layout_attributes(layout, bounds=node.get("bounds")))
+        attrs = self._merge_attributes(
+            attrs,
+            self._layout_attributes(layout, bounds=node.get("bounds")),
+        )
         attrs["data-layout-source"] = "geometry"
         attrs["data-layout-axis"] = inference.axis
         attrs["data-layout-confidence"] = f"{inference.confidence:.2f}"
@@ -1459,52 +1481,128 @@ class CanonicalModelBuilder:
         parent_bounds: dict[str, float],
     ) -> None:
         child_bounds = self._geometry_reference_bounds(child)
-        parent_width = float(parent_bounds.get("width", 0.0) or 0.0)
-        parent_height = float(parent_bounds.get("height", 0.0) or 0.0)
-        if parent_width <= 0 or parent_height <= 0:
+        horizontal = self._dimension_constraints(
+            start=float(child_bounds.get("x", 0.0) or 0.0),
+            size=float(child_bounds.get("width", 0.0) or 0.0),
+            parent_size=float(parent_bounds.get("width", 0.0) or 0.0),
+        )
+        vertical = self._dimension_constraints(
+            start=float(child_bounds.get("y", 0.0) or 0.0),
+            size=float(child_bounds.get("height", 0.0) or 0.0),
+            parent_size=float(parent_bounds.get("height", 0.0) or 0.0),
+        )
+        if horizontal is None or vertical is None:
             return
-
-        left = float(child_bounds.get("x", 0.0) or 0.0)
-        top = float(child_bounds.get("y", 0.0) or 0.0)
-        width = float(child_bounds.get("width", 0.0) or 0.0)
-        height = float(child_bounds.get("height", 0.0) or 0.0)
-        right = parent_width - (left + width)
-        bottom = parent_height - (top + height)
-        horizontal_anchor = self._position_anchor(
-            start=left,
-            end=right,
-            size=width,
-            parent_size=parent_width,
-        )
-        vertical_anchor = self._position_anchor(
-            start=top,
-            end=bottom,
-            size=height,
-            parent_size=parent_height,
-        )
-        horizontal_size = "fill" if horizontal_anchor == "stretch" else "fixed"
-        vertical_size = "fill" if vertical_anchor == "stretch" else "fixed"
 
         layout = dict(as_mapping(child.get("layout")))
         layout.update(
             {
-                "position_anchor_horizontal": horizontal_anchor,
-                "position_anchor_vertical": vertical_anchor,
-                "size_policy_horizontal": horizontal_size,
-                "size_policy_vertical": vertical_size,
-                "margin_left": round(left, 2),
-                "margin_right": round(right, 2),
-                "margin_top": round(top, 2),
-                "margin_bottom": round(bottom, 2),
+                "position_anchor_horizontal": horizontal.anchor,
+                "position_anchor_vertical": vertical.anchor,
+                "size_policy_horizontal": horizontal.size_policy,
+                "size_policy_vertical": vertical.size_policy,
+                "margin_left": self._rounded_dimension(horizontal.start),
+                "margin_right": self._rounded_dimension(horizontal.end),
+                "margin_top": self._rounded_dimension(vertical.start),
+                "margin_bottom": self._rounded_dimension(vertical.end),
+                "margin_left_ratio": self._rounded_ratio(horizontal.start_ratio),
+                "margin_right_ratio": self._rounded_ratio(horizontal.end_ratio),
+                "margin_top_ratio": self._rounded_ratio(vertical.start_ratio),
+                "margin_bottom_ratio": self._rounded_ratio(vertical.end_ratio),
+                "width_ratio": self._rounded_ratio(horizontal.size_ratio),
+                "height_ratio": self._rounded_ratio(vertical.size_ratio),
+                "center_offset_x": self._rounded_dimension(horizontal.center_offset),
+                "center_offset_y": self._rounded_dimension(vertical.center_offset),
+                "center_offset_x_ratio": self._rounded_ratio(horizontal.center_offset_ratio),
+                "center_offset_y_ratio": self._rounded_ratio(vertical.center_offset_ratio),
             }
         )
         attrs = dict(as_mapping(child.get("attributes")))
-        attrs["data-position-x"] = horizontal_anchor
-        attrs["data-position-y"] = vertical_anchor
-        attrs["data-size-x"] = horizontal_size
-        attrs["data-size-y"] = vertical_size
+        attrs["data-position-x"] = horizontal.anchor
+        attrs["data-position-y"] = vertical.anchor
+        attrs["data-size-x"] = horizontal.size_policy
+        attrs["data-size-y"] = vertical.size_policy
+        attrs["style"] = merge_inline_styles(
+            attrs.get("style", ""),
+            self._geometry_dimension_inline_style(horizontal=horizontal, vertical=vertical),
+        )
         child["layout"] = layout
         child["attributes"] = attrs
+
+    def _dimension_constraints(
+        self,
+        *,
+        start: float,
+        size: float,
+        parent_size: float,
+    ) -> GeometryDimensionInference | None:
+        if parent_size <= 0 or size <= 0:
+            return None
+        end = parent_size - (start + size)
+        center_offset = (start + size / 2.0) - (parent_size / 2.0)
+        anchor = self._position_anchor(
+            start=start,
+            end=end,
+            size=size,
+            parent_size=parent_size,
+        )
+        return GeometryDimensionInference(
+            anchor=anchor,
+            size_policy=self._dimension_size_policy(
+                anchor=anchor,
+                start=start,
+                end=end,
+                size=size,
+                parent_size=parent_size,
+            ),
+            start=start,
+            end=end,
+            size=size,
+            parent_size=parent_size,
+            start_ratio=start / parent_size,
+            end_ratio=end / parent_size,
+            size_ratio=size / parent_size,
+            center_offset=center_offset,
+            center_offset_ratio=center_offset / parent_size,
+        )
+
+    def _dimension_size_policy(
+        self,
+        *,
+        anchor: str,
+        start: float,
+        end: float,
+        size: float,
+        parent_size: float,
+    ) -> str:
+        tolerance = max(6.0, parent_size * 0.03)
+        size_ratio = size / max(parent_size, 1.0)
+        if anchor == "stretch":
+            return "fill"
+        if size_ratio >= 0.82 and start >= -tolerance and end >= -tolerance:
+            return "fluid"
+        return "fixed"
+
+    def _geometry_dimension_inline_style(
+        self,
+        *,
+        horizontal: GeometryDimensionInference,
+        vertical: GeometryDimensionInference,
+    ) -> str:
+        return merge_inline_styles(
+            f"--geometry-x: {horizontal.start:.2f}px",
+            f"--geometry-y: {vertical.start:.2f}px",
+            f"--geometry-width: {horizontal.size:.2f}px",
+            f"--geometry-height: {vertical.size:.2f}px",
+            f"--geometry-margin-right: {horizontal.end:.2f}px",
+            f"--geometry-margin-bottom: {vertical.end:.2f}px",
+            f"--geometry-x-ratio: {horizontal.start_ratio:.6f}",
+            f"--geometry-y-ratio: {vertical.start_ratio:.6f}",
+            f"--geometry-width-ratio: {horizontal.size_ratio:.6f}",
+            f"--geometry-height-ratio: {vertical.size_ratio:.6f}",
+            f"--geometry-center-x: {horizontal.center_offset:.2f}px",
+            f"--geometry-center-y: {vertical.center_offset:.2f}px",
+        )
 
     def _geometry_reference_bounds(self, node: dict[str, Any]) -> dict[str, float]:
         metadata = as_mapping(node.get("metadata"))
@@ -1532,6 +1630,22 @@ class CanonicalModelBuilder:
         if abs(end) + tolerance < abs(start):
             return "end"
         return "start"
+
+    def _spacing_variation_penalty(self, values: list[float]) -> float:
+        if len(values) < 2:
+            return 0.0
+        median = self._median(values)
+        deviations = [abs(float(value) - median) for value in values]
+        variation = self._median(deviations)
+        return min(0.18, variation / max(abs(median), 16.0))
+
+    def _rounded_dimension(self, value: float) -> float:
+        rounded = round(float(value), 2)
+        return 0.0 if abs(rounded) < 0.01 else rounded
+
+    def _rounded_ratio(self, value: float) -> float:
+        rounded = round(float(value), 6)
+        return 0.0 if abs(rounded) < 0.000001 else rounded
 
     def _median(self, values: list[float]) -> float:
         numbers = sorted(float(value) for value in values if value is not None)
@@ -1881,6 +1995,48 @@ class CanonicalModelBuilder:
             "margin_right": self._layout_float(raw_layout, "margin_right", "marginRight"),
             "margin_top": self._layout_float(raw_layout, "margin_top", "marginTop"),
             "margin_bottom": self._layout_float(raw_layout, "margin_bottom", "marginBottom"),
+            "margin_left_ratio": self._layout_float(
+                raw_layout,
+                "margin_left_ratio",
+                "marginLeftRatio",
+            ),
+            "margin_right_ratio": self._layout_float(
+                raw_layout,
+                "margin_right_ratio",
+                "marginRightRatio",
+            ),
+            "margin_top_ratio": self._layout_float(
+                raw_layout,
+                "margin_top_ratio",
+                "marginTopRatio",
+            ),
+            "margin_bottom_ratio": self._layout_float(
+                raw_layout,
+                "margin_bottom_ratio",
+                "marginBottomRatio",
+            ),
+            "width_ratio": self._layout_float(raw_layout, "width_ratio", "widthRatio"),
+            "height_ratio": self._layout_float(raw_layout, "height_ratio", "heightRatio"),
+            "center_offset_x": self._layout_float(
+                raw_layout,
+                "center_offset_x",
+                "centerOffsetX",
+            ),
+            "center_offset_y": self._layout_float(
+                raw_layout,
+                "center_offset_y",
+                "centerOffsetY",
+            ),
+            "center_offset_x_ratio": self._layout_float(
+                raw_layout,
+                "center_offset_x_ratio",
+                "centerOffsetXRatio",
+            ),
+            "center_offset_y_ratio": self._layout_float(
+                raw_layout,
+                "center_offset_y_ratio",
+                "centerOffsetYRatio",
+            ),
             "direction": direction,
         }
 
@@ -2426,7 +2582,11 @@ class CanonicalModelBuilder:
             "bounds": bounds,
             "layout": layout,
             "attributes": attrs,
-            "metadata": self._container_metadata(data, authored_bounds=authored_bounds, bounds=bounds),
+            "metadata": self._container_metadata(
+                data,
+                authored_bounds=authored_bounds,
+                bounds=bounds,
+            ),
             "children": children,
             "form_control": form_control,
         }
@@ -2451,7 +2611,9 @@ class CanonicalModelBuilder:
         tolerance: float = 0.01,
     ) -> bool:
         for key in ("x", "y", "width", "height"):
-            if abs(float(first.get(key, 0.0) or 0.0) - float(second.get(key, 0.0) or 0.0)) > tolerance:
+            first_value = float(first.get(key, 0.0) or 0.0)
+            second_value = float(second.get(key, 0.0) or 0.0)
+            if abs(first_value - second_value) > tolerance:
                 return False
         return True
 
