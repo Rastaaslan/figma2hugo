@@ -1962,6 +1962,57 @@ Ordre recommande pour la suite :
   - `PYTHONPATH=src python -m figma2hugo.cli validate site`
   - resultat : `buildOk=true`, `0 / 6` viewports avec issues, `strictReady=true`
 
+### 2026-05-07 - Passe 52 : coherence de taille texte et formulaire mobile lisible
+
+- declencheur :
+  - certains paragraphes longs du meme breakpoint etaient exportes a des corps tres differents
+  - en mobile `402`, le paragraphe contact principal etait a `5.35px` alors que les paragraphes longs comparables etaient a `9px`
+  - le formulaire du bandeau footer mobile etait exporte a environ `76x91px`, donc trop petit pour etre lu ou manipule
+- implementation dans `templates/shared/page-shell.js` :
+  - ajout de `repairResponsiveTextSizeConsistency`
+  - selection defensive des longs `p.content-text` :
+    - exclusion des boutons, formulaires, footer legal, bandeaux, hero et nav
+    - cible basee sur la mediane du breakpoint courant
+    - en mobile, plancher de lisibilite puis reduction si la hauteur estimee depasse le budget vertical raisonnable du bloc
+    - annotation transitoire `data-page-shell-normalized-text="true"`
+  - ajout de `repairReadableTinyForm`
+    - si un formulaire responsive mobile est sous `180px` de large, il peut etre agrandi par `scale(...)`
+    - les vrais controles HTML restent actifs et recoivent une taille de texte/padding adaptee avant scaling
+    - annotation transitoire `data-page-shell-readable-form="true"`
+  - ajout de `stretchFormVisualBand`
+    - le bandeau visuel parent est etire quand le formulaire mobile agrandi depasse la hauteur exportee
+    - les assets de fond et la barre footer sont decales/etires sans mutation des donnees Hugo
+    - annotation transitoire `data-page-shell-stretched-band="true"`
+  - renforcement du rescue de paragraphe trailing :
+    - ajout de `data-page-shell-rescue-heading-text`
+    - `repairAnchoredRescuedTexts` rattache le clone sous le titre visible apres les deplacements anti-collision
+    - `ensureRescuedHeadingClearance` reserve un petit gap avant ce titre si le paragraphe precedent est trop proche
+- effet mesure localement sur `page-accueil` mobile `402px` :
+  - `text-texte-contact-paragraph-1-w402` passe de `5.35px / 218px` a environ `7.11px / 284px`
+  - le paragraphe rescape `text-texte-contact-paragraph-3` reste visible sous `Expertise`, a environ `9px / 284px`
+  - `node-formulaire-contact-post` passe d'environ `76x91px` a environ `169x201px`
+  - les controles du formulaire restent actifs et visibles, avec police interne ramenee a `7px` avant scaling
+  - la hauteur finale colle au contenu visible (`scrollHeight` ~= `page-shell-height`, environ `2268px`)
+- idiome Hugo :
+  - aucune modification du JSON ou des partials metier
+  - la correction reste une reparation runtime mesuree du shell fixe responsive
+  - les marqueurs sont nettoyes a chaque recalcul avant nouvelle mesure
+- validation visuelle locale :
+  - capture Playwright mobile `402px` : `tmp/402-size-pass-v8.png`
+  - capture tablette verifiee : pas d'agrandissement mobile applique au formulaire tablette
+- validation ciblee :
+  - `PYTHONPATH=src python -m pytest tests/test_generators.py -k page_shell -q`
+  - resultat : `1 passed`
+  - `PYTHONPATH=src python -m pytest tests/test_validator.py -q`
+  - resultat : `16 passed`
+- validation globale :
+  - `PYTHONPATH=src python -m pytest -p no:cacheprovider`
+  - resultat : `237 passed, 1 skipped`
+  - `PYTHONPATH=src python -m ruff check --select I,F src tests`
+  - resultat : OK
+  - `PYTHONPATH=src python -m figma2hugo.cli validate site`
+  - resultat : `buildOk=true`, `0 / 6` viewports avec issues, `strictReady=true`
+
 ## Points Ouverts
 
 - la couverture "responsive complet" n'est pas encore synonyme de "toute page absolue Figma devient automatiquement fluide"

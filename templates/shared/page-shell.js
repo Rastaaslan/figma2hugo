@@ -91,6 +91,20 @@
     page.querySelectorAll('[data-page-shell-rescued-text="true"]').forEach(function (text) {
       text.remove();
     });
+    page.querySelectorAll('[data-page-shell-normalized-text="true"]').forEach(function (text) {
+      text.removeAttribute("data-page-shell-normalized-text");
+      text.style.removeProperty("font-size");
+      text.style.removeProperty("line-height");
+      text.style.removeProperty("left");
+      text.style.removeProperty("width");
+      text.style.removeProperty("height");
+      text.style.removeProperty("overflow");
+    });
+    page.querySelectorAll('[data-page-shell-stretched-band="true"]').forEach(function (item) {
+      item.removeAttribute("data-page-shell-stretched-band");
+      item.style.removeProperty("height");
+      item.style.removeProperty("min-height");
+    });
     page.querySelectorAll(".content-node").forEach(function (node) {
       node.style.removeProperty("--content-node-stack-shift");
     });
@@ -111,6 +125,10 @@
     });
     page.querySelectorAll('[data-page-shell-tiny-form="true"]').forEach(function (form) {
       form.removeAttribute("data-page-shell-tiny-form");
+      form.removeAttribute("data-page-shell-readable-form");
+      form.style.removeProperty("transform");
+      form.style.removeProperty("transform-origin");
+      form.style.removeProperty("left");
       form.querySelectorAll(".content-form-control, [data-form-submit]").forEach(function (control) {
         if (control.dataset.pageShellInitiallyDisabled !== "true") {
           control.disabled = false;
@@ -120,6 +138,9 @@
         control.removeAttribute("aria-hidden");
         control.style.removeProperty("pointer-events");
         control.style.removeProperty("visibility");
+        control.style.removeProperty("font-size");
+        control.style.removeProperty("line-height");
+        control.style.removeProperty("padding");
       });
     });
   }
@@ -132,7 +153,9 @@
     repairBreakpointBackgroundLayers(page);
     repairTinyResponsiveForms(page, scale);
     repairRescuedTrailingTexts(page, scale);
+    repairResponsiveTextSizeConsistency(page, scale);
     repairTextCollisions(page, scale);
+    repairAnchoredRescuedTexts(page, scale);
     repairScopedContentCollisions(page, scale);
     repairPostTextControlSpacing(page, scale);
     repairButtonBandSpacing(page, scale);
@@ -152,6 +175,9 @@
       if (width >= 180) {
         return;
       }
+      if (repairReadableTinyForm(form, scale, width)) {
+        return;
+      }
       form.setAttribute("data-page-shell-tiny-form", "true");
       form.querySelectorAll(".content-form-control, [data-form-submit]").forEach(function (control) {
         control.dataset.pageShellInitiallyDisabled = control.disabled ? "true" : "false";
@@ -166,6 +192,278 @@
     });
   }
 
+  function repairReadableTinyForm(form, scale, width) {
+    var section = form.closest(".page-section");
+    if (!(section instanceof HTMLElement)) {
+      return false;
+    }
+    var sectionRect = section.getBoundingClientRect();
+    var sectionWidth = sectionRect.width / scale;
+    if (sectionWidth > 480 || width <= 0) {
+      return false;
+    }
+    var targetWidth = Math.min(176, Math.max(156, sectionWidth * 0.42));
+    if (targetWidth <= width * 1.2) {
+      return false;
+    }
+    var formRect = form.getBoundingClientRect();
+    var formLeft = (formRect.left - sectionRect.left) / scale;
+    var formTop = (formRect.top - sectionRect.top) / scale;
+    var formScale = targetWidth / width;
+    var sectionPadding = 10;
+    var nextLeft = Math.min(formLeft, sectionWidth - targetWidth - sectionPadding);
+    nextLeft = Math.max(sectionPadding, nextLeft);
+    form.setAttribute("data-page-shell-tiny-form", "true");
+    form.setAttribute("data-page-shell-readable-form", "true");
+    form.style.setProperty("left", roundPx(nextLeft) + "px", "important");
+    form.style.setProperty("transform-origin", "top left");
+    form.style.setProperty(
+      "transform",
+      "translateY(var(--content-node-stack-shift, 0px)) scale(" + roundPx(formScale) + ")",
+    );
+    repairReadableFormControlText(form, scale);
+    stretchFormVisualBand(form, section, formTop + formRect.height / scale * formScale + sectionPadding);
+    return true;
+  }
+
+  function repairReadableFormControlText(form, scale) {
+    form.querySelectorAll(".content-form-control").forEach(function (control) {
+      if (!(control instanceof HTMLElement) || !isVisible(control)) {
+        return;
+      }
+      var rect = control.getBoundingClientRect();
+      var height = rect.height / scale;
+      if (height <= 0) {
+        return;
+      }
+      var fontSize = Math.min(7, Math.max(5.2, height * 0.58));
+      var lineHeight = control.tagName.toUpperCase() === "TEXTAREA" ? fontSize * 1.25 : height;
+      var padding = Math.max(2, Math.min(4, height * 0.3));
+      control.style.setProperty("font-size", roundPx(fontSize) + "px", "important");
+      control.style.setProperty("line-height", roundPx(lineHeight) + "px", "important");
+      control.style.setProperty("padding", "0 " + roundPx(padding) + "px", "important");
+    });
+  }
+
+  function stretchFormVisualBand(form, section, minHeight) {
+    var sectionRect = section.getBoundingClientRect();
+    var formAncestor = form.parentElement;
+    while (formAncestor && formAncestor !== section) {
+      if (/\b(bandeau|banner|footer|contact)\b/i.test(String(formAncestor.className || ""))) {
+        break;
+      }
+      formAncestor = formAncestor.parentElement;
+    }
+    var target = formAncestor instanceof HTMLElement && formAncestor !== section ? formAncestor : section;
+    var targetRect = target.getBoundingClientRect();
+    var targetTop = target === section ? 0 : (targetRect.top - sectionRect.top) / scaleFromRects(sectionRect, section);
+    var currentHeight = targetRect.height / scaleFromRects(sectionRect, section);
+    var nextHeight = Math.ceil(minHeight - targetTop);
+    if (nextHeight <= currentHeight) {
+      return;
+    }
+    var delta = nextHeight - currentHeight;
+    var shiftedBottom = targetTop + nextHeight;
+    var parent = target.parentElement;
+    target.style.setProperty("height", roundPx(nextHeight) + "px", "important");
+    target.style.setProperty("min-height", roundPx(nextHeight) + "px", "important");
+    target.setAttribute("data-page-shell-stretched-band", "true");
+    target.querySelectorAll(".content-asset.bg, .content-asset[data-purpose='background']").forEach(function (asset) {
+      if (!(asset instanceof HTMLElement)) {
+        return;
+      }
+      asset.style.setProperty("height", "100%", "important");
+      asset.setAttribute("data-page-shell-stretched-band", "true");
+    });
+    if (parent instanceof HTMLElement) {
+      Array.from(parent.children).forEach(function (sibling) {
+        if (!(sibling instanceof HTMLElement) || sibling === target || !isVisible(sibling)) {
+          return;
+        }
+        var siblingRect = sibling.getBoundingClientRect();
+        var siblingTop = (siblingRect.top - sectionRect.top) / scaleFromRects(sectionRect, section);
+        if (siblingTop < targetTop + currentHeight - 2) {
+          return;
+        }
+        setStackShift(sibling, delta);
+        shiftedBottom = Math.max(shiftedBottom, siblingTop + siblingRect.height / scaleFromRects(sectionRect, section) + delta);
+      });
+    }
+    stretchSectionForBand(section, shiftedBottom + 2);
+  }
+
+  function scaleFromRects(sectionRect, section) {
+    var sectionWidth = parsePx(window.getComputedStyle(section).width) || section.offsetWidth || sectionRect.width;
+    return sectionWidth > 0 ? sectionRect.width / sectionWidth : 1;
+  }
+
+  function stretchSectionForBand(section, minHeight) {
+    var inner = section.querySelector(":scope > .page-section__inner");
+    var sectionHeight = parsePx(window.getComputedStyle(section).height) || section.offsetHeight || 0;
+    if (minHeight <= sectionHeight) {
+      return;
+    }
+    [section, inner].forEach(function (item) {
+      if (!(item instanceof HTMLElement)) {
+        return;
+      }
+      item.style.setProperty("height", roundPx(minHeight) + "px", "important");
+      item.style.setProperty("min-height", roundPx(minHeight) + "px", "important");
+      item.setAttribute("data-page-shell-stretched-band", "true");
+    });
+  }
+
+  function repairResponsiveTextSizeConsistency(page, scale) {
+    var pageRect = page.getBoundingClientRect();
+    var pageWidth = pageRect.width / scale;
+    if (pageWidth <= 0 || pageWidth > 1024) {
+      return;
+    }
+    var items = Array.from(page.querySelectorAll("p.content-text"))
+      .filter(isResponsiveBodyTextCandidate)
+      .map(function (text) {
+        var style = window.getComputedStyle(text);
+        var rect = visualElementRect(text, scale);
+        var section = text.closest(".page-section") || page;
+        var sectionRect = section.getBoundingClientRect();
+        return {
+          element: text,
+          section: section,
+          sectionRect: sectionRect,
+          fontSize: parsePx(style.fontSize),
+          lineHeight: parsePx(style.lineHeight),
+          left: (rect.left - sectionRect.left) / scale,
+          width: rect.width / scale,
+          height: rect.height / scale,
+        };
+      })
+      .filter(function (item) {
+        return item.fontSize > 0 && item.width > 0;
+      });
+
+    if (items.length < 3) {
+      return;
+    }
+
+    var fontSizes = items.map(function (item) {
+      return item.fontSize;
+    });
+    var lineRatios = items
+      .map(function (item) {
+        return item.lineHeight > 0 ? item.lineHeight / item.fontSize : 0;
+      })
+      .filter(function (ratio) {
+        return ratio >= 1 && ratio <= 2;
+      });
+    var widths = items.map(function (item) {
+      return item.width;
+    });
+    var targetFontSize = median(fontSizes);
+    if (pageWidth <= 480) {
+      targetFontSize = Math.max(targetFontSize, 8.5);
+    }
+    targetFontSize = Math.min(targetFontSize, pageWidth <= 480 ? 10 : 14);
+    var lineRatio = Math.min(1.5, Math.max(1.2, median(lineRatios) || 1.25));
+    var targetLineHeight = targetFontSize * lineRatio;
+    var targetWidth = Math.min(median(widths), pageWidth - 32);
+    if (pageWidth <= 480) {
+      targetWidth = Math.max(targetWidth, Math.min(pageWidth - 32, pageWidth * 0.68));
+    }
+
+    items.forEach(function (item) {
+      if (item.fontSize >= targetFontSize * 0.86) {
+        return;
+      }
+      var sectionWidth = item.sectionRect.width / scale;
+      var nextWidth = Math.min(Math.max(item.width, targetWidth), Math.max(1, sectionWidth - 24));
+      var nextFontSize = targetFontSize;
+      var nextLineHeight = targetLineHeight;
+      var nextLeft = item.left + item.width / 2 - nextWidth / 2;
+      nextLeft = Math.min(Math.max(12, nextLeft), Math.max(12, sectionWidth - nextWidth - 12));
+      var maxHeight = pageWidth <= 480 ? Math.max(120, Math.min(160, item.height * 2.25)) : Infinity;
+      if (Number.isFinite(maxHeight)) {
+        var estimatedHeight = estimateNormalizedTextHeight(item, nextWidth, nextFontSize, nextLineHeight, scale);
+        if (estimatedHeight > maxHeight) {
+          var shrink = Math.sqrt(maxHeight / estimatedHeight);
+          nextFontSize = Math.max(item.fontSize * 1.15, nextFontSize * shrink);
+          nextLineHeight = nextFontSize * lineRatio;
+        }
+      }
+      item.element.setAttribute("data-page-shell-normalized-text", "true");
+      item.element.style.setProperty("font-size", roundPx(nextFontSize) + "px", "important");
+      item.element.style.setProperty("line-height", roundPx(nextLineHeight) + "px", "important");
+      item.element.style.setProperty("left", roundPx(nextLeft) + "px", "important");
+      item.element.style.setProperty("width", roundPx(nextWidth) + "px", "important");
+      item.element.style.setProperty("height", "auto", "important");
+      item.element.style.setProperty("overflow", "visible", "important");
+    });
+  }
+
+  function estimateNormalizedTextHeight(item, width, fontSize, lineHeight, scale) {
+    item.element.style.setProperty("font-size", roundPx(fontSize) + "px", "important");
+    item.element.style.setProperty("line-height", roundPx(lineHeight) + "px", "important");
+    item.element.style.setProperty("width", roundPx(width) + "px", "important");
+    item.element.style.setProperty("height", "auto", "important");
+    item.element.style.setProperty("overflow", "visible", "important");
+    var rect = visualElementRect(item.element, scale);
+    item.element.style.removeProperty("font-size");
+    item.element.style.removeProperty("line-height");
+    item.element.style.removeProperty("width");
+    item.element.style.removeProperty("height");
+    item.element.style.removeProperty("overflow");
+    return rect.height / scale;
+  }
+
+  function isResponsiveBodyTextCandidate(text) {
+    if (!isVisible(text) || isHeadingText(text)) {
+      return false;
+    }
+    var content = normalizeTextContent(text.textContent);
+    if (content.length < 80) {
+      return false;
+    }
+    var className = String(text.className || "");
+    if (/\b(button|footer|label|coord|legal|copyright)\b/i.test(className)) {
+      return false;
+    }
+    if (text.closest("button, form, [data-form='true'], [data-form-submit]")) {
+      return false;
+    }
+    var framed = text.closest(".content-node, .page-section");
+    while (framed instanceof HTMLElement) {
+      if (/\b(bandeau|banner|hero|nav|menu)\b/i.test(String(framed.className || ""))) {
+        return false;
+      }
+      if (framed.classList.contains("page-section")) {
+        break;
+      }
+      framed = framed.parentElement;
+    }
+    return true;
+  }
+
+  function median(values) {
+    if (!values || values.length === 0) {
+      return 0;
+    }
+    var sorted = values
+      .slice()
+      .filter(function (value) {
+        return Number.isFinite(value);
+      })
+      .sort(function (a, b) {
+        return a - b;
+      });
+    if (sorted.length === 0) {
+      return 0;
+    }
+    var middle = Math.floor(sorted.length / 2);
+    if (sorted.length % 2) {
+      return sorted[middle];
+    }
+    return (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+
   function repairPostTextControlSpacing(page, scale) {
     var minGap = 18;
     page.querySelectorAll(".page-section").forEach(function (section) {
@@ -178,6 +476,7 @@
         .map(function (text) {
           var rect = visualElementRect(text, scale);
           return {
+            top: (rect.top - sectionRect.top) / scale,
             left: (rect.left - sectionRect.left) / scale,
             right: (rect.right - sectionRect.left) / scale,
             bottom: (rect.bottom - sectionRect.top) / scale,
@@ -471,7 +770,8 @@
             }
           });
           if (shift > 0) {
-            item.element.style.setProperty("--content-text-stack-shift", roundPx(shift) + "px");
+            var existingShift = parsePx(item.element.style.getPropertyValue("--content-text-stack-shift"));
+            item.element.style.setProperty("--content-text-stack-shift", roundPx(Math.max(existingShift, shift)) + "px");
           }
           placed.push({
             left: item.left,
@@ -758,6 +1058,7 @@
     var gap = Math.max(10, parsePx(headingStyle.lineHeight) / Math.max(scale, 1) * 0.35);
     clone.removeAttribute("id");
     clone.setAttribute("data-page-shell-rescued-text", "true");
+    clone.setAttribute("data-page-shell-rescue-heading-text", normalizeTextContent(heading.textContent));
     clone.setAttribute("aria-hidden", "false");
     clone.style.setProperty("display", "block", "important");
     clone.style.setProperty("left", roundPx((referenceRect.left - sectionRect.left) / scale) + "px", "important");
@@ -777,6 +1078,72 @@
     var target = section.querySelector(".page-section__inner, .content-node");
     if (target instanceof HTMLElement) {
       target.appendChild(clone);
+    }
+  }
+
+  function repairAnchoredRescuedTexts(page, scale) {
+    page.querySelectorAll('[data-page-shell-rescued-text="true"]').forEach(function (text) {
+      if (!(text instanceof HTMLElement) || !isVisible(text)) {
+        return;
+      }
+      var section = text.closest(".page-section");
+      if (!(section instanceof HTMLElement)) {
+        return;
+      }
+      var headingText = text.getAttribute("data-page-shell-rescue-heading-text");
+      if (!headingText) {
+        return;
+      }
+      var heading = findVisibleHeadingByText(
+        Array.from(section.querySelectorAll(".content-text")).filter(function (candidate) {
+          return candidate !== text && isVisible(candidate) && isHeadingText(candidate);
+        }),
+        headingText,
+      );
+      if (!(heading instanceof HTMLElement)) {
+        return;
+      }
+      ensureRescuedHeadingClearance(section, heading, text, scale);
+      var sectionRect = section.getBoundingClientRect();
+      var headingRect = visualElementRect(heading, scale);
+      var headingStyle = window.getComputedStyle(heading);
+      var gap = Math.max(8, parsePx(headingStyle.lineHeight) / Math.max(scale, 1) * 0.45);
+      text.style.removeProperty("--content-text-stack-shift");
+      text.style.setProperty("top", roundPx((headingRect.bottom - sectionRect.top) / scale + gap) + "px", "important");
+    });
+  }
+
+  function ensureRescuedHeadingClearance(section, heading, rescuedText, scale) {
+    var minGap = 12;
+    var sectionRect = section.getBoundingClientRect();
+    var headingRect = visualElementRect(heading, scale);
+    var headingTop = (headingRect.top - sectionRect.top) / scale;
+    var headingLeft = (headingRect.left - sectionRect.left) / scale;
+    var headingRight = (headingRect.right - sectionRect.left) / scale;
+    var headingWidth = headingRect.width / scale;
+    var previousBottom = -Infinity;
+    Array.from(section.querySelectorAll("p.content-text"))
+      .filter(isVisible)
+      .forEach(function (paragraph) {
+        if (paragraph === rescuedText) {
+          return;
+        }
+        var rect = visualElementRect(paragraph, scale);
+        var top = (rect.top - sectionRect.top) / scale;
+        if (top > headingTop) {
+          return;
+        }
+        var left = (rect.left - sectionRect.left) / scale;
+        var right = (rect.right - sectionRect.left) / scale;
+        var width = rect.width / scale;
+        var overlap = Math.min(headingRight, right) - Math.max(headingLeft, left);
+        if (overlap < Math.min(headingWidth, width) * 0.16) {
+          return;
+        }
+        previousBottom = Math.max(previousBottom, (rect.bottom - sectionRect.top) / scale);
+      });
+    if (previousBottom > -Infinity && headingTop - previousBottom < minGap) {
+      addTextShift(heading, minGap - (headingTop - previousBottom));
     }
   }
 

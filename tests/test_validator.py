@@ -339,6 +339,14 @@ def test_validator_reports_supported_scope_and_responsive_viewports(
             "recover a hidden trailing paragraph" in item
             for item in report["supportedScope"]["guarantees"]
         )
+        assert any(
+            "normalize undersized long body copy" in item
+            for item in report["supportedScope"]["guarantees"]
+        )
+        assert any(
+            "enlarge tiny mobile forms" in item
+            for item in report["supportedScope"]["guarantees"]
+        )
         assert "breakpoint merging from multiple Figma page variants" not in report["supportedScope"]["notGuaranteedYet"]
         assert report["responsive"]["available"] is True
         assert report["responsive"]["checked"] is True

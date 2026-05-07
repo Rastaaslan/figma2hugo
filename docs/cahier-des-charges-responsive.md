@@ -203,6 +203,14 @@ footer-bandeau-contact
   - uniquement si son titre precedent a un equivalent visible
   - uniquement si aucun paragraphe visible ne suit deja ce titre
   - sans modifier les donnees Hugo generees
+- le shell fixe peut harmoniser un paragraphe long manifestement sous-dimensionne :
+  - uniquement en responsive
+  - en se basant sur les autres paragraphes longs visibles du breakpoint
+  - en reduisant la correction si le bloc manquerait de hauteur disponible
+- le shell fixe peut agrandir un formulaire mobile illisible :
+  - uniquement si la largeur exportee est inferieure au seuil de lisibilite
+  - en adaptant les vrais controles HTML avant scaling
+  - en etirant le bandeau/fond parent quand le formulaire agrandi deborde la hauteur exportee
 - le travail de mise en page responsive principal reste fait dans Figma
 - le moteur se contente de fusionner des variantes coherentes
 

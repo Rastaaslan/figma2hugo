@@ -31,6 +31,8 @@ Ce document fige le perimetre actuellement supporte par `figma2hugo`.
 - Un board Figma unique peut contenir plusieurs frames top-level `page-<slug>-<width>` et sera splitte automatiquement avant fusion
 - Shell fixe responsive capable de compacter des sections sparse quand l'export Figma laisse un vide vertical mesurable apres le contenu visible, en excluant les sections a fond couvrant
 - Shell fixe responsive capable de recuperer un paragraphe trailing cache par un conteneur de breakpoint quand le titre correspondant existe encore visiblement et qu'aucun paragraphe visible ne le suit deja
+- Shell fixe responsive capable de normaliser defensivement les longs paragraphes sous-dimensionnes dans un breakpoint, en respectant un budget vertical raisonnable
+- Shell fixe responsive capable d'agrandir un formulaire mobile trop petit et d'etirer son bandeau visuel parent sans modifier les donnees Hugo
 
 ## Responsive-friendly garanti
 

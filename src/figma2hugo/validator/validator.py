@@ -246,6 +246,14 @@ class SiteValidator:
                     "fixed responsive shells can recover a hidden trailing paragraph when "
                     "its heading remains visible and no visible paragraph already follows it"
                 ),
+                (
+                    "fixed responsive shells can normalize undersized long body copy and "
+                    "keep recovered trailing paragraphs anchored after their visible heading"
+                ),
+                (
+                    "fixed responsive shells can enlarge tiny mobile forms and stretch the "
+                    "surrounding visual band when the exported breakpoint form is unreadably small"
+                ),
                 "responsive probes run on multiple viewport widths when Playwright is available",
                 "interactive probes cover accordion, cards, carousel and forms when present",
             ],
