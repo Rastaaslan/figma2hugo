@@ -1885,6 +1885,46 @@ Ordre recommande pour la suite :
   - `PYTHONPATH=src python -m figma2hugo.cli validate site`
   - resultat : `buildOk=true`, `0 / 6` viewports avec issues, `strictReady=true`
 
+### 2026-05-07 - Passe 50 : compaction generique des sections sparse mobiles
+
+- declencheur :
+  - en mobile, la section `contact` conservait une hauteur Figma trop grande apres le dernier contenu visible
+  - symptome : grand blanc entre `Expertise` et le bandeau/formulaire final
+- implementation dans `templates/shared/page-shell.js` :
+  - ajout de `repairSparseSectionHeights`
+  - detection runtime limitee au shell fixe responsive (`pageWidth <= 1024`)
+  - mesure du contenu reellement visible d'une section :
+    - textes
+    - assets de contenu
+    - boutons
+    - formulaires
+    - cartes et bandeaux nommes
+    - conteneurs avec fond visible
+  - exclusion des sections avec fond couvrant pour ne pas rogner les hero, bandeaux et sections visuelles pleines
+  - annotation transitoire :
+    - `data-page-shell-compact-height="true"`
+    - `--page-section-compact-height`
+  - `repairSectionStack` sait maintenant absorber ce vide avec un budget de compaction cumulatif, pour remonter les sections suivantes sans effacer aveuglement leurs espacements propres
+- effet mesure localement sur `page-accueil` mobile `351px` :
+  - avant : environ `60px` Figma entre le dernier contenu de contact et le footer
+  - apres : environ `15px` Figma apres le conteneur contact, environ `29px` apres le texte `Expertise`
+  - le footer applique un shift `-45px`
+- idiome Hugo :
+  - les donnees et CSS generes restent stables
+  - la correction est une reparation de shell mesuree, pas un merge de layout dans le navigateur
+  - elle reste defensive et ne s'active que quand l'export contient du vide vertical detectable
+- validation ciblee :
+  - `PYTHONPATH=src python -m pytest tests/test_generators.py -k page_shell -q`
+  - resultat : `1 passed`
+  - `hugo --source site --minify` OK
+- validation globale :
+  - `PYTHONPATH=src python -m pytest -p no:cacheprovider`
+  - resultat : `237 passed, 1 skipped`
+  - `PYTHONPATH=src python -m ruff check --select I,F src tests`
+  - resultat : OK
+  - `PYTHONPATH=src python -m figma2hugo.cli validate site`
+  - resultat : `buildOk=true`, `0 / 6` viewports avec issues, `strictReady=true`
+
 ## Points Ouverts
 
 - la couverture "responsive complet" n'est pas encore synonyme de "toute page absolue Figma devient automatiquement fluide"

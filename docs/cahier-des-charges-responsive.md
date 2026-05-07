@@ -195,6 +195,10 @@ footer-bandeau-contact
   - collections repetitives detectees
   - axe, gap, padding, ancres, ratios et offsets par dimension deduits des bounds Figma exportes
   - activation responsive du flow uniquement si la structure est coherente
+- le shell fixe peut appliquer une reparation mesuree de sections sparse :
+  - uniquement en responsive
+  - uniquement si la hauteur exportee depasse clairement le contenu visible
+  - jamais sur une section avec fond couvrant
 - le travail de mise en page responsive principal reste fait dans Figma
 - le moteur se contente de fusionner des variantes coherentes
 

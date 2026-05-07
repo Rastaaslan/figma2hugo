@@ -29,6 +29,7 @@ Ce document fige le perimetre actuellement supporte par `figma2hugo`.
 - Fusion responsive multi-variantes basee sur les noms de pages `page-<slug>-<width>`
 - Une famille responsive fusionnee produit une seule page Hugo finale, une seule feuille CSS finale et un seul JSON final
 - Un board Figma unique peut contenir plusieurs frames top-level `page-<slug>-<width>` et sera splitte automatiquement avant fusion
+- Shell fixe responsive capable de compacter des sections sparse quand l'export Figma laisse un vide vertical mesurable apres le contenu visible, en excluant les sections a fond couvrant
 
 ## Responsive-friendly garanti
 

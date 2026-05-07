@@ -238,6 +238,10 @@ class SiteValidator:
                     "repeated component collections can infer row, column or grid flow "
                     "from exported Figma bounds when the structure is coherent"
                 ),
+                (
+                    "fixed responsive shells compact sparse sections when exported height "
+                    "clearly exceeds visible content and no covering background is present"
+                ),
                 "responsive probes run on multiple viewport widths when Playwright is available",
                 "interactive probes cover accordion, cards, carousel and forms when present",
             ],

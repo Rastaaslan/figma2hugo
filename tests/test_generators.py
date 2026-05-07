@@ -6099,13 +6099,23 @@ class HugoGeneratorTests(unittest.TestCase):
         self.assertIn("function addTextShift(text, delta)", page_shell_js)
         self.assertIn("--content-asset-stack-shift", page_shell_js)
         self.assertIn('text.style.setProperty("--content-text-stack-shift"', page_shell_js)
+        self.assertIn("var selector = visualOnly", page_shell_js)
+        self.assertIn('section.querySelectorAll(selector)', page_shell_js)
         self.assertIn(
-            'section.querySelectorAll(".content-node, .content-text, .content-asset:not(.is-decorative):not(.bg)")',
+            ': ".content-node, .content-text, .content-asset:not(.is-decorative):not(.bg)"',
             page_shell_js,
         )
         self.assertIn("function repairTextCollisions(page, scale)", page_shell_js)
         self.assertIn("function repairScopedContentCollisions(page, scale)", page_shell_js)
         self.assertIn("function repairSectionStack(page, scale)", page_shell_js)
+        self.assertIn("function repairSparseSectionHeights(page, scale)", page_shell_js)
+        self.assertIn('section.setAttribute("data-page-shell-compact-height", "true")', page_shell_js)
+        self.assertIn("--page-section-compact-height", page_shell_js)
+        self.assertIn("var compactionShift = 0;", page_shell_js)
+        self.assertIn("shift = Math.max(-compactionShift, desiredShift);", page_shell_js)
+        self.assertIn("compactionShift += Math.max(0, sectionRect.height / scale - compactHeight);", page_shell_js)
+        self.assertIn("function hasCoveringSectionBackground(section, sectionRect, scale)", page_shell_js)
+        self.assertIn("function isSectionVisualMeasurementItem(item)", page_shell_js)
 
     def test_hugo_generator_warns_when_responsive_matching_relies_on_duplicate_sibling_tokens(self) -> None:
         desktop_model = {

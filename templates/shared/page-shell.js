@@ -99,6 +99,8 @@
     });
     page.querySelectorAll(".page-section").forEach(function (section) {
       section.style.removeProperty("--page-section-stack-shift");
+      section.style.removeProperty("--page-section-compact-height");
+      section.removeAttribute("data-page-shell-compact-height");
     });
     page.querySelectorAll('[data-page-shell-hidden-breakpoint-bg="true"]').forEach(function (asset) {
       asset.removeAttribute("data-page-shell-hidden-breakpoint-bg");
@@ -132,6 +134,7 @@
     repairButtonBandSpacing(page, scale);
     repairBandTextContainment(page, scale);
     repairIconLabelCards(page, scale);
+    repairSparseSectionHeights(page, scale);
     repairSectionStack(page, scale);
   }
 
@@ -597,6 +600,7 @@
       page.querySelectorAll(":scope > .page-section, .page-main > .page-section"),
     ).filter(isVisible);
     var cursorBottom = 0;
+    var compactionShift = 0;
     sections
       .sort(function (a, b) {
         return a.offsetTop - b.offsetTop || a.offsetLeft - b.offsetLeft;
@@ -606,27 +610,122 @@
         var top = (sectionRect.top - pageRect.top) / scale;
         var existingShift = parsePx(section.style.getPropertyValue("--page-section-stack-shift"));
         var baseTop = top - existingShift;
-        var shift = Math.max(existingShift, cursorBottom - baseTop, 0);
-        if (shift > 0) {
+        var desiredShift = cursorBottom - baseTop;
+        var shift = Math.max(existingShift, desiredShift, 0);
+        if (compactionShift > 0) {
+          shift = Math.max(-compactionShift, desiredShift);
+        }
+        if (Math.abs(shift - existingShift) > 0.01) {
           section.style.setProperty("--page-section-stack-shift", roundPx(shift) + "px");
           sectionRect = section.getBoundingClientRect();
           top = (sectionRect.top - pageRect.top) / scale;
         }
         var contentBottom = measureSectionContentBottom(section, sectionRect, scale);
         cursorBottom = Math.max(cursorBottom, top + contentBottom);
+        if (section.getAttribute("data-page-shell-compact-height") === "true") {
+          var compactHeight = parsePx(section.style.getPropertyValue("--page-section-compact-height"));
+          compactionShift += Math.max(0, sectionRect.height / scale - compactHeight);
+        }
       });
   }
 
-  function measureSectionContentBottom(section, sectionRect, scale) {
-    var bottom = sectionRect.height / scale;
-    section.querySelectorAll(".content-node, .content-text, .content-asset:not(.is-decorative):not(.bg)").forEach(function (item) {
-      if (!isVisible(item)) {
+  function repairSparseSectionHeights(page, scale) {
+    var bottomGap = 28;
+    page.querySelectorAll(".page-section").forEach(function (section) {
+      if (!isVisible(section)) {
+        return;
+      }
+      var sectionRect = section.getBoundingClientRect();
+      var sectionHeight = sectionRect.height / scale;
+      if (sectionHeight < 220 || hasCoveringSectionBackground(section, sectionRect, scale)) {
+        return;
+      }
+      var visibleBottom = measureSectionContentBottom(section, sectionRect, scale, {
+        includeSectionHeight: false,
+        visualOnly: true,
+      });
+      if (visibleBottom <= 0) {
+        return;
+      }
+      var compactHeight = Math.ceil(visibleBottom + bottomGap);
+      var blankSpace = sectionHeight - compactHeight;
+      if (blankSpace < Math.max(32, sectionHeight * 0.05)) {
+        return;
+      }
+      section.setAttribute("data-page-shell-compact-height", "true");
+      section.style.setProperty("--page-section-compact-height", roundPx(compactHeight) + "px");
+    });
+  }
+
+  function hasCoveringSectionBackground(section, sectionRect, scale) {
+    var sectionWidth = sectionRect.width / scale;
+    var sectionHeight = sectionRect.height / scale;
+    return Array.from(section.querySelectorAll(".content-asset.bg, .content-asset[data-purpose='background']")).some(function (
+      asset,
+    ) {
+      if (!isVisible(asset)) {
+        return false;
+      }
+      var rect = asset.getBoundingClientRect();
+      var left = (rect.left - sectionRect.left) / scale;
+      var top = (rect.top - sectionRect.top) / scale;
+      var right = (rect.right - sectionRect.left) / scale;
+      var bottom = (rect.bottom - sectionRect.top) / scale;
+      var coversWidth =
+        rect.width / scale >= sectionWidth * 0.85 && left <= sectionWidth * 0.12 && right >= sectionWidth * 0.88;
+      var coversHeight =
+        rect.height / scale >= sectionHeight * 0.72 &&
+        top <= sectionHeight * 0.14 &&
+        bottom >= sectionHeight * 0.86;
+      return coversWidth && coversHeight;
+    });
+  }
+
+  function measureSectionContentBottom(section, sectionRect, scale, options) {
+    var includeSectionHeight = !(options && options.includeSectionHeight === false);
+    var visualOnly = Boolean(options && options.visualOnly);
+    var compactHeight = parsePx(section.style.getPropertyValue("--page-section-compact-height"));
+    var sectionHeight = compactHeight > 0 ? compactHeight : sectionRect.height / scale;
+    var bottom = includeSectionHeight ? sectionHeight : 0;
+    var selector = visualOnly
+      ? ".content-text, .content-asset:not(.is-decorative):not(.bg), button.content-node, form.content-node, " +
+        "[data-card='true'], [data-form='true'], .content-node"
+      : ".content-node, .content-text, .content-asset:not(.is-decorative):not(.bg)";
+    section.querySelectorAll(selector).forEach(function (item) {
+      if (!isVisible(item) || (visualOnly && !isSectionVisualMeasurementItem(item))) {
         return;
       }
       var rect = visualElementRect(item, scale);
       bottom = Math.max(bottom, (rect.bottom - sectionRect.top) / scale);
     });
     return bottom;
+  }
+
+  function isSectionVisualMeasurementItem(item) {
+    if (item.classList.contains("content-text")) {
+      return true;
+    }
+    if (item.classList.contains("content-asset")) {
+      return !item.classList.contains("is-decorative") && !item.classList.contains("bg");
+    }
+    if (
+      item.matches("button.content-node, form.content-node") ||
+      item.dataset.form === "true" ||
+      item.dataset.card === "true"
+    ) {
+      return true;
+    }
+    if (/\b(bandeau|banner)\b/i.test(item.className)) {
+      return true;
+    }
+    return Array.from(item.children).some(function (child) {
+      return (
+        child instanceof HTMLElement &&
+        child.classList.contains("content-asset") &&
+        child.classList.contains("bg") &&
+        isVisible(child)
+      );
+    });
   }
 
   function updatePageShell(shell) {
