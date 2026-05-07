@@ -1925,6 +1925,43 @@ Ordre recommande pour la suite :
   - `PYTHONPATH=src python -m figma2hugo.cli validate site`
   - resultat : `buildOk=true`, `0 / 6` viewports avec issues, `strictReady=true`
 
+### 2026-05-07 - Passe 51 : paragraphes trailing et hauteur finale responsive
+
+- declencheur :
+  - en mobile, un paragraphe attendu apres le titre `Expertise` etait present dans la structure desktop/tablette mais masque par un conteneur absent au breakpoint `402`
+  - la hauteur finale du shell gardait encore le fallback Figma, ce qui pouvait laisser du blanc sous le footer
+- implementation dans `templates/shared/page-shell.js` :
+  - ajout de `repairRescuedTrailingTexts`
+  - detection defensive :
+    - paragraphe cache par un ancetre masque
+    - precede par un titre cache
+    - titre equivalent visible dans la section responsive
+    - aucun paragraphe visible deja place apres ce titre
+  - le paragraphe est clone dans le conteneur visible de section avec :
+    - `data-page-shell-rescued-text="true"`
+    - position sous le titre visible
+    - largeur et typographie reprises du paragraphe visible le plus proche avant le titre
+  - nettoyage automatique des clones a chaque recalcul du shell
+  - correction de la hauteur finale :
+    - en shell fixe responsive, `measureVisibleSectionBounds` ne demarre plus sur le fallback de hauteur Figma
+    - la hauteur finale devient la vraie borne visible mesuree
+- effet mesure localement sur `page-accueil` mobile `351px` :
+  - un seul paragraphe rescape : `text-texte-contact-paragraph-3`
+  - le paragraphe apparait sous `Expertise`
+  - la hauteur document colle au dernier element visible (`scrollHeight` ~= `page-shell-height`)
+- validation ciblee :
+  - `PYTHONPATH=src python -m pytest tests/test_generators.py -k page_shell -q`
+  - resultat : `1 passed`
+- validation globale :
+  - `PYTHONPATH=src python -m pytest tests/test_validator.py -q`
+  - resultat : `16 passed`
+  - `PYTHONPATH=src python -m pytest -p no:cacheprovider`
+  - resultat : `237 passed, 1 skipped`
+  - `PYTHONPATH=src python -m ruff check --select I,F src tests`
+  - resultat : OK
+  - `PYTHONPATH=src python -m figma2hugo.cli validate site`
+  - resultat : `buildOk=true`, `0 / 6` viewports avec issues, `strictReady=true`
+
 ## Points Ouverts
 
 - la couverture "responsive complet" n'est pas encore synonyme de "toute page absolue Figma devient automatiquement fluide"

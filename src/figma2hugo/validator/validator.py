@@ -242,6 +242,10 @@ class SiteValidator:
                     "fixed responsive shells compact sparse sections when exported height "
                     "clearly exceeds visible content and no covering background is present"
                 ),
+                (
+                    "fixed responsive shells can recover a hidden trailing paragraph when "
+                    "its heading remains visible and no visible paragraph already follows it"
+                ),
                 "responsive probes run on multiple viewport widths when Playwright is available",
                 "interactive probes cover accordion, cards, carousel and forms when present",
             ],

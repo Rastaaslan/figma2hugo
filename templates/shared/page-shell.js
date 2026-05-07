@@ -88,6 +88,9 @@
   }
 
   function clearLayoutRepairs(page) {
+    page.querySelectorAll('[data-page-shell-rescued-text="true"]').forEach(function (text) {
+      text.remove();
+    });
     page.querySelectorAll(".content-node").forEach(function (node) {
       node.style.removeProperty("--content-node-stack-shift");
     });
@@ -128,6 +131,7 @@
   function repairResponsiveLayout(page, scale) {
     repairBreakpointBackgroundLayers(page);
     repairTinyResponsiveForms(page, scale);
+    repairRescuedTrailingTexts(page, scale);
     repairTextCollisions(page, scale);
     repairScopedContentCollisions(page, scale);
     repairPostTextControlSpacing(page, scale);
@@ -629,6 +633,153 @@
       });
   }
 
+  function repairRescuedTrailingTexts(page, scale) {
+    page.querySelectorAll(".page-section").forEach(function (section) {
+      if (!isVisible(section)) {
+        return;
+      }
+      var visibleTexts = Array.from(section.querySelectorAll(".content-text")).filter(isVisible);
+      var visibleHeadings = visibleTexts.filter(isHeadingText);
+      if (visibleHeadings.length === 0) {
+        return;
+      }
+      section.querySelectorAll("p.content-text").forEach(function (text) {
+        if (isVisible(text) || !hasHiddenAncestor(text, section) || !text.textContent.trim()) {
+          return;
+        }
+        var previousText = previousTextSibling(text);
+        if (!previousText || !isHeadingText(previousText)) {
+          return;
+        }
+        var heading = findVisibleHeadingByText(visibleHeadings, previousText.textContent);
+        if (!heading) {
+          return;
+        }
+        if (hasVisibleParagraphAfter(visibleTexts, heading, scale)) {
+          return;
+        }
+        var referenceText = nearestVisibleTextBefore(visibleTexts, heading, scale) || heading;
+        rescueTrailingText(section, text, heading, referenceText, scale);
+      });
+    });
+  }
+
+  function hasHiddenAncestor(element, boundary) {
+    var current = element.parentElement;
+    while (current && current !== boundary) {
+      if (current instanceof HTMLElement && !isVisible(current)) {
+        return true;
+      }
+      current = current.parentElement;
+    }
+    return false;
+  }
+
+  function previousTextSibling(element) {
+    var current = element.previousElementSibling;
+    while (current) {
+      if (current instanceof HTMLElement && current.classList.contains("content-text")) {
+        return current;
+      }
+      current = current.previousElementSibling;
+    }
+    return null;
+  }
+
+  function isHeadingText(element) {
+    if (!(element instanceof HTMLElement) || !element.classList.contains("content-text")) {
+      return false;
+    }
+    var level = element.getAttribute("data-heading-level");
+    if (level) {
+      return true;
+    }
+    return /^H[1-6]$/i.test(element.tagName);
+  }
+
+  function findVisibleHeadingByText(headings, text) {
+    var normalized = normalizeTextContent(text);
+    if (!normalized) {
+      return null;
+    }
+    return (
+      headings.find(function (heading) {
+        return normalizeTextContent(heading.textContent) === normalized;
+      }) || null
+    );
+  }
+
+  function normalizeTextContent(value) {
+    return String(value || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  }
+
+  function nearestVisibleTextBefore(texts, target, scale) {
+    var targetRect = target.getBoundingClientRect();
+    var best = null;
+    var bestDistance = Infinity;
+    texts.forEach(function (text) {
+      if (text === target || isHeadingText(text)) {
+        return;
+      }
+      var rect = visualElementRect(text, scale);
+      if (rect.bottom > targetRect.top) {
+        return;
+      }
+      var distance = targetRect.top - rect.bottom;
+      if (distance < bestDistance) {
+        best = text;
+        bestDistance = distance;
+      }
+    });
+    return best;
+  }
+
+  function hasVisibleParagraphAfter(texts, target, scale) {
+    var targetRect = target.getBoundingClientRect();
+    return texts.some(function (text) {
+      if (text === target || isHeadingText(text) || text.tagName.toUpperCase() !== "P") {
+        return false;
+      }
+      var rect = visualElementRect(text, scale);
+      return rect.top >= targetRect.bottom - 1;
+    });
+  }
+
+  function rescueTrailingText(section, text, heading, referenceText, scale) {
+    var sectionRect = section.getBoundingClientRect();
+    var headingRect = visualElementRect(heading, scale);
+    var referenceRect = visualElementRect(referenceText, scale);
+    var clone = text.cloneNode(true);
+    var referenceStyle = window.getComputedStyle(referenceText);
+    var headingStyle = window.getComputedStyle(heading);
+    var gap = Math.max(10, parsePx(headingStyle.lineHeight) / Math.max(scale, 1) * 0.35);
+    clone.removeAttribute("id");
+    clone.setAttribute("data-page-shell-rescued-text", "true");
+    clone.setAttribute("aria-hidden", "false");
+    clone.style.setProperty("display", "block", "important");
+    clone.style.setProperty("left", roundPx((referenceRect.left - sectionRect.left) / scale) + "px", "important");
+    clone.style.setProperty("top", roundPx((headingRect.bottom - sectionRect.top) / scale + gap) + "px", "important");
+    clone.style.setProperty("width", roundPx(referenceRect.width / scale) + "px", "important");
+    clone.style.setProperty("height", "auto", "important");
+    clone.style.setProperty("overflow", "visible", "important");
+    clone.style.setProperty("white-space", "normal", "important");
+    clone.style.setProperty("font-family", referenceStyle.fontFamily, "important");
+    clone.style.setProperty("font-size", referenceStyle.fontSize, "important");
+    clone.style.setProperty("font-weight", referenceStyle.fontWeight, "important");
+    clone.style.setProperty("font-style", referenceStyle.fontStyle, "important");
+    clone.style.setProperty("line-height", referenceStyle.lineHeight, "important");
+    clone.style.setProperty("letter-spacing", referenceStyle.letterSpacing, "important");
+    clone.style.setProperty("text-align", referenceStyle.textAlign, "important");
+    clone.style.setProperty("color", referenceStyle.color, "important");
+    var target = section.querySelector(".page-section__inner, .content-node");
+    if (target instanceof HTMLElement) {
+      target.appendChild(clone);
+    }
+  }
+
   function repairSparseSectionHeights(page, scale) {
     var bottomGap = 28;
     page.querySelectorAll(".page-section").forEach(function (section) {
@@ -764,14 +915,21 @@
     if (isResponsiveFixedLayout) {
       repairResponsiveLayout(page, measurementScale);
     }
-    var visibleBounds = measureVisibleSectionBounds(page, fallbackWidth, fallbackHeight, measurementScale);
+    var visibleBounds = measureVisibleSectionBounds(
+      page,
+      fallbackWidth,
+      isResponsiveFixedLayout ? 0 : fallbackHeight,
+      measurementScale,
+    );
     var effectiveWidth = Math.max(pageWidth, visibleBounds.width);
     if (effectiveWidth > pageWidth) {
       scale = isResponsiveFixedLayout
         ? availableWidth / effectiveWidth
         : Math.min(1, availableWidth / effectiveWidth);
     }
-    var pageHeight = Math.max(fallbackHeight, visibleBounds.height);
+    var pageHeight = isResponsiveFixedLayout
+      ? visibleBounds.height
+      : Math.max(fallbackHeight, visibleBounds.height);
     shell.style.setProperty("--page-shell-scale", String(scale));
     shell.style.setProperty("--page-shell-width", roundPx(effectiveWidth * scale) + "px");
     shell.style.setProperty("--page-shell-height", roundPx(pageHeight * scale) + "px");

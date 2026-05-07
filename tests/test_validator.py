@@ -335,6 +335,10 @@ def test_validator_reports_supported_scope_and_responsive_viewports(
             "fixed responsive shells compact sparse sections" in item
             for item in report["supportedScope"]["guarantees"]
         )
+        assert any(
+            "recover a hidden trailing paragraph" in item
+            for item in report["supportedScope"]["guarantees"]
+        )
         assert "breakpoint merging from multiple Figma page variants" not in report["supportedScope"]["notGuaranteedYet"]
         assert report["responsive"]["available"] is True
         assert report["responsive"]["checked"] is True

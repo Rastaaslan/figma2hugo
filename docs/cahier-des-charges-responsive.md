@@ -199,6 +199,10 @@ footer-bandeau-contact
   - uniquement en responsive
   - uniquement si la hauteur exportee depasse clairement le contenu visible
   - jamais sur une section avec fond couvrant
+- le shell fixe peut recuperer un paragraphe trailing masque par un conteneur de breakpoint :
+  - uniquement si son titre precedent a un equivalent visible
+  - uniquement si aucun paragraphe visible ne suit deja ce titre
+  - sans modifier les donnees Hugo generees
 - le travail de mise en page responsive principal reste fait dans Figma
 - le moteur se contente de fusionner des variantes coherentes
 
