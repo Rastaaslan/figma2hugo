@@ -1,3 +1,5 @@
+"""Helpers de presentation qui transforment les resultats du pipeline en messages lisibles."""
+
 from __future__ import annotations
 
 import re
@@ -5,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from figma2hugo.config import OutputMode
 from figma2hugo.progress import stage_status_label, translate_generation_stage
 
 
@@ -55,14 +56,13 @@ def clean_figma_urls(values: list[Any]) -> list[str]:
 
 
 def supports_static_mode(figma_urls: list[str]) -> bool:
-    return len(figma_urls) <= 1
+    del figma_urls
+    return False
 
 
 def control_states(figma_urls: list[str], *, running: bool) -> GuiControlStates:
     default_state = "disabled" if running else "normal"
-    static_button_state = (
-        "normal" if not running and supports_static_mode(figma_urls) else "disabled"
-    )
+    static_button_state = "disabled"
     return GuiControlStates(
         default=default_state,
         static_button=static_button_state,
@@ -100,31 +100,29 @@ def selection_hint_message(figma_urls: list[str]) -> str:
     if len(figma_urls) == 1:
         return (
             "Une URL detectee. Le mode Hugo est recommande et accepte aussi un board "
-            "unique contenant plusieurs frames top-level `page-<slug>-<width>`. "
-            "Le mode Statique reste disponible pour une seule page."
+            "unique contenant plusieurs frames top-level `page-<slug>-<width>`."
         )
     return (
         f"{len(figma_urls)} URLs detectees. Le mode Hugo fusionnera les pages ou "
-        "variantes ensemble. Le mode Statique est desactive pour plusieurs URLs."
+        "variantes ensemble."
     )
 
 
-def generation_launch_summary(mode: OutputMode, figma_url_count: int) -> str:
+def generation_launch_summary(figma_url_count: int) -> str:
     page_label = "page" if figma_url_count == 1 else "pages"
-    return f"Lancement du mode {mode.value} pour {figma_url_count} {page_label}..."
+    return f"Lancement du mode hugo pour {figma_url_count} {page_label}..."
 
 
 def format_generation_start(
     figma_urls: list[str],
     destination: Path,
-    mode: OutputMode,
     *,
     access_source: str,
 ) -> str:
     lines = [
         "Preparation de la generation.",
         "",
-        f"Mode: {mode.value}",
+        "Mode: hugo",
         f"URLs detectees: {len(figma_urls)}",
         f"Dossier cible: {destination}",
         f"Acces Figma: {access_source}",
@@ -139,10 +137,10 @@ def format_generation_start(
             "Entree: plusieurs URLs. Le mode Hugo traitera l'ensemble comme une "
             "generation multi-pages ou multi-variantes."
         )
-    if mode is OutputMode.STATIC:
-        lines.append("Sortie attendue: export statique d'une seule page.")
-    else:
-        lines.append("Sortie attendue: site Hugo avec validation et rapport.")
+    lines.append("Sortie attendue: site Hugo avec validation et rapport.")
+    lines.append("Cache Figma: rafraichissement force des donnees de design.")
+    lines.append("Reference visuelle: baseline projet, sinon export Figma automatique.")
+    lines.append("Contrat responsive: resolution automatique par projet si disponible.")
     return "\n".join(lines)
 
 
@@ -157,13 +155,61 @@ def format_generation_success(result: dict[str, Any]) -> str:
         f"Dossier: {output_dir}",
         f"Build valide: {'oui' if bool(result.get('buildOk')) else 'non'}",
     ]
+    if result.get("pipeline"):
+        lines.insert(3, f"Pipeline: {result['pipeline']}")
     if report_path:
         lines.append(f"Rapport: {report_path}")
+    visual_smoke_summary = _visual_smoke_success_lines(result)
+    if visual_smoke_summary:
+        lines.extend(["", *visual_smoke_summary])
     lines.extend(["", f"Fichiers ecrits: {len(written_files)}", ""])
     lines.extend(f"- {path}" for path in written_files[:20])
     if len(written_files) > 20:
         lines.append(f"- ... {len(written_files) - 20} autres fichiers")
     return "\n".join(lines)
+
+
+def format_baseline_promotion_success(result: dict[str, Any]) -> str:
+    lines = [
+        "Baseline visuelle validee.",
+        "",
+        f"Projet: {result.get('projectId', 'unknown')}",
+        f"Snapshot: {result.get('baselineId', 'unknown')}",
+        f"Dossier: {result.get('baselineDir', '')}",
+        f"Captures: {result.get('screenshotCount', 0)}",
+    ]
+    return "\n".join(lines)
+
+
+def _visual_smoke_success_lines(result: dict[str, Any]) -> list[str]:
+    visual_smoke = result.get("visualSmoke")
+    if not isinstance(visual_smoke, dict):
+        return []
+    if visual_smoke.get("error"):
+        return [
+            "Smoke visuel: indisponible",
+            f"Detail smoke: {visual_smoke['error']}",
+        ]
+    issue_count = int(visual_smoke.get("issueCount") or 0)
+    error_count = int(visual_smoke.get("errorCount") or 0)
+    warn_count = int(visual_smoke.get("warnCount") or 0)
+    raw_visual_review = visual_smoke.get("visualReview")
+    visual_review: dict[str, Any] = raw_visual_review if isinstance(raw_visual_review, dict) else {}
+    raw_by_status = visual_review.get("byStatus")
+    by_status: dict[str, Any] = raw_by_status if isinstance(raw_by_status, dict) else {}
+    status_chunks = ", ".join(f"{key}={value}" for key, value in sorted(by_status.items()))
+    lines = [
+        f"Smoke visuel: issues={issue_count}, erreurs={error_count}, warnings={warn_count}",
+    ]
+    if status_chunks:
+        lines.append(f"Baseline: {status_chunks}")
+    if visual_review.get("bootstrapRequired") is True:
+        lines.append("Action: baseline projet a valider.")
+    elif visual_review.get("enabled") is True:
+        lines.append("Action: baseline projet comparee.")
+    if result.get("visualSmokeReport"):
+        lines.append(f"Rapport smoke: {result['visualSmokeReport']}")
+    return lines
 
 
 def format_generation_error(message: str, *, access_message: str) -> str:

@@ -1,0 +1,236 @@
+{
+  "version": 1,
+  "description": "Approved actionable review fingerprints for the real-page pipeline promotion run after near-threshold gap priority calibration and responsive contract metadata.",
+  "sourceRun": ".figma2hugo-scratch/release-gate-all-pages-20260510-responsive-contract-final2",
+  "visualBaseline": "baselines/visual/pipeline/real-pages-semantic5-20260510",
+  "matchFields": [
+    "source",
+    "code",
+    "priority",
+    "action",
+    "owner",
+    "page",
+    "family",
+    "width",
+    "nodeId",
+    "relatedNodeId",
+    "key",
+    "differenceKind"
+  ],
+  "approvedActionableReviews": [
+    {
+      "source": "diagnostics",
+      "code": "large-vertical-gap",
+      "priority": "P3",
+      "action": "inspect-empty-space-or-figma-intent",
+      "owner": "figma-or-code",
+      "page": "page-a-propos-1920",
+      "width": 1920,
+      "nodeId": "179:34",
+      "relatedNodeId": "192:833"
+    },
+    {
+      "source": "diagnostics",
+      "code": "large-vertical-gap",
+      "priority": "P3",
+      "action": "inspect-empty-space-or-figma-intent",
+      "owner": "figma-or-code",
+      "page": "page-a-propos-834",
+      "width": 834,
+      "nodeId": "4042:1891",
+      "relatedNodeId": "4042:1873"
+    },
+    {
+      "source": "diagnostics",
+      "code": "large-vertical-gap",
+      "priority": "P3",
+      "action": "inspect-empty-space-or-figma-intent",
+      "owner": "figma-or-code",
+      "page": "page-prestation-2-1920",
+      "width": 1920,
+      "nodeId": "4011:207",
+      "relatedNodeId": "4011:197"
+    },
+    {
+      "source": "diagnostics",
+      "code": "large-vertical-gap",
+      "priority": "P3",
+      "action": "inspect-empty-space-or-figma-intent",
+      "owner": "figma-or-code",
+      "page": "page-prestation-2-834",
+      "width": 834,
+      "nodeId": "4042:3331",
+      "relatedNodeId": "4042:3320"
+    },
+    {
+      "source": "responsive",
+      "code": "content-conflict",
+      "priority": "P3",
+      "action": "inspect-responsive-contract",
+      "owner": "figma-contract",
+      "family": "page-mentions-legales",
+      "key": "section:footer",
+      "differenceKind": "content-delta"
+    },
+    {
+      "source": "responsive",
+      "code": "breakpoint-only",
+      "priority": "P3",
+      "action": "inspect-responsive-contract",
+      "owner": "figma-contract",
+      "family": "page-etude-de-cas",
+      "key": "container:bandeau-droite-accompagnement",
+      "differenceKind": "missing-breakpoint-node"
+    },
+    {
+      "source": "responsive",
+      "code": "content-conflict",
+      "priority": "P3",
+      "action": "inspect-responsive-contract",
+      "owner": "figma-contract",
+      "family": "page-etude-de-cas",
+      "key": "section:footer",
+      "differenceKind": "content-delta"
+    },
+    {
+      "source": "responsive",
+      "code": "content-conflict",
+      "priority": "P3",
+      "action": "inspect-responsive-contract",
+      "owner": "figma-contract",
+      "family": "page-etude-de-cas",
+      "key": "section:section-cas-clients",
+      "differenceKind": "content-delta"
+    },
+    {
+      "source": "responsive",
+      "code": "breakpoint-only",
+      "priority": "P3",
+      "action": "inspect-responsive-contract",
+      "owner": "figma-contract",
+      "family": "page-prestation-3",
+      "key": "container:bandeau-droite-accompagnement",
+      "differenceKind": "missing-breakpoint-node"
+    },
+    {
+      "source": "responsive",
+      "code": "content-conflict",
+      "priority": "P3",
+      "action": "inspect-responsive-contract",
+      "owner": "figma-contract",
+      "family": "page-prestation-3",
+      "key": "section:footer",
+      "differenceKind": "content-delta"
+    },
+    {
+      "source": "responsive",
+      "code": "content-conflict",
+      "priority": "P3",
+      "action": "inspect-responsive-contract",
+      "owner": "figma-contract",
+      "family": "page-prestation-3",
+      "key": "section:section-cas-clients",
+      "differenceKind": "content-delta"
+    },
+    {
+      "source": "responsive",
+      "code": "content-conflict",
+      "priority": "P3",
+      "action": "inspect-responsive-contract",
+      "owner": "figma-contract",
+      "family": "page-prestation-3",
+      "key": "section:section-hero",
+      "differenceKind": "content-delta"
+    },
+    {
+      "source": "responsive",
+      "code": "content-conflict",
+      "priority": "P3",
+      "action": "inspect-responsive-contract",
+      "owner": "figma-contract",
+      "family": "page-prestation-3",
+      "key": "section:section-prestation-1",
+      "differenceKind": "content-delta"
+    },
+    {
+      "source": "responsive",
+      "code": "content-conflict",
+      "priority": "P3",
+      "action": "inspect-responsive-contract",
+      "owner": "figma-contract",
+      "family": "page-prestation-2",
+      "key": "container:bandeau-droite-accompagnement",
+      "differenceKind": "content-delta"
+    },
+    {
+      "source": "responsive",
+      "code": "content-conflict",
+      "priority": "P3",
+      "action": "inspect-responsive-contract",
+      "owner": "figma-contract",
+      "family": "page-prestation-2",
+      "key": "section:footer",
+      "differenceKind": "content-delta"
+    },
+    {
+      "source": "responsive",
+      "code": "content-conflict",
+      "priority": "P3",
+      "action": "inspect-responsive-contract",
+      "owner": "figma-contract",
+      "family": "page-prestation-2",
+      "key": "section:section-cas-clients",
+      "differenceKind": "content-delta"
+    },
+    {
+      "source": "responsive",
+      "code": "breakpoint-only",
+      "priority": "P3",
+      "action": "inspect-responsive-contract",
+      "owner": "figma-contract",
+      "family": "page-prestation-2",
+      "key": "section:section-embedded",
+      "differenceKind": "missing-breakpoint-node"
+    },
+    {
+      "source": "responsive",
+      "code": "breakpoint-only",
+      "priority": "P3",
+      "action": "inspect-responsive-contract",
+      "owner": "figma-contract",
+      "family": "page-prestation-2",
+      "key": "section:section-embedded-infos",
+      "differenceKind": "missing-breakpoint-node"
+    },
+    {
+      "source": "responsive",
+      "code": "content-conflict",
+      "priority": "P3",
+      "action": "inspect-responsive-contract",
+      "owner": "figma-contract",
+      "family": "page-prestation-2",
+      "key": "section:section-hero",
+      "differenceKind": "content-delta"
+    },
+    {
+      "source": "responsive",
+      "code": "breakpoint-only",
+      "priority": "P3",
+      "action": "inspect-responsive-contract",
+      "owner": "figma-contract",
+      "family": "page-prestation-2",
+      "key": "section:section-input-output",
+      "differenceKind": "missing-breakpoint-node"
+    },
+    {
+      "source": "responsive",
+      "code": "content-conflict",
+      "priority": "P3",
+      "action": "inspect-responsive-contract",
+      "owner": "figma-contract",
+      "family": "page-prestation-2",
+      "key": "section:section-prestation-1",
+      "differenceKind": "content-delta"
+    }
+  ]
+}

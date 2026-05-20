@@ -1,0 +1,232 @@
+{
+  "id": "ci-board",
+  "name": "ci-board",
+  "type": "FRAME",
+  "children": [
+    {
+      "id": "page-ci-1920",
+      "name": "page-ci-1920",
+      "type": "FRAME",
+      "absoluteBoundingBox": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 960
+      },
+      "children": [
+        {
+          "id": "section-hero-1920",
+          "name": "section-hero",
+          "type": "FRAME",
+          "absoluteBoundingBox": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 480
+          },
+          "children": [
+            {
+              "id": "hero-title-1920",
+              "name": "titre-h1",
+              "type": "TEXT",
+              "characters": "Pipeline CI",
+              "absoluteBoundingBox": {
+                "x": 120,
+                "y": 120,
+                "width": 760,
+                "height": 64
+              }
+            },
+            {
+              "id": "hero-copy-1920",
+              "name": "texte-intro",
+              "type": "TEXT",
+              "characters": "Fixture courte pour exercer le gate Hugo sans dependance Figma live.",
+              "absoluteBoundingBox": {
+                "x": 120,
+                "y": 220,
+                "width": 760,
+                "height": 80
+              }
+            }
+          ]
+        },
+        {
+          "id": "section-content-1920",
+          "name": "section-content",
+          "type": "FRAME",
+          "absoluteBoundingBox": {
+            "x": 0,
+            "y": 480,
+            "width": 1920,
+            "height": 480
+          },
+          "children": [
+            {
+              "id": "content-title-1920",
+              "name": "titre-h2",
+              "type": "TEXT",
+              "characters": "Smoke local",
+              "absoluteBoundingBox": {
+                "x": 120,
+                "y": 560,
+                "width": 760,
+                "height": 52
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "page-ci-834",
+      "name": "page-ci-834",
+      "type": "FRAME",
+      "absoluteBoundingBox": {
+        "x": 0,
+        "y": 0,
+        "width": 834,
+        "height": 960
+      },
+      "children": [
+        {
+          "id": "section-hero-834",
+          "name": "section-hero",
+          "type": "FRAME",
+          "absoluteBoundingBox": {
+            "x": 0,
+            "y": 0,
+            "width": 834,
+            "height": 480
+          },
+          "children": [
+            {
+              "id": "hero-title-834",
+              "name": "titre-h1",
+              "type": "TEXT",
+              "characters": "Pipeline CI",
+              "absoluteBoundingBox": {
+                "x": 64,
+                "y": 120,
+                "width": 520,
+                "height": 64
+              }
+            },
+            {
+              "id": "hero-copy-834",
+              "name": "texte-intro",
+              "type": "TEXT",
+              "characters": "Fixture courte pour exercer le gate Hugo sans dependance Figma live.",
+              "absoluteBoundingBox": {
+                "x": 64,
+                "y": 220,
+                "width": 520,
+                "height": 80
+              }
+            }
+          ]
+        },
+        {
+          "id": "section-content-834",
+          "name": "section-content",
+          "type": "FRAME",
+          "absoluteBoundingBox": {
+            "x": 0,
+            "y": 480,
+            "width": 834,
+            "height": 480
+          },
+          "children": [
+            {
+              "id": "content-title-834",
+              "name": "titre-h2",
+              "type": "TEXT",
+              "characters": "Smoke local",
+              "absoluteBoundingBox": {
+                "x": 64,
+                "y": 560,
+                "width": 520,
+                "height": 52
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "page-ci-402",
+      "name": "page-ci-402",
+      "type": "FRAME",
+      "absoluteBoundingBox": {
+        "x": 0,
+        "y": 0,
+        "width": 402,
+        "height": 960
+      },
+      "children": [
+        {
+          "id": "section-hero-402",
+          "name": "section-hero",
+          "type": "FRAME",
+          "absoluteBoundingBox": {
+            "x": 0,
+            "y": 0,
+            "width": 402,
+            "height": 480
+          },
+          "children": [
+            {
+              "id": "hero-title-402",
+              "name": "titre-h1",
+              "type": "TEXT",
+              "characters": "Pipeline CI",
+              "absoluteBoundingBox": {
+                "x": 24,
+                "y": 120,
+                "width": 354,
+                "height": 64
+              }
+            },
+            {
+              "id": "hero-copy-402",
+              "name": "texte-intro",
+              "type": "TEXT",
+              "characters": "Fixture courte pour exercer le gate Hugo sans dependance Figma live.",
+              "absoluteBoundingBox": {
+                "x": 24,
+                "y": 220,
+                "width": 354,
+                "height": 80
+              }
+            }
+          ]
+        },
+        {
+          "id": "section-content-402",
+          "name": "section-content",
+          "type": "FRAME",
+          "absoluteBoundingBox": {
+            "x": 0,
+            "y": 480,
+            "width": 402,
+            "height": 480
+          },
+          "children": [
+            {
+              "id": "content-title-402",
+              "name": "titre-h2",
+              "type": "TEXT",
+              "characters": "Smoke local",
+              "absoluteBoundingBox": {
+                "x": 24,
+                "y": 560,
+                "width": 354,
+                "height": 52
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

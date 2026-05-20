@@ -1,0 +1,48 @@
+"""Limites centrales des rares ajustements generiques autorises a modifier le layout."""
+
+from __future__ import annotations
+
+# Figma preservation: keep authored geometry unless browser rendering would clip
+# real content.
+FORM_SCALE_MAX_PAGE_WIDTH = 618
+FORM_SECTION_PADDING_PX = 12.0
+
+BAND_SECTION_PADDING_MIN_PX = 12.0
+BAND_SECTION_PADDING_MAX_PX = 24.0
+BAND_SECTION_PADDING_RATIO = 0.08
+BAND_VISUAL_MIN_WIDTH_RATIO = 0.9
+BAND_VISUAL_EDGE_TOLERANCE_RATIO = 0.12
+BAND_VISUAL_MIN_EDGE_TOLERANCE_PX = 12.0
+BAND_VISUAL_MAX_EDGE_TOLERANCE_PX = 24.0
+
+# Web component conversion: native controls and footer text need minimum browser
+# constraints while preserving Figma's visible placement.
+FOOTER_READABILITY_MAX_PAGE_WIDTH = 900
+FOOTER_SECTION_MIN_HEIGHT_PX = 44.0
+FOOTER_TEXT_MIN_FONT_SIZE_PX = 8.0
+FOOTER_TEXT_MIN_LINE_HEIGHT_PX = 12.0
+FOOTER_TEXT_MIN_HEIGHT_PX = 24.0
+FOOTER_TEXT_HORIZONTAL_PADDING_PX = 5.0
+FOOTER_TEXT_TOP_PADDING_PX = 4.0
+FOOTER_BG_VERTICAL_PADDING_PX = 4.0
+FOOTER_LEGAL_TEXT_MARKERS = (
+    "tous droits",
+    "copyright",
+    "(c)",
+    "\N{COPYRIGHT SIGN}",
+)
+
+# Browser safety: only prevent intrinsic text/flow overlaps and unsupported
+# geometry, never rebalance authored Figma text columns.
+TEXT_INTRINSIC_TOLERANCE_PX = 2.0
+TEXT_AVERAGE_CHAR_WIDTH_RATIO = 0.48
+TEXT_SIBLING_OVERLAP_TOLERANCE_PX = 1.0
+TEXT_SIBLING_HORIZONTAL_OVERLAP_RATIO = 0.35
+TEXT_STACK_EXCLUDED_COMPONENTS = {"field", "select", "textarea"}
+FLOW_SIBLING_OVERLAP_TOLERANCE_PX = 1.0
+FLOW_SIBLING_HORIZONTAL_OVERLAP_RATIO = 0.35
+SECTION_COMPACTION_MIN_EMPTY_PX = 48.0
+DECORATIVE_SECTION_OVERFLOW_TOLERANCE_PX = 4.0
+ACCORDION_SECTION_PADDING_PX = 24.0
+HEADING_EXPLICIT_LINE_PRESERVE_MIN_PAGE_WIDTH = 768
+HEADING_EXPLICIT_LINE_PRESERVE_TOLERANCE_PX = 8.0

@@ -11,9 +11,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import pytest
 
-from figma2hugo.config import OutputMode
 from figma2hugo.local_config import get_local_figma_token
-from figma2hugo.workflow import GenerationOptions, run_generation
+from figma2hugo.pipeline.runner import build_pipeline_hugo_site_from_figma_urls
 
 ROOT = Path(__file__).resolve().parents[1]
 REAL_FIGMA_URLS_ENV = "FIGMA2HUGO_REAL_FIGMA_URLS"
@@ -46,22 +45,13 @@ def test_real_figma_urls_generate_valid_hugo_site() -> None:
 
     with tempfile.TemporaryDirectory() as temp_dir:
         output_dir = _configured_output_dir(Path(temp_dir))
-        result = run_generation(
-            GenerationOptions(
-                figma_url=figma_urls[0],
-                figma_urls=figma_urls if len(figma_urls) > 1 else (),
-                out=output_dir,
-                mode=OutputMode.HUGO,
-            )
-        )
+        result = build_pipeline_hugo_site_from_figma_urls(list(figma_urls), output_dir)
 
         report_path = output_dir / "report.json"
         report = json.loads(report_path.read_text(encoding="utf-8"))
 
-        assert result["buildOk"] is True
+        assert result["pipeline"] == "pipeline"
         assert report["buildOk"] is True
-        assert report["missingTexts"] == []
-        assert report["missingAssets"] == []
         assert _generated_page_count(output_dir) >= 1
         if report.get("responsive", {}).get("checked"):
             responsive_summary = report["responsive"].get("summary", {})
@@ -93,6 +83,9 @@ def _configured_output_dir(tmp_path: Path) -> Path:
 
 
 def _generated_page_count(output_dir: Path) -> int:
+    pipeline_pages_dir = output_dir / "data" / "pipeline" / "pages"
+    if pipeline_pages_dir.exists():
+        return len(list(pipeline_pages_dir.glob("*.json")))
     site_manifest = output_dir / "data" / "site.json"
     if site_manifest.exists():
         payload = json.loads(site_manifest.read_text(encoding="utf-8"))

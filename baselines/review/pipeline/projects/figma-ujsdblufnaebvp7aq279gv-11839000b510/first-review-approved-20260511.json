@@ -1,0 +1,766 @@
+{
+  "version": 1,
+  "pipeline": "pipeline",
+  "projectIdentity": {
+    "version": 1,
+    "pipeline": "pipeline",
+    "sourceKind": "figma",
+    "projectId": "figma-ujsdblufnaebvp7aq279gv-11839000b510",
+    "projectHash": "11839000b510659c65ea84d96ba8b5e69bd7a271af3228d1ec802215ec4ffe98",
+    "sourceHash": "93903b62670baa013663bdd2ac10078e94f0233e8a34aae8d6f7b7f94f95a432",
+    "pageCount": 7,
+    "figmaFileKeys": [
+      "ujsdblUfnAeBvP7Aq279gv"
+    ],
+    "figmaNodeIds": [
+      "0:1",
+      "114:117",
+      "162:10",
+      "190:715",
+      "2031:179",
+      "2041:502",
+      "2041:666"
+    ],
+    "rawRootIds": [
+      "0:1",
+      "114:117",
+      "162:10",
+      "190:715",
+      "2031:179",
+      "2041:502",
+      "2041:666"
+    ],
+    "rawRootNames": [
+      "DEV - Maquette-Accueil",
+      "DEV - Maquette-Prestation",
+      "DEV - Maquette-Prestation-2",
+      "DEV - Maquette-Prestation-3",
+      "OK - Mentions-legales",
+      "OK- Etude-de-cas",
+      "OK- Maquette-a-propos"
+    ],
+    "sourceNodes": [
+      {
+        "index": 1,
+        "rawRootId": "2031:179",
+        "rawRootName": "OK - Mentions-legales",
+        "sourceKind": "figma",
+        "sourceUrl": "https://www.figma.com/design/ujsdblUfnAeBvP7Aq279gv/OLD---maquette_embedded--GRAND?node-id=2031-179",
+        "fileKey": "ujsdblUfnAeBvP7Aq279gv",
+        "nodeId": "2031:179"
+      },
+      {
+        "index": 2,
+        "rawRootId": "162:10",
+        "rawRootName": "OK- Maquette-a-propos",
+        "sourceKind": "figma",
+        "sourceUrl": "https://www.figma.com/design/ujsdblUfnAeBvP7Aq279gv/OLD---maquette_embedded--GRAND?node-id=162-10",
+        "fileKey": "ujsdblUfnAeBvP7Aq279gv",
+        "nodeId": "162:10"
+      },
+      {
+        "index": 3,
+        "rawRootId": "190:715",
+        "rawRootName": "OK- Etude-de-cas",
+        "sourceKind": "figma",
+        "sourceUrl": "https://www.figma.com/design/ujsdblUfnAeBvP7Aq279gv/OLD---maquette_embedded--GRAND?node-id=190-715",
+        "fileKey": "ujsdblUfnAeBvP7Aq279gv",
+        "nodeId": "190:715"
+      },
+      {
+        "index": 4,
+        "rawRootId": "2041:666",
+        "rawRootName": "DEV - Maquette-Prestation-3",
+        "sourceKind": "figma",
+        "sourceUrl": "https://www.figma.com/design/ujsdblUfnAeBvP7Aq279gv/OLD---maquette_embedded--GRAND?node-id=2041-666",
+        "fileKey": "ujsdblUfnAeBvP7Aq279gv",
+        "nodeId": "2041:666"
+      },
+      {
+        "index": 5,
+        "rawRootId": "2041:502",
+        "rawRootName": "DEV - Maquette-Prestation-2",
+        "sourceKind": "figma",
+        "sourceUrl": "https://www.figma.com/design/ujsdblUfnAeBvP7Aq279gv/OLD---maquette_embedded--GRAND?node-id=2041-502",
+        "fileKey": "ujsdblUfnAeBvP7Aq279gv",
+        "nodeId": "2041:502"
+      },
+      {
+        "index": 6,
+        "rawRootId": "114:117",
+        "rawRootName": "DEV - Maquette-Prestation",
+        "sourceKind": "figma",
+        "sourceUrl": "https://www.figma.com/design/ujsdblUfnAeBvP7Aq279gv/OLD---maquette_embedded--GRAND?node-id=114-117",
+        "fileKey": "ujsdblUfnAeBvP7Aq279gv",
+        "nodeId": "114:117"
+      },
+      {
+        "index": 7,
+        "rawRootId": "0:1",
+        "rawRootName": "DEV - Maquette-Accueil",
+        "sourceKind": "figma",
+        "sourceUrl": "https://www.figma.com/design/ujsdblUfnAeBvP7Aq279gv/OLD---maquette_embedded--GRAND?node-id=0-1",
+        "fileKey": "ujsdblUfnAeBvP7Aq279gv",
+        "nodeId": "0:1"
+      }
+    ]
+  },
+  "snapshotId": "first-review-approved-20260511",
+  "label": "first-review-approved-20260511",
+  "createdAt": "2026-05-11T11:24:40.275950+00:00",
+  "sourceReport": "C:\\dev\\figma2hugo\\site\\report.json",
+  "responsiveContracts": [
+    {
+      "id": "page-a-propos-section-footer-content-conflict-content-delta-e0bbcb46",
+      "family": "page-a-propos",
+      "code": "content-conflict",
+      "key": "section:footer",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "footer content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "footer",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "footer-copy-or-contact-drift"
+    },
+    {
+      "id": "page-accueil-container-bandeau-cas-clients-breakpoint-only-missing-break-507e4fc4",
+      "family": "page-accueil",
+      "code": "breakpoint-only",
+      "key": "container:bandeau-cas-clients",
+      "differenceKind": "missing-breakpoint-node",
+      "contractRule": "stable-breakpoint-presence",
+      "presentWidths": [
+        402
+      ],
+      "decision": "intentional-breakpoint-only",
+      "rationale": "case-studies is intentionally present only on selected breakpoints in Figma.",
+      "owner": "figma-contract",
+      "nodeRole": "case-studies",
+      "contractAction": "add-missing-node-or-declare-breakpoint-only",
+      "contractRisk": "intentional-breakpoint-structure-needs-declaration",
+      "missingWidths": [
+        834,
+        1920
+      ]
+    },
+    {
+      "id": "page-accueil-container-bandeau-droite-accompagnement-breakpoint-only-mis-3d586cd5",
+      "family": "page-accueil",
+      "code": "breakpoint-only",
+      "key": "container:bandeau-droite-accompagnement",
+      "differenceKind": "missing-breakpoint-node",
+      "contractRule": "stable-breakpoint-presence",
+      "presentWidths": [
+        402
+      ],
+      "decision": "intentional-breakpoint-only",
+      "rationale": "service-section is intentionally present only on selected breakpoints in Figma.",
+      "owner": "figma-contract",
+      "nodeRole": "service-section",
+      "contractAction": "add-missing-node-or-declare-breakpoint-only",
+      "contractRisk": "possible-breakpoint-content-loss",
+      "missingWidths": [
+        834,
+        1920
+      ]
+    },
+    {
+      "id": "page-accueil-container-bandeau-gauche-content-breakpoint-only-missing-br-b91c2cd3",
+      "family": "page-accueil",
+      "code": "breakpoint-only",
+      "key": "container:bandeau-gauche-content",
+      "differenceKind": "missing-breakpoint-node",
+      "contractRule": "stable-breakpoint-presence",
+      "presentWidths": [
+        834,
+        1920
+      ],
+      "decision": "intentional-breakpoint-only",
+      "rationale": "band is intentionally present only on selected breakpoints in Figma.",
+      "owner": "figma-contract",
+      "nodeRole": "band",
+      "contractAction": "add-missing-node-or-declare-breakpoint-only",
+      "contractRisk": "intentional-breakpoint-structure-needs-declaration",
+      "missingWidths": [
+        402
+      ]
+    },
+    {
+      "id": "page-accueil-section-footer-content-conflict-content-delta-114236ad",
+      "family": "page-accueil",
+      "code": "content-conflict",
+      "key": "section:footer",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "footer content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "footer",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "footer-copy-or-contact-drift"
+    },
+    {
+      "id": "page-accueil-section-section-embedded-breakpoint-only-missing-breakpoint-864d8d39",
+      "family": "page-accueil",
+      "code": "breakpoint-only",
+      "key": "section:section-embedded",
+      "differenceKind": "missing-breakpoint-node",
+      "contractRule": "stable-breakpoint-presence",
+      "presentWidths": [
+        402
+      ],
+      "decision": "intentional-breakpoint-only",
+      "rationale": "embedded-content is intentionally present only on selected breakpoints in Figma.",
+      "owner": "figma-contract",
+      "nodeRole": "embedded-content",
+      "contractAction": "add-missing-node-or-declare-breakpoint-only",
+      "contractRisk": "possible-breakpoint-content-loss",
+      "missingWidths": [
+        834,
+        1920
+      ]
+    },
+    {
+      "id": "page-accueil-section-section-embedded-infos-financez-breakpoint-only-mis-734f6ffb",
+      "family": "page-accueil",
+      "code": "breakpoint-only",
+      "key": "section:section-embedded-infos-financez",
+      "differenceKind": "missing-breakpoint-node",
+      "contractRule": "stable-breakpoint-presence",
+      "presentWidths": [
+        834,
+        1920
+      ],
+      "decision": "intentional-breakpoint-only",
+      "rationale": "embedded-content is intentionally present only on selected breakpoints in Figma.",
+      "owner": "figma-contract",
+      "nodeRole": "embedded-content",
+      "contractAction": "add-missing-node-or-declare-breakpoint-only",
+      "contractRisk": "possible-breakpoint-content-loss",
+      "missingWidths": [
+        402
+      ]
+    },
+    {
+      "id": "page-accueil-section-section-hero-content-conflict-content-delta-ba47cb46",
+      "family": "page-accueil",
+      "code": "content-conflict",
+      "key": "section:section-hero",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "hero content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "hero",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "primary-message-drift"
+    },
+    {
+      "id": "page-accueil-section-section-prestation-1-content-conflict-content-delta-7578a46d",
+      "family": "page-accueil",
+      "code": "content-conflict",
+      "key": "section:section-prestation-1",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "service-section content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "service-section",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "service-copy-drift"
+    },
+    {
+      "id": "page-etude-de-cas-container-bandeau-droite-accompagnement-breakpoint-onl-c5cd9975",
+      "family": "page-etude-de-cas",
+      "code": "breakpoint-only",
+      "key": "container:bandeau-droite-accompagnement",
+      "differenceKind": "missing-breakpoint-node",
+      "contractRule": "stable-breakpoint-presence",
+      "presentWidths": [
+        834,
+        1920
+      ],
+      "decision": "intentional-breakpoint-only",
+      "rationale": "service-section is intentionally present only on selected breakpoints in Figma.",
+      "owner": "figma-contract",
+      "nodeRole": "service-section",
+      "contractAction": "add-missing-node-or-declare-breakpoint-only",
+      "contractRisk": "possible-breakpoint-content-loss",
+      "missingWidths": [
+        402
+      ]
+    },
+    {
+      "id": "page-etude-de-cas-section-footer-content-conflict-content-delta-27a9a175",
+      "family": "page-etude-de-cas",
+      "code": "content-conflict",
+      "key": "section:footer",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "footer content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "footer",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "footer-copy-or-contact-drift"
+    },
+    {
+      "id": "page-etude-de-cas-section-section-cas-clients-content-conflict-content-d-afce7c22",
+      "family": "page-etude-de-cas",
+      "code": "content-conflict",
+      "key": "section:section-cas-clients",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "case-studies content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "case-studies",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "collection-content-drift"
+    },
+    {
+      "id": "page-mentions-legales-section-footer-content-conflict-content-delta-936be9b7",
+      "family": "page-mentions-legales",
+      "code": "content-conflict",
+      "key": "section:footer",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "footer content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "footer",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "footer-copy-or-contact-drift"
+    },
+    {
+      "id": "page-prestation-container-bandeau-droite-accompagnement-content-conflict-cb0c3073",
+      "family": "page-prestation",
+      "code": "content-conflict",
+      "key": "container:bandeau-droite-accompagnement",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "service-section content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "service-section",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "service-copy-drift"
+    },
+    {
+      "id": "page-prestation-section-footer-content-conflict-content-delta-652cc8c9",
+      "family": "page-prestation",
+      "code": "content-conflict",
+      "key": "section:footer",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "footer content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "footer",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "footer-copy-or-contact-drift"
+    },
+    {
+      "id": "page-prestation-section-section-cas-clients-content-conflict-content-del-94243377",
+      "family": "page-prestation",
+      "code": "content-conflict",
+      "key": "section:section-cas-clients",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "case-studies content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "case-studies",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "collection-content-drift"
+    },
+    {
+      "id": "page-prestation-section-section-embedded-breakpoint-only-missing-breakpo-d4c990c3",
+      "family": "page-prestation",
+      "code": "breakpoint-only",
+      "key": "section:section-embedded",
+      "differenceKind": "missing-breakpoint-node",
+      "contractRule": "stable-breakpoint-presence",
+      "presentWidths": [
+        834,
+        1920
+      ],
+      "decision": "intentional-breakpoint-only",
+      "rationale": "embedded-content is intentionally present only on selected breakpoints in Figma.",
+      "owner": "figma-contract",
+      "nodeRole": "embedded-content",
+      "contractAction": "add-missing-node-or-declare-breakpoint-only",
+      "contractRisk": "possible-breakpoint-content-loss",
+      "missingWidths": [
+        402
+      ]
+    },
+    {
+      "id": "page-prestation-section-section-embedded-infos-breakpoint-only-missing-b-ffd900e4",
+      "family": "page-prestation",
+      "code": "breakpoint-only",
+      "key": "section:section-embedded-infos",
+      "differenceKind": "missing-breakpoint-node",
+      "contractRule": "stable-breakpoint-presence",
+      "presentWidths": [
+        402
+      ],
+      "decision": "intentional-breakpoint-only",
+      "rationale": "embedded-content is intentionally present only on selected breakpoints in Figma.",
+      "owner": "figma-contract",
+      "nodeRole": "embedded-content",
+      "contractAction": "add-missing-node-or-declare-breakpoint-only",
+      "contractRisk": "possible-breakpoint-content-loss",
+      "missingWidths": [
+        834,
+        1920
+      ]
+    },
+    {
+      "id": "page-prestation-section-section-hero-content-conflict-content-delta-a49206ef",
+      "family": "page-prestation",
+      "code": "content-conflict",
+      "key": "section:section-hero",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "hero content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "hero",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "primary-message-drift"
+    },
+    {
+      "id": "page-prestation-section-section-prestation-1-content-conflict-content-de-b65ade6d",
+      "family": "page-prestation",
+      "code": "content-conflict",
+      "key": "section:section-prestation-1",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "service-section content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "service-section",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "service-copy-drift"
+    },
+    {
+      "id": "page-prestation-2-container-bandeau-droite-accompagnement-content-confli-e19e4804",
+      "family": "page-prestation-2",
+      "code": "content-conflict",
+      "key": "container:bandeau-droite-accompagnement",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "service-section content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "service-section",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "service-copy-drift"
+    },
+    {
+      "id": "page-prestation-2-section-footer-content-conflict-content-delta-dad57628",
+      "family": "page-prestation-2",
+      "code": "content-conflict",
+      "key": "section:footer",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "footer content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "footer",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "footer-copy-or-contact-drift"
+    },
+    {
+      "id": "page-prestation-2-section-section-cas-clients-content-conflict-content-d-4210ff66",
+      "family": "page-prestation-2",
+      "code": "content-conflict",
+      "key": "section:section-cas-clients",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "case-studies content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "case-studies",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "collection-content-drift"
+    },
+    {
+      "id": "page-prestation-2-section-section-embedded-breakpoint-only-missing-break-39db66a2",
+      "family": "page-prestation-2",
+      "code": "breakpoint-only",
+      "key": "section:section-embedded",
+      "differenceKind": "missing-breakpoint-node",
+      "contractRule": "stable-breakpoint-presence",
+      "presentWidths": [
+        1920
+      ],
+      "decision": "intentional-breakpoint-only",
+      "rationale": "embedded-content is intentionally present only on selected breakpoints in Figma.",
+      "owner": "figma-contract",
+      "nodeRole": "embedded-content",
+      "contractAction": "add-missing-node-or-declare-breakpoint-only",
+      "contractRisk": "possible-breakpoint-content-loss",
+      "missingWidths": [
+        402,
+        834
+      ]
+    },
+    {
+      "id": "page-prestation-2-section-section-embedded-infos-breakpoint-only-missing-1b7f2287",
+      "family": "page-prestation-2",
+      "code": "breakpoint-only",
+      "key": "section:section-embedded-infos",
+      "differenceKind": "missing-breakpoint-node",
+      "contractRule": "stable-breakpoint-presence",
+      "presentWidths": [
+        402
+      ],
+      "decision": "intentional-breakpoint-only",
+      "rationale": "embedded-content is intentionally present only on selected breakpoints in Figma.",
+      "owner": "figma-contract",
+      "nodeRole": "embedded-content",
+      "contractAction": "add-missing-node-or-declare-breakpoint-only",
+      "contractRisk": "possible-breakpoint-content-loss",
+      "missingWidths": [
+        834,
+        1920
+      ]
+    },
+    {
+      "id": "page-prestation-2-section-section-hero-content-conflict-content-delta-a8d12319",
+      "family": "page-prestation-2",
+      "code": "content-conflict",
+      "key": "section:section-hero",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "hero content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "hero",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "primary-message-drift"
+    },
+    {
+      "id": "page-prestation-2-section-section-input-output-breakpoint-only-missing-b-8ff553b4",
+      "family": "page-prestation-2",
+      "code": "breakpoint-only",
+      "key": "section:section-input-output",
+      "differenceKind": "missing-breakpoint-node",
+      "contractRule": "stable-breakpoint-presence",
+      "presentWidths": [
+        834
+      ],
+      "decision": "intentional-breakpoint-only",
+      "rationale": "embedded-content is intentionally present only on selected breakpoints in Figma.",
+      "owner": "figma-contract",
+      "nodeRole": "embedded-content",
+      "contractAction": "add-missing-node-or-declare-breakpoint-only",
+      "contractRisk": "possible-breakpoint-content-loss",
+      "missingWidths": [
+        402,
+        1920
+      ]
+    },
+    {
+      "id": "page-prestation-2-section-section-prestation-1-content-conflict-content--dd0edb85",
+      "family": "page-prestation-2",
+      "code": "content-conflict",
+      "key": "section:section-prestation-1",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "service-section content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "service-section",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "service-copy-drift"
+    },
+    {
+      "id": "page-prestation-3-container-bandeau-droite-accompagnement-breakpoint-onl-b9de93b4",
+      "family": "page-prestation-3",
+      "code": "breakpoint-only",
+      "key": "container:bandeau-droite-accompagnement",
+      "differenceKind": "missing-breakpoint-node",
+      "contractRule": "stable-breakpoint-presence",
+      "presentWidths": [
+        402,
+        1920
+      ],
+      "decision": "intentional-breakpoint-only",
+      "rationale": "service-section is intentionally present only on selected breakpoints in Figma.",
+      "owner": "figma-contract",
+      "nodeRole": "service-section",
+      "contractAction": "add-missing-node-or-declare-breakpoint-only",
+      "contractRisk": "possible-breakpoint-content-loss",
+      "missingWidths": [
+        834
+      ]
+    },
+    {
+      "id": "page-prestation-3-section-footer-content-conflict-content-delta-dfec994b",
+      "family": "page-prestation-3",
+      "code": "content-conflict",
+      "key": "section:footer",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "footer content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "footer",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "footer-copy-or-contact-drift"
+    },
+    {
+      "id": "page-prestation-3-section-section-cas-clients-content-conflict-content-d-41f84ea3",
+      "family": "page-prestation-3",
+      "code": "content-conflict",
+      "key": "section:section-cas-clients",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "case-studies content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "case-studies",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "collection-content-drift"
+    },
+    {
+      "id": "page-prestation-3-section-section-hero-content-conflict-content-delta-fa815ab1",
+      "family": "page-prestation-3",
+      "code": "content-conflict",
+      "key": "section:section-hero",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "hero content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "hero",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "primary-message-drift"
+    },
+    {
+      "id": "page-prestation-3-section-section-prestation-1-content-conflict-content--77786f55",
+      "family": "page-prestation-3",
+      "code": "content-conflict",
+      "key": "section:section-prestation-1",
+      "differenceKind": "content-delta",
+      "contractRule": "stable-responsive-content",
+      "presentWidths": [
+        402,
+        834,
+        1920
+      ],
+      "decision": "intentional-content-variant",
+      "rationale": "service-section content is intentionally adapted by responsive breakpoint.",
+      "owner": "figma-contract",
+      "nodeRole": "service-section",
+      "contractAction": "align-copy-or-declare-intentional-variant",
+      "contractRisk": "service-copy-drift"
+    }
+  ],
+  "approvedActionableReviews": []
+}

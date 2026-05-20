@@ -1,3 +1,5 @@
+"""Evenements de progression legers pour rendre les longues generations comprehensibles."""
+
 from __future__ import annotations
 
 from pathlib import Path

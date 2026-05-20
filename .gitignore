@@ -2,6 +2,9 @@
 __pycache__/
 .mypy_cache/
 .ruff_cache/
+.codex-tmp/
+.pipeline-*/
+.css-pass-*/
 .coverage
 .venv/
 *.py[cod]
@@ -14,6 +17,11 @@ figma2hugo.local.json
 .figma2hugo-debug/
 .figma2hugo-tmp/
 figma-extract/
+/site/
+/site-check-*/
+/site-smoke/
+/css-pass-site/
+docs/transcript-conversation-autre-gpt.md
 /repro*/
 /tmp*/
 /tmp*.png

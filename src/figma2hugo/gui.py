@@ -1,3 +1,5 @@
+"""Petite interface desktop pour lancer le flux officiel de generation Hugo."""
+
 from __future__ import annotations
 
 import os
@@ -9,7 +11,6 @@ from queue import Empty, Queue
 from typing import Any
 
 from figma2hugo import gui_presenter
-from figma2hugo.config import OutputMode
 from figma2hugo.local_config import get_local_config_path, get_local_figma_token
 from figma2hugo.progress import (
     format_progress_event as _format_progress_event,
@@ -17,7 +18,6 @@ from figma2hugo.progress import (
 from figma2hugo.progress import (
     progress_status_label as _progress_status_label,
 )
-from figma2hugo.workflow import GenerationOptions, run_generation
 
 
 class Figma2HugoGUI:
@@ -37,6 +37,8 @@ class Figma2HugoGUI:
         self._queue: Queue[tuple[str, Any]] = Queue()
         self._is_running = False
         self._last_output_dir: Path | None = None
+        self._last_baseline_smoke_out: Path | None = None
+        self._last_baseline_root: Path | None = None
 
         self.url_vars: list[Any] = [tk.StringVar()]
         self.url_entries: list[Any] = []
@@ -163,8 +165,8 @@ class Figma2HugoGUI:
         ttk.Label(
             form_card,
             text=(
-                "Le mode Hugo gere aussi le multi-pages. Le statique reste disponible "
-                "pour une seule URL."
+                "Le mode Hugo gere le multi-pages, les variantes responsive et "
+                "rafraichit les donnees Figma au lancement."
             ),
             style="CardBody.TLabel",
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 14))
@@ -232,23 +234,14 @@ class Figma2HugoGUI:
         actions.grid(row=11, column=0, columnspan=2, sticky="ew", pady=(18, 0))
         actions.columnconfigure(0, weight=1)
         actions.columnconfigure(1, weight=1)
-        actions.columnconfigure(2, weight=1)
 
         self.generate_hugo_button = ttk.Button(
             actions,
             text="Generer Hugo",
             style="Primary.TButton",
-            command=lambda: self._start_generation(OutputMode.HUGO),
+            command=self._start_generation,
         )
         self.generate_hugo_button.grid(row=0, column=0, sticky="ew", padx=(0, 8))
-
-        self.generate_static_button = ttk.Button(
-            actions,
-            text="Exporter Statique",
-            style="Secondary.TButton",
-            command=lambda: self._start_generation(OutputMode.STATIC),
-        )
-        self.generate_static_button.grid(row=0, column=1, sticky="ew", padx=4)
 
         self.open_folder_button = ttk.Button(
             actions,
@@ -257,7 +250,16 @@ class Figma2HugoGUI:
             command=self._open_output_dir,
             state="disabled",
         )
-        self.open_folder_button.grid(row=0, column=2, sticky="ew", padx=(8, 0))
+        self.open_folder_button.grid(row=0, column=1, sticky="ew", padx=(8, 0))
+
+        self.promote_baseline_button = ttk.Button(
+            actions,
+            text="Valider baseline",
+            style="Secondary.TButton",
+            command=self._promote_last_baseline,
+            state="disabled",
+        )
+        self.promote_baseline_button.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(8, 0))
 
         self.progressbar = ttk.Progressbar(form_card, mode="indeterminate")
         self.progressbar.grid(row=12, column=0, columnspan=2, sticky="ew", pady=(14, 0))
@@ -299,7 +301,7 @@ class Figma2HugoGUI:
         if directory:
             self.destination_var.set(directory)
 
-    def _start_generation(self, mode: OutputMode) -> None:
+    def _start_generation(self) -> None:
         from tkinter import messagebox
 
         if self._is_running:
@@ -312,13 +314,6 @@ class Figma2HugoGUI:
             return
         if not destination:
             messagebox.showerror("Destination manquante", "Choisis un dossier de destination.")
-            return
-        if mode is OutputMode.STATIC and len(figma_urls) > 1:
-            messagebox.showerror(
-                "Mode indisponible",
-                "L'export statique ne gere qu'une seule URL.\n"
-                "Utilise le mode Hugo pour plusieurs pages.",
-            )
             return
         if not _has_figma_access(self.token_var.get()):
             messagebox.showerror(
@@ -335,35 +330,28 @@ class Figma2HugoGUI:
 
         self._set_running_state(True)
         self.status_var.set("Generation en cours")
-        self.summary_var.set(_generation_launch_summary(mode, len(figma_urls)))
+        self.summary_var.set(_generation_launch_summary(len(figma_urls)))
         self._set_output(
-            _format_generation_start(
-                figma_urls, Path(destination), mode, self.token_var.get().strip()
-            )
+            _format_generation_start(figma_urls, Path(destination), self.token_var.get().strip())
         )
         self._append_output("\nGeneration en cours, merci de patienter...\n")
 
         thread = threading.Thread(
             target=self._run_generation_job,
-            args=(figma_urls, Path(destination), mode, self.token_var.get().strip()),
+            args=(figma_urls, Path(destination), self.token_var.get().strip()),
             daemon=True,
         )
         thread.start()
 
-    def _run_generation_job(
-        self, figma_urls: list[str], destination: Path, mode: OutputMode, token: str
-    ) -> None:
+    def _run_generation_job(self, figma_urls: list[str], destination: Path, token: str) -> None:
         try:
             previous_token = os.environ.get("FIGMA_ACCESS_TOKEN")
             if token:
                 os.environ["FIGMA_ACCESS_TOKEN"] = token
-            result = run_generation(
-                GenerationOptions(
-                    figma_url=figma_urls[0],
-                    figma_urls=tuple(figma_urls),
-                    out=destination,
-                    mode=mode,
-                ),
+            result = _run_generation_for_gui(
+                figma_urls,
+                destination,
+                token,
                 progress_callback=self._enqueue_progress_event,
             )
             self._queue.put(("success", result))
@@ -383,6 +371,8 @@ class Figma2HugoGUI:
                 if kind == "success":
                     result = payload
                     self._last_output_dir = Path(result["outDir"])
+                    self._last_baseline_smoke_out = _baseline_smoke_out_from_result(result)
+                    self._last_baseline_root = _baseline_root_from_result(result)
                     self.status_var.set("Termine")
                     self.summary_var.set(
                         f"Generation {result['mode']} terminee. Rapport ecrit dans "
@@ -390,6 +380,7 @@ class Figma2HugoGUI:
                     )
                     self._append_output("\n" + _format_generation_success(result))
                     self.open_folder_button.configure(state="normal")
+                    self._refresh_baseline_promotion_state(result)
                     self._set_running_state(False)
                 elif kind == "progress":
                     progress = (
@@ -439,6 +430,8 @@ class Figma2HugoGUI:
             self.generate_hugo_button.configure(state=states.default)
         if hasattr(self, "generate_static_button"):
             self.generate_static_button.configure(state=states.static_button)
+        if hasattr(self, "promote_baseline_button") and running:
+            self.promote_baseline_button.configure(state="disabled")
         if hasattr(self, "progressbar"):
             if states.progress_running:
                 self.progressbar.start(10)
@@ -521,6 +514,32 @@ class Figma2HugoGUI:
         if not self._last_output_dir:
             return
         _open_directory(self._last_output_dir)
+
+    def _refresh_baseline_promotion_state(self, result: dict[str, Any]) -> None:
+        if not hasattr(self, "promote_baseline_button"):
+            return
+        state = "normal" if _result_needs_baseline_promotion(result) else "disabled"
+        self.promote_baseline_button.configure(state=state)
+
+    def _promote_last_baseline(self) -> None:
+        from tkinter import messagebox
+
+        if self._is_running:
+            return
+        if self._last_baseline_smoke_out is None or self._last_baseline_root is None:
+            messagebox.showinfo("Baseline", "Aucune capture de baseline a valider.")
+            return
+        try:
+            result = _promote_visual_baseline_for_gui(
+                self._last_baseline_smoke_out,
+                self._last_baseline_root,
+            )
+        except ValueError as exc:
+            messagebox.showerror("Baseline", str(exc))
+            return
+        self.promote_baseline_button.configure(state="disabled")
+        self._append_output("\n" + _format_baseline_promotion_success(result))
+        self.summary_var.set("Baseline visuelle validee pour ce projet.")
 
     def _toggle_token_visibility(self) -> None:
         self.token_entry.configure(show="" if self.token_visible_var.get() else "*")
@@ -661,20 +680,142 @@ def _selection_hint_message(figma_urls: list[str]) -> str:
     return gui_presenter.selection_hint_message(figma_urls)
 
 
-def _generation_launch_summary(mode: OutputMode, figma_url_count: int) -> str:
-    return gui_presenter.generation_launch_summary(mode, figma_url_count)
+def _generation_launch_summary(figma_url_count: int) -> str:
+    return gui_presenter.generation_launch_summary(figma_url_count)
+
+
+def _run_generation_for_gui(
+    figma_urls: list[str],
+    destination: Path,
+    token: str,
+    *,
+    progress_callback: Any | None = None,
+) -> dict[str, Any]:
+    del progress_callback
+    return _run_hugo_pipeline_generation(figma_urls, destination, token)
+
+
+def _run_hugo_pipeline_generation(
+    figma_urls: list[str],
+    destination: Path,
+    token: str,
+) -> dict[str, Any]:
+    from figma2hugo.pipeline.runner import build_pipeline_hugo_site_from_figma_urls
+
+    payload = build_pipeline_hugo_site_from_figma_urls(
+        figma_urls,
+        destination,
+        token=token or None,
+        refresh_cache=True,
+        responsive_contract_root=_default_review_baseline_root(),
+    )
+    try:
+        visual_smoke = _run_visual_smoke_for_gui(destination, token=token or None)
+    except Exception as exc:  # pragma: no cover - defensive UI fallback
+        visual_smoke = {
+            "outDir": str(_default_visual_smoke_out(destination)),
+            "baselineRoot": str(_default_visual_baseline_root()),
+            "error": str(exc),
+        }
+    return _gui_result_from_pipeline_hugo_payload(payload, visual_smoke=visual_smoke)
+
+
+def _run_visual_smoke_for_gui(destination: Path, *, token: str | None = None) -> dict[str, Any]:
+    from figma2hugo.pipeline.visual_smoke import (
+        DEFAULT_SCREENSHOT_WIDTHS,
+        DEFAULT_VIEWPORT_WIDTHS,
+        run_pipeline_visual_smoke,
+    )
+
+    smoke_out = _default_visual_smoke_out(destination)
+    baseline_root = _default_visual_baseline_root()
+    report = run_pipeline_visual_smoke(
+        destination,
+        smoke_out,
+        widths=DEFAULT_VIEWPORT_WIDTHS,
+        screenshot_widths=DEFAULT_SCREENSHOT_WIDTHS,
+        baseline_mode="auto",
+        baseline_root=baseline_root,
+        token=token,
+    )
+    report["baselineRoot"] = str(baseline_root)
+    report["smokeOut"] = str(smoke_out)
+    return report
+
+
+def _default_visual_smoke_out(destination: Path) -> Path:
+    return destination.parent / f"{destination.name}-smoke"
+
+
+def _default_visual_baseline_root() -> Path:
+    return Path.cwd() / "baselines" / "visual" / "pipeline" / "projects"
+
+
+def _default_review_baseline_root() -> Path:
+    return Path.cwd() / "baselines" / "review" / "pipeline" / "projects"
+
+
+def _gui_result_from_pipeline_hugo_payload(
+    payload: dict[str, Any],
+    *,
+    visual_smoke: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    result = dict(payload)
+    result["mode"] = "hugo"
+    result["pipeline"] = "pipeline"
+    result.setdefault("buildOk", True)
+    result.setdefault("writtenFiles", [])
+    if visual_smoke is not None:
+        result["visualSmoke"] = visual_smoke
+        result["visualSmokeReport"] = str(
+            Path(str(visual_smoke.get("outDir") or ".")) / "report.json"
+        )
+    return result
+
+
+def _result_needs_baseline_promotion(result: dict[str, Any]) -> bool:
+    visual_smoke = result.get("visualSmoke")
+    if not isinstance(visual_smoke, dict):
+        return False
+    visual_review = visual_smoke.get("visualReview")
+    if not isinstance(visual_review, dict):
+        return False
+    return visual_review.get("bootstrapRequired") is True
+
+
+def _baseline_smoke_out_from_result(result: dict[str, Any]) -> Path | None:
+    visual_smoke = result.get("visualSmoke")
+    if not isinstance(visual_smoke, dict):
+        return None
+    out_dir = str(visual_smoke.get("outDir") or visual_smoke.get("smokeOut") or "")
+    return Path(out_dir) if out_dir else None
+
+
+def _baseline_root_from_result(result: dict[str, Any]) -> Path | None:
+    visual_smoke = result.get("visualSmoke")
+    if not isinstance(visual_smoke, dict):
+        return None
+    visual_review = visual_smoke.get("visualReview")
+    if isinstance(visual_review, dict) and visual_review.get("baselineRoot"):
+        return Path(str(visual_review["baselineRoot"]))
+    baseline_root = str(visual_smoke.get("baselineRoot") or "")
+    return Path(baseline_root) if baseline_root else None
+
+
+def _promote_visual_baseline_for_gui(smoke_out: Path, baseline_root: Path) -> dict[str, Any]:
+    from figma2hugo.pipeline.visual_baselines import promote_visual_baseline
+
+    return promote_visual_baseline(smoke_out, baseline_root, label="validated-from-ui")
 
 
 def _format_generation_start(
     figma_urls: list[str],
     destination: Path,
-    mode: OutputMode,
     token_override: str | None,
 ) -> str:
     return gui_presenter.format_generation_start(
         figma_urls,
         destination,
-        mode,
         access_source=_figma_access_source(token_override),
     )
 
@@ -683,11 +824,8 @@ def _format_generation_success(result: dict[str, Any]) -> str:
     return gui_presenter.format_generation_success(result)
 
 
-def _format_generation_error(message: str) -> str:
-    return gui_presenter.format_generation_error(
-        message,
-        access_message=_missing_access_message(),
-    )
+def _format_baseline_promotion_success(result: dict[str, Any]) -> str:
+    return gui_presenter.format_baseline_promotion_success(result)
 
 
 def _describe_generation_error(message: str) -> dict[str, str]:

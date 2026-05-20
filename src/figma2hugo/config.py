@@ -1,14 +1,13 @@
+"""Helpers de configuration partages par la CLI et l'interface desktop."""
+
 from __future__ import annotations
 
 import re
 from enum import StrEnum
-from pathlib import Path
 from typing import Self
 from urllib.parse import parse_qs, unquote, urlparse
 
-from pydantic import ConfigDict, Field, field_validator
-
-from figma2hugo.model.base import FigmaBaseModel
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 _SUPPORTED_FIGMA_HOSTS = {"figma.com", "www.figma.com"}
 _SUPPORTED_FIGMA_PATHS = {"file", "design", "proto"}
@@ -18,23 +17,22 @@ _FIGMA_PATH_PATTERN = re.compile(
 _NODE_ID_PATTERN = re.compile(r"^\d+(?:-\d+)+$")
 
 
-class OutputMode(StrEnum):
-    HUGO = "hugo"
-    STATIC = "static"
-
-
 class FidelityMode(StrEnum):
     EXACT = "exact"
     BALANCED = "balanced"
     SEMANTIC = "semantic"
 
 
-class ContentMode(StrEnum):
-    INLINE = "inline"
-    DATA_FILE = "data-file"
+def _to_camel(value: str) -> str:
+    parts = value.split("_")
+    return parts[0] + "".join(part.capitalize() for part in parts[1:])
 
 
-class FigmaUrl(FigmaBaseModel):
+class _ConfigModel(BaseModel):
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
+
+
+class FigmaUrl(_ConfigModel):
     model_config = ConfigDict(extra="forbid")
 
     source_url: str = Field(min_length=1)
@@ -78,32 +76,6 @@ class FigmaUrl(FigmaBaseModel):
             node_id=normalize_node_id(node_values[0]),
             slug=slug,
         )
-
-
-class ExtractConfig(FigmaBaseModel):
-    figma: FigmaUrl
-    target_dir: Path
-
-    @field_validator("target_dir", mode="before")
-    @classmethod
-    def ensure_path(cls, value: Path | str) -> Path:
-        return Path(value)
-
-
-class GenerateConfig(ExtractConfig):
-    output_mode: OutputMode = OutputMode.HUGO
-    fidelity_mode: FidelityMode = FidelityMode.BALANCED
-    content_mode: ContentMode = ContentMode.DATA_FILE
-
-
-class ValidateConfig(FigmaBaseModel):
-    target_dir: Path
-    against: FigmaUrl | None = None
-
-    @field_validator("target_dir", mode="before")
-    @classmethod
-    def ensure_path(cls, value: Path | str) -> Path:
-        return Path(value)
 
 
 def normalize_node_id(raw_value: str) -> str:

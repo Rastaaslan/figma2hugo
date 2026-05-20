@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  quality:
+    name: Quality Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Set up Hugo
+        uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: "0.160.1"
+          extended: true
+
+      - name: Install Python package
+        run: python -m pip install -e .[dev]
+
+      - name: Install Playwright browser
+        run: python -m playwright install chromium --with-deps
+
+      - name: Ruff lint
+        run: python -m ruff check src tests scripts
+
+      - name: Ruff format check
+        run: python -m ruff format --check src tests scripts
+
+      - name: Mypy
+        run: python -m mypy src/figma2hugo
+
+      - name: Tests
+        run: python -m pytest -p no:cacheprovider
+
+      - name: Release gate smoke
+        run: >
+          python scripts/release_gate.py
+          .figma2hugo-scratch/release-gate-ci
+          --raw tests/fixtures/release-gate-page.raw.json
+          --smoke-out .figma2hugo-scratch/release-gate-ci-smoke
+          --widths 402
+          --screenshot-widths 402
+
+      - name: Performance smoke
+        run: python scripts/perf_smoke.py --skip-hugo --budget cli_help=3
+
+      - name: Build wheel
+        run: python -m pip wheel . --no-deps -w .figma2hugo-scratch/ci-wheel
+
+  release-pipeline-offline:
+    name: Release Offline Gate
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/v') ||
+      startsWith(github.ref, 'refs/heads/release/')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Set up Hugo
+        uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: "0.160.1"
+          extended: true
+
+      - name: Install Python package
+        run: python -m pip install -e .[dev]
+
+      - name: Install Playwright browser
+        run: python -m playwright install chromium --with-deps
+
+      - name: Strict offline real-pages gate
+        run: >
+          python scripts/release_gate.py
+          .figma2hugo-scratch/release-pipeline-user-list-20260510-strict
+          --raw-dir baselines/raw/pipeline/real-pages-user-list-20260510
+          --smoke-out .figma2hugo-scratch/release-pipeline-user-list-20260510-strict-smoke
+          --widths 1920,1440,1280,1024,834,402
+          --screenshot-widths 1920,1440,1280,1024,834,402
+          --baseline-dir baselines/visual/pipeline/real-pages-user-list-20260511
+          --diff-review-threshold 0.002
+          --diff-fail-threshold 0.01
+          --review-baseline baselines/review/pipeline/real-pages-semantic10-zero-actionables.json
+          --responsive-contract baselines/review/pipeline/real-pages-user-list-responsive-contract.json

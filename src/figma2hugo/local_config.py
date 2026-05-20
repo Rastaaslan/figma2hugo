@@ -1,3 +1,5 @@
+"""Configuration locale reservee au poste de travail, comme les tokens Figma sauvegardes."""
+
 from __future__ import annotations
 
 import json

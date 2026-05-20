@@ -1,0 +1,409 @@
+{
+  "version": 1,
+  "pipeline": "pipeline",
+  "projectIdentity": {
+    "version": 1,
+    "pipeline": "pipeline",
+    "sourceKind": "figma",
+    "projectId": "figma-ujsdblufnaebvp7aq279gv-11839000b510",
+    "projectHash": "11839000b510659c65ea84d96ba8b5e69bd7a271af3228d1ec802215ec4ffe98",
+    "sourceHash": "1becdb3cc4c64622a5f5dc4726de15b60510a401823e38f1a3daebc1e1a7683d",
+    "pageCount": 7,
+    "figmaFileKeys": [
+      "ujsdblUfnAeBvP7Aq279gv"
+    ],
+    "figmaNodeIds": [
+      "0:1",
+      "114:117",
+      "162:10",
+      "190:715",
+      "2031:179",
+      "2041:502",
+      "2041:666"
+    ],
+    "rawRootIds": [
+      "0:1",
+      "114:117",
+      "162:10",
+      "190:715",
+      "2031:179",
+      "2041:502",
+      "2041:666"
+    ],
+    "rawRootNames": [
+      "DEV - Maquette-Accueil",
+      "DEV - Maquette-Prestation",
+      "DEV - Maquette-Prestation-2",
+      "DEV - Maquette-Prestation-3",
+      "OK - Mentions-legales",
+      "OK- Etude-de-cas",
+      "OK- Maquette-a-propos"
+    ],
+    "sourceNodes": [
+      {
+        "index": 1,
+        "rawRootId": "2031:179",
+        "rawRootName": "OK - Mentions-legales",
+        "sourceKind": "figma",
+        "sourceUrl": "https://www.figma.com/design/ujsdblUfnAeBvP7Aq279gv/OLD---maquette_embedded--GRAND?node-id=2031-179",
+        "fileKey": "ujsdblUfnAeBvP7Aq279gv",
+        "nodeId": "2031:179"
+      },
+      {
+        "index": 2,
+        "rawRootId": "162:10",
+        "rawRootName": "OK- Maquette-a-propos",
+        "sourceKind": "figma",
+        "sourceUrl": "https://www.figma.com/design/ujsdblUfnAeBvP7Aq279gv/OLD---maquette_embedded--GRAND?node-id=162-10",
+        "fileKey": "ujsdblUfnAeBvP7Aq279gv",
+        "nodeId": "162:10"
+      },
+      {
+        "index": 3,
+        "rawRootId": "190:715",
+        "rawRootName": "OK- Etude-de-cas",
+        "sourceKind": "figma",
+        "sourceUrl": "https://www.figma.com/design/ujsdblUfnAeBvP7Aq279gv/OLD---maquette_embedded--GRAND?node-id=190-715",
+        "fileKey": "ujsdblUfnAeBvP7Aq279gv",
+        "nodeId": "190:715"
+      },
+      {
+        "index": 4,
+        "rawRootId": "2041:666",
+        "rawRootName": "DEV - Maquette-Prestation-3",
+        "sourceKind": "figma",
+        "sourceUrl": "https://www.figma.com/design/ujsdblUfnAeBvP7Aq279gv/OLD---maquette_embedded--GRAND?node-id=2041-666",
+        "fileKey": "ujsdblUfnAeBvP7Aq279gv",
+        "nodeId": "2041:666"
+      },
+      {
+        "index": 5,
+        "rawRootId": "2041:502",
+        "rawRootName": "DEV - Maquette-Prestation-2",
+        "sourceKind": "figma",
+        "sourceUrl": "https://www.figma.com/design/ujsdblUfnAeBvP7Aq279gv/OLD---maquette_embedded--GRAND?node-id=2041-502",
+        "fileKey": "ujsdblUfnAeBvP7Aq279gv",
+        "nodeId": "2041:502"
+      },
+      {
+        "index": 6,
+        "rawRootId": "114:117",
+        "rawRootName": "DEV - Maquette-Prestation",
+        "sourceKind": "figma",
+        "sourceUrl": "https://www.figma.com/design/ujsdblUfnAeBvP7Aq279gv/OLD---maquette_embedded--GRAND?node-id=114-117",
+        "fileKey": "ujsdblUfnAeBvP7Aq279gv",
+        "nodeId": "114:117"
+      },
+      {
+        "index": 7,
+        "rawRootId": "0:1",
+        "rawRootName": "DEV - Maquette-Accueil",
+        "sourceKind": "figma",
+        "sourceUrl": "https://www.figma.com/design/ujsdblUfnAeBvP7Aq279gv/OLD---maquette_embedded--GRAND?node-id=0-1",
+        "fileKey": "ujsdblUfnAeBvP7Aq279gv",
+        "nodeId": "0:1"
+      }
+    ]
+  },
+  "snapshotId": "current-approved-20260520",
+  "label": "current-approved-after-pipeline-cleanup",
+  "createdAt": "2026-05-20T08:18:43.151921+00:00",
+  "sourceSmokeReport": "C:\\dev\\figma2hugo\\.figma2hugo-scratch\\visual-figma-diff\\report.json",
+  "screenshotCount": 21,
+  "screenshots": [
+    {
+      "slug": "page-mentions-legales",
+      "viewport": 1920,
+      "path": "page-mentions-legales-1920.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 1920,
+        "height": 920
+      },
+      "imageSize": {
+        "width": 1920,
+        "height": 3118
+      }
+    },
+    {
+      "slug": "page-mentions-legales",
+      "viewport": 834,
+      "path": "page-mentions-legales-834.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 834,
+        "height": 1112
+      },
+      "imageSize": {
+        "width": 834,
+        "height": 1817
+      }
+    },
+    {
+      "slug": "page-mentions-legales",
+      "viewport": 402,
+      "path": "page-mentions-legales-402.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 402,
+        "height": 874
+      },
+      "imageSize": {
+        "width": 402,
+        "height": 1244
+      }
+    },
+    {
+      "slug": "page-a-propos",
+      "viewport": 1920,
+      "path": "page-a-propos-1920.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 1920,
+        "height": 920
+      },
+      "imageSize": {
+        "width": 1920,
+        "height": 4353
+      }
+    },
+    {
+      "slug": "page-a-propos",
+      "viewport": 834,
+      "path": "page-a-propos-834.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 834,
+        "height": 1112
+      },
+      "imageSize": {
+        "width": 834,
+        "height": 2948
+      }
+    },
+    {
+      "slug": "page-a-propos",
+      "viewport": 402,
+      "path": "page-a-propos-402.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 402,
+        "height": 874
+      },
+      "imageSize": {
+        "width": 402,
+        "height": 2029
+      }
+    },
+    {
+      "slug": "page-etude-de-cas",
+      "viewport": 1920,
+      "path": "page-etude-de-cas-1920.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 1920,
+        "height": 920
+      },
+      "imageSize": {
+        "width": 1920,
+        "height": 6574
+      }
+    },
+    {
+      "slug": "page-etude-de-cas",
+      "viewport": 834,
+      "path": "page-etude-de-cas-834.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 834,
+        "height": 1112
+      },
+      "imageSize": {
+        "width": 834,
+        "height": 4631
+      }
+    },
+    {
+      "slug": "page-etude-de-cas",
+      "viewport": 402,
+      "path": "page-etude-de-cas-402.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 402,
+        "height": 874
+      },
+      "imageSize": {
+        "width": 402,
+        "height": 3166
+      }
+    },
+    {
+      "slug": "page-prestation-3",
+      "viewport": 1920,
+      "path": "page-prestation-3-1920.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 1920,
+        "height": 920
+      },
+      "imageSize": {
+        "width": 1920,
+        "height": 5709
+      }
+    },
+    {
+      "slug": "page-prestation-3",
+      "viewport": 834,
+      "path": "page-prestation-3-834.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 834,
+        "height": 1112
+      },
+      "imageSize": {
+        "width": 834,
+        "height": 4641
+      }
+    },
+    {
+      "slug": "page-prestation-3",
+      "viewport": 402,
+      "path": "page-prestation-3-402.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 402,
+        "height": 874
+      },
+      "imageSize": {
+        "width": 402,
+        "height": 2983
+      }
+    },
+    {
+      "slug": "page-prestation-2",
+      "viewport": 1920,
+      "path": "page-prestation-2-1920.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 1920,
+        "height": 920
+      },
+      "imageSize": {
+        "width": 1920,
+        "height": 5586
+      }
+    },
+    {
+      "slug": "page-prestation-2",
+      "viewport": 834,
+      "path": "page-prestation-2-834.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 834,
+        "height": 1112
+      },
+      "imageSize": {
+        "width": 834,
+        "height": 4649
+      }
+    },
+    {
+      "slug": "page-prestation-2",
+      "viewport": 402,
+      "path": "page-prestation-2-402.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 402,
+        "height": 874
+      },
+      "imageSize": {
+        "width": 402,
+        "height": 2983
+      }
+    },
+    {
+      "slug": "page-prestation",
+      "viewport": 1920,
+      "path": "page-prestation-1920.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 1920,
+        "height": 920
+      },
+      "imageSize": {
+        "width": 1920,
+        "height": 5709
+      }
+    },
+    {
+      "slug": "page-prestation",
+      "viewport": 834,
+      "path": "page-prestation-834.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 834,
+        "height": 1112
+      },
+      "imageSize": {
+        "width": 834,
+        "height": 4641
+      }
+    },
+    {
+      "slug": "page-prestation",
+      "viewport": 402,
+      "path": "page-prestation-402.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 402,
+        "height": 874
+      },
+      "imageSize": {
+        "width": 402,
+        "height": 2983
+      }
+    },
+    {
+      "slug": "page-accueil",
+      "viewport": 1920,
+      "path": "page-accueil-1920.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 1920,
+        "height": 920
+      },
+      "imageSize": {
+        "width": 1920,
+        "height": 5368
+      }
+    },
+    {
+      "slug": "page-accueil",
+      "viewport": 834,
+      "path": "page-accueil-834.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 834,
+        "height": 1112
+      },
+      "imageSize": {
+        "width": 834,
+        "height": 3455
+      }
+    },
+    {
+      "slug": "page-accueil",
+      "viewport": 402,
+      "path": "page-accueil-402.png",
+      "fullPage": true,
+      "viewportSize": {
+        "width": 402,
+        "height": 874
+      },
+      "imageSize": {
+        "width": 402,
+        "height": 2735
+      }
+    }
+  ]
+}

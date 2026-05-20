@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "approvedActionableReviews": [
+    {
+      "source": "diagnostics",
+      "code": "large-vertical-gap",
+      "priority": "P3",
+      "action": "inspect-empty-space-or-figma-intent",
+      "owner": "figma-or-code",
+      "page": "page-a-propos-1920",
+      "width": 1920,
+      "nodeId": "179:34",
+      "relatedNodeId": "192:833"
+    },
+    {
+      "source": "diagnostics",
+      "code": "large-vertical-gap",
+      "priority": "P3",
+      "action": "inspect-empty-space-or-figma-intent",
+      "owner": "figma-or-code",
+      "page": "page-a-propos-834",
+      "width": 834,
+      "nodeId": "4042:1891",
+      "relatedNodeId": "4042:1873"
+    },
+    {
+      "source": "diagnostics",
+      "code": "large-vertical-gap",
+      "priority": "P3",
+      "action": "inspect-empty-space-or-figma-intent",
+      "owner": "figma-or-code",
+      "page": "page-prestation-2-1920",
+      "width": 1920,
+      "nodeId": "4011:207",
+      "relatedNodeId": "4011:197"
+    },
+    {
+      "source": "diagnostics",
+      "code": "large-vertical-gap",
+      "priority": "P3",
+      "action": "inspect-empty-space-or-figma-intent",
+      "owner": "figma-or-code",
+      "page": "page-prestation-2-834",
+      "width": 834,
+      "nodeId": "4042:3331",
+      "relatedNodeId": "4042:3320"
+    }
+  ]
+}

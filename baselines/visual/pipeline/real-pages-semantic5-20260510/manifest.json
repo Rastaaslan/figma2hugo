@@ -1,0 +1,180 @@
+﻿{
+    "name":  "real-pages-semantic5-20260510",
+    "createdAt":  "2026-05-10T16:22:44.4726146+02:00",
+    "sourceSmoke":  ".figma2hugo-scratch\\\\release-gate-all-pages-20260510-semantic5-smoke",
+    "sourceSite":  ".figma2hugo-scratch\\\\release-gate-all-pages-20260510-semantic5",
+    "pagesFile":  ".figma2hugo-scratch\\\\real-figma\\\\pages.txt",
+    "pages":  [
+                  "page-mentions-legales",
+                  "page-a-propos",
+                  "page-etude-de-cas",
+                  "page-prestation-3",
+                  "page-prestation-2"
+              ],
+    "widths":  [
+                   1920,
+                   1440,
+                   1280,
+                   1024,
+                   834,
+                   402
+               ],
+    "screenshotCount":  30,
+    "expectedPattern":  "\u003cslug\u003e-\u003cwidth\u003e.png",
+    "gitHead":  "edc7b4c",
+    "dirtyWorktreeEntryCount":  77,
+    "promotionNote":  "Promoted from semantic5 after fixing bottom-anchored footer/contact overlap found during QA review.",
+    "releaseGateCommand":  "python scripts\\\\release_gate.py .figma2hugo-scratch\\\\release-gate-all-pages-20260510-semantic5-baseline-check --page-file .figma2hugo-scratch\\\\real-figma\\\\pages.txt --cache-dir .figma2hugo-scratch\\\\raw-cache --smoke-out .figma2hugo-scratch\\\\release-gate-all-pages-20260510-semantic5-baseline-check-smoke --widths 1920,1440,1280,1024,834,402 --screenshot-widths 1920,1440,1280,1024,834,402 --baseline-dir baselines\\\\visual\\\\pipeline\\\\real-pages-semantic5-20260510 --diff-review-threshold 0.002 --diff-fail-threshold 0.01",
+    "files":  [
+                  {
+                      "name":  "page-a-propos-1024.png",
+                      "bytes":  328655,
+                      "sha256":  "113447039de7e22eea5efabbfbc96d89fff510a47f6ae28ddd1e196849d83334"
+                  },
+                  {
+                      "name":  "page-a-propos-1280.png",
+                      "bytes":  335983,
+                      "sha256":  "28bbd057400bc2087f7c41a9f8e8dd75adf3125dc2fbf9de38fa3f4abb6e2dec"
+                  },
+                  {
+                      "name":  "page-a-propos-1440.png",
+                      "bytes":  684284,
+                      "sha256":  "bf09517285f9a66c7ea4df14b7c5e05bbde6352fb7988465126beeae8832d65a"
+                  },
+                  {
+                      "name":  "page-a-propos-1920.png",
+                      "bytes":  1189835,
+                      "sha256":  "490fbf812f8b192c0525346bb3a82f0ee1566150a2ab8837e1b321236c24db6c"
+                  },
+                  {
+                      "name":  "page-a-propos-402.png",
+                      "bytes":  92367,
+                      "sha256":  "71fa2fa268d81361213a4b462bae3cbcbc164fd1a0c2ca7c41dc6814af788a62"
+                  },
+                  {
+                      "name":  "page-a-propos-834.png",
+                      "bytes":  320616,
+                      "sha256":  "7f094b1bd220bd104974ceaf0506a61da854dd6852028914e3a4c06982de4de2"
+                  },
+                  {
+                      "name":  "page-etude-de-cas-1024.png",
+                      "bytes":  521471,
+                      "sha256":  "c43dd9b0ed309c3968f60bb4ca1d28b4326b70cfc5868da07888eee2422e3975"
+                  },
+                  {
+                      "name":  "page-etude-de-cas-1280.png",
+                      "bytes":  530306,
+                      "sha256":  "fa4a85ca94861ecaa8124958520c6266dc960aebc1fb2d17deb9d6dc627871cc"
+                  },
+                  {
+                      "name":  "page-etude-de-cas-1440.png",
+                      "bytes":  1202104,
+                      "sha256":  "cde463e4ab34253cfec3b5f3f4a522d5fca9835f6c028abc9ef41eaf654d9be7"
+                  },
+                  {
+                      "name":  "page-etude-de-cas-1920.png",
+                      "bytes":  2092430,
+                      "sha256":  "51459cc8280c69ece81f4587cc0607cf7fa1ccaeb115de8da86fccc3e42d036e"
+                  },
+                  {
+                      "name":  "page-etude-de-cas-402.png",
+                      "bytes":  290385,
+                      "sha256":  "9bcffada1a1525ea2bd6ee8914eca31a042f596b81304ea574c9a34296a239d5"
+                  },
+                  {
+                      "name":  "page-etude-de-cas-834.png",
+                      "bytes":  510836,
+                      "sha256":  "38977c522f009133db03c5435753fbd0c77e19ae2fd643dbf6ea9a6b3b87f0e4"
+                  },
+                  {
+                      "name":  "page-mentions-legales-1024.png",
+                      "bytes":  113291,
+                      "sha256":  "04dd2fc3f2ce28ccf0ffb61f49728e7888e0e4d3b76a64340cbd3217856d0a71"
+                  },
+                  {
+                      "name":  "page-mentions-legales-1280.png",
+                      "bytes":  115320,
+                      "sha256":  "611948ec0e84b0a8bdac43434013615c75919bac5b0725a324c2704bb96d84fe"
+                  },
+                  {
+                      "name":  "page-mentions-legales-1440.png",
+                      "bytes":  567012,
+                      "sha256":  "fc69e66f567ae3ec8feebf7f082ebbb8d54cab0d4e51b85c1867d86016658362"
+                  },
+                  {
+                      "name":  "page-mentions-legales-1920.png",
+                      "bytes":  934992,
+                      "sha256":  "bb2343223479482553ebbfc7b17dd4d84e758f251785a7c89d3285d5b43823a2"
+                  },
+                  {
+                      "name":  "page-mentions-legales-402.png",
+                      "bytes":  59210,
+                      "sha256":  "c545026f4528147eb48e6f6a9a969e8257728e38720e088e18cd31c58f7c58b4"
+                  },
+                  {
+                      "name":  "page-mentions-legales-834.png",
+                      "bytes":  109825,
+                      "sha256":  "9b6a00308c7096f215da0c9f3b6fe125d453299deaa12f0a9cd7a403c6bdf301"
+                  },
+                  {
+                      "name":  "page-prestation-2-1024.png",
+                      "bytes":  471167,
+                      "sha256":  "db5e10c6bdaa66bb3492a144b7dec4155325af9a190a85ffb1512fb60c7db8f8"
+                  },
+                  {
+                      "name":  "page-prestation-2-1280.png",
+                      "bytes":  479693,
+                      "sha256":  "8c7b971309eb125a6ba0c080ed1e5293f765c811b0ee1f41a97966ab0f4787a7"
+                  },
+                  {
+                      "name":  "page-prestation-2-1440.png",
+                      "bytes":  1088646,
+                      "sha256":  "28591065b5bc882c245f76c26cd2caeabff091adf2e6d9b551e421b5ed84b88a"
+                  },
+                  {
+                      "name":  "page-prestation-2-1920.png",
+                      "bytes":  1965835,
+                      "sha256":  "baa3e1d78d8483ef3136e4178895af05f719a9e1d8399319fafc8a010a9db764"
+                  },
+                  {
+                      "name":  "page-prestation-2-402.png",
+                      "bytes":  297216,
+                      "sha256":  "b813065adf752b9a4a03a2c7f0775edc6b6c932cefb35aea0b3317f47e2f731c"
+                  },
+                  {
+                      "name":  "page-prestation-2-834.png",
+                      "bytes":  457698,
+                      "sha256":  "3dde5b85f057c0c275bb20982aa5b86878e2d91a976efa0dd532f293368a0fb1"
+                  },
+                  {
+                      "name":  "page-prestation-3-1024.png",
+                      "bytes":  461159,
+                      "sha256":  "a4091035be97dd55598c8b4808d38ef222d0dff2ebbd0d01cae7d9d8d1774e50"
+                  },
+                  {
+                      "name":  "page-prestation-3-1280.png",
+                      "bytes":  468391,
+                      "sha256":  "e64847df4e8ae6ddfa8ab8b85db9b04ae91e5525d71a6b50e26cc654a39c3b8f"
+                  },
+                  {
+                      "name":  "page-prestation-3-1440.png",
+                      "bytes":  1160005,
+                      "sha256":  "a0f2e23301ecc65db3e0d4e976f85f93e923291c90fcb0dabbe9468072ffce57"
+                  },
+                  {
+                      "name":  "page-prestation-3-1920.png",
+                      "bytes":  2091416,
+                      "sha256":  "451a962978c35ef501e75c1b34c829f3ee57a568689e974c370d7ca327a17296"
+                  },
+                  {
+                      "name":  "page-prestation-3-402.png",
+                      "bytes":  310438,
+                      "sha256":  "f2555b77af71b7cfa969de82b87f2eed21273c32a9c83765a6b35a741d73d8dd"
+                  },
+                  {
+                      "name":  "page-prestation-3-834.png",
+                      "bytes":  450113,
+                      "sha256":  "d7d8c944ac86d536d721f42dc73e04aa23100eda5f6b15bafcb15bb730003723"
+                  }
+              ]
+}

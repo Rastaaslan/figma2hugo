@@ -86,7 +86,7 @@ def test_selection_hint_message_mentions_responsive_board_for_single_url() -> No
         gui_module._supports_static_mode(
             ["https://www.figma.com/design/FILE/Mentions?node-id=200-1"]
         )
-        is True
+        is False
     )
 
 
@@ -98,7 +98,7 @@ def test_selection_hint_message_disables_static_for_multiple_urls() -> None:
         ]
     )
 
-    assert "statique est desactive" in message.lower()
+    assert "statique" not in message.lower()
     assert (
         gui_module._supports_static_mode(
             [
@@ -128,7 +128,7 @@ def test_control_states_disable_static_for_multiple_urls_and_running_state() -> 
     )
 
     assert single_url_states.default == "normal"
-    assert single_url_states.static_button == "normal"
+    assert single_url_states.static_button == "disabled"
     assert single_url_states.progress_running is False
     assert multi_url_states.default == "normal"
     assert multi_url_states.static_button == "disabled"
@@ -138,14 +138,148 @@ def test_control_states_disable_static_for_multiple_urls_and_running_state() -> 
 
 
 def test_generation_launch_summary_pluralizes_page_count() -> None:
-    assert (
-        gui_module._generation_launch_summary(gui_module.OutputMode.HUGO, 1)
-        == "Lancement du mode hugo pour 1 page..."
+    assert gui_module._generation_launch_summary(1) == "Lancement du mode hugo pour 1 page..."
+    assert gui_module._generation_launch_summary(3) == "Lancement du mode hugo pour 3 pages..."
+
+
+def test_gui_hugo_generation_routes_to_pipeline(monkeypatch, tmp_path) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_hugo_pipeline(
+        figma_urls: list[str], destination: Path, token: str
+    ) -> dict[str, object]:
+        captured["figma_urls"] = figma_urls
+        captured["destination"] = destination
+        captured["token"] = token
+        return {
+            "mode": "hugo",
+            "pipeline": "pipeline",
+            "outDir": str(destination),
+            "writtenFiles": [],
+            "report": str(destination / "report.json"),
+            "buildOk": True,
+        }
+
+    def fail_generation(*_args, **_kwargs):
+        raise AssertionError("Hugo UI generation must use pipeline")
+
+    monkeypatch.setattr(gui_module, "_run_hugo_pipeline_generation", fake_hugo_pipeline)
+    monkeypatch.setattr(gui_module, "run_generation", fail_generation, raising=False)
+
+    result = gui_module._run_generation_for_gui(
+        ["https://www.figma.com/design/FILE/Page?node-id=1-1"],
+        tmp_path,
+        "secret-token",
     )
-    assert (
-        gui_module._generation_launch_summary(gui_module.OutputMode.HUGO, 3)
-        == "Lancement du mode hugo pour 3 pages..."
+
+    assert result["pipeline"] == "pipeline"
+    assert captured == {
+        "figma_urls": ["https://www.figma.com/design/FILE/Page?node-id=1-1"],
+        "destination": tmp_path,
+        "token": "secret-token",
+    }
+
+
+def test_gui_hugo_generation_refreshes_figma_raw_cache(monkeypatch, tmp_path) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_build_pipeline_hugo_site_from_figma_urls(
+        figma_urls,
+        destination,
+        *,
+        token=None,
+        refresh_cache=False,
+        **_kwargs,
+    ):
+        captured["figma_urls"] = figma_urls
+        captured["destination"] = destination
+        captured["token"] = token
+        captured["refresh_cache"] = refresh_cache
+        captured["responsive_contract_root"] = _kwargs.get("responsive_contract_root")
+        return {
+            "mode": "hugo",
+            "pipeline": "pipeline",
+            "outDir": str(destination),
+            "writtenFiles": [],
+            "report": str(destination / "report.json"),
+            "buildOk": True,
+        }
+
+    monkeypatch.setattr(
+        gui_module,
+        "build_pipeline_hugo_site_from_figma_urls",
+        fake_build_pipeline_hugo_site_from_figma_urls,
+        raising=False,
     )
+    monkeypatch.setattr(
+        "figma2hugo.pipeline.runner.build_pipeline_hugo_site_from_figma_urls",
+        fake_build_pipeline_hugo_site_from_figma_urls,
+    )
+    monkeypatch.setattr(
+        gui_module,
+        "_run_visual_smoke_for_gui",
+        lambda destination, **_kwargs: {
+            "outDir": str(destination.parent / f"{destination.name}-smoke"),
+            "baselineRoot": str(tmp_path / "baselines"),
+            "issueCount": 0,
+            "errorCount": 0,
+            "warnCount": 0,
+            "visualReview": {
+                "bootstrapRequired": True,
+                "baselineRoot": str(tmp_path / "baselines"),
+                "byStatus": {"capture-only": 1},
+            },
+        },
+    )
+
+    result = gui_module._run_hugo_pipeline_generation(
+        ["https://www.figma.com/design/FILE/Page?node-id=1-1"],
+        tmp_path,
+        "secret-token",
+    )
+
+    assert result["pipeline"] == "pipeline"
+    assert captured == {
+        "figma_urls": ["https://www.figma.com/design/FILE/Page?node-id=1-1"],
+        "destination": tmp_path,
+        "token": "secret-token",
+        "refresh_cache": True,
+        "responsive_contract_root": Path.cwd() / "baselines" / "review" / "pipeline" / "projects",
+    }
+    assert result["visualSmoke"]["visualReview"]["bootstrapRequired"] is True
+
+
+def test_gui_hugo_generation_keeps_success_when_visual_smoke_is_unavailable(
+    monkeypatch, tmp_path
+) -> None:
+    def fake_build_pipeline_hugo_site_from_figma_urls(*_args, **_kwargs):
+        return {
+            "mode": "hugo",
+            "pipeline": "pipeline",
+            "outDir": str(tmp_path),
+            "writtenFiles": [],
+            "report": str(tmp_path / "report.json"),
+            "buildOk": True,
+        }
+
+    monkeypatch.setattr(
+        "figma2hugo.pipeline.runner.build_pipeline_hugo_site_from_figma_urls",
+        fake_build_pipeline_hugo_site_from_figma_urls,
+    )
+    monkeypatch.setattr(
+        gui_module,
+        "_run_visual_smoke_for_gui",
+        lambda _destination, **_kwargs: (_ for _ in ()).throw(RuntimeError("hugo missing")),
+    )
+
+    result = gui_module._run_hugo_pipeline_generation(
+        ["https://www.figma.com/design/FILE/Page?node-id=1-1"],
+        tmp_path,
+        "secret-token",
+    )
+
+    assert result["pipeline"] == "pipeline"
+    assert result["visualSmoke"]["error"] == "hugo missing"
 
 
 def test_format_generation_success_returns_readable_summary() -> None:
@@ -165,12 +299,54 @@ def test_format_generation_success_returns_readable_summary() -> None:
     assert "- C:/tmp/site/index.html" in output
 
 
+def test_format_generation_success_mentions_visual_baseline_bootstrap() -> None:
+    output = gui_module._format_generation_success(
+        {
+            "mode": "hugo",
+            "pipeline": "pipeline",
+            "outDir": "C:/tmp/site",
+            "writtenFiles": [],
+            "report": "C:/tmp/site/report.json",
+            "buildOk": True,
+            "visualSmokeReport": "C:/tmp/site-smoke/report.json",
+            "visualSmoke": {
+                "issueCount": 0,
+                "errorCount": 0,
+                "warnCount": 0,
+                "visualReview": {
+                    "bootstrapRequired": True,
+                    "byStatus": {"capture-only": 1},
+                },
+            },
+        }
+    )
+
+    assert "Smoke visuel: issues=0, erreurs=0, warnings=0" in output
+    assert "Baseline: capture-only=1" in output
+    assert "Action: baseline projet a valider." in output
+
+
+def test_baseline_promotion_helpers_read_visual_smoke_result(tmp_path) -> None:
+    result = {
+        "visualSmoke": {
+            "outDir": str(tmp_path / "smoke"),
+            "visualReview": {
+                "bootstrapRequired": True,
+                "baselineRoot": str(tmp_path / "baselines"),
+            },
+        }
+    }
+
+    assert gui_module._result_needs_baseline_promotion(result) is True
+    assert gui_module._baseline_smoke_out_from_result(result) == tmp_path / "smoke"
+    assert gui_module._baseline_root_from_result(result) == tmp_path / "baselines"
+
+
 def test_format_generation_start_returns_contextual_log(monkeypatch) -> None:
     monkeypatch.setattr(gui_module, "get_local_figma_token", lambda: None)
     output = gui_module._format_generation_start(
         ["https://www.figma.com/design/FILE/Mentions?node-id=200-1"],
         Path("C:/tmp/site"),
-        gui_module.OutputMode.HUGO,
         "secret-token",
     )
 
@@ -178,6 +354,7 @@ def test_format_generation_start_returns_contextual_log(monkeypatch) -> None:
     assert "Mode: hugo" in output
     assert "URLs detectees: 1" in output
     assert "Acces Figma: token saisi dans l'UI" in output
+    assert "Cache Figma: rafraichissement force" in output
     assert "board top-level `page-<slug>-<width>`" in output
 
 
@@ -210,9 +387,7 @@ def test_format_progress_event_returns_readable_live_log() -> None:
         "documents page-mentions-legales-1920, page-mentions-legales-834, "
         "page-mentions-legales-402, +1 autre(s)"
     )
-    assert (
-        expected_documents in output
-    )
+    assert expected_documents in output
 
 
 def test_describe_generation_error_detects_invalid_figma_url() -> None:
